@@ -1,6 +1,6 @@
 <?php
 include '../config/koneksi.php';
-include '../config/auth.php';
+require_once '../config/auth.php';
 require_permission($koneksi, 'barang.view');
 
 
@@ -399,9 +399,9 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
                         <p class="text-muted mb-0">Manajemen Inventaris Aset Teknologi</p>
                     </div>
                     <?php if (can('barang.create')): ?>
-                    <button class="btn btn-success px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
-                        <i class="bi bi-plus-circle me-2"></i>Add Item
-                    </button>
+                        <button class="btn btn-success px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
+                            <i class="bi bi-plus-circle me-2"></i>Add Item
+                        </button>
                     <?php endif; ?>
                 </div>
 
@@ -586,18 +586,18 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
                                                 <td class="text-center">
                                                     <div class="action-group">
                                                         <?php if (can('barang.update')): ?>
-                                                        <button class="btn btn-sm btn-warning btnEdit"
-                                                            data-id="<?= $data['id'] ?>"
-                                                            title="Edit data barang">
-                                                            <i class="bi bi-pencil"></i>
-                                                        </button>
+                                                            <button class="btn btn-sm btn-warning btnEdit"
+                                                                data-id="<?= $data['id'] ?>"
+                                                                title="Edit data barang">
+                                                                <i class="bi bi-pencil"></i>
+                                                            </button>
                                                         <?php endif; ?>
                                                         <?php if (can('barang.delete')): ?>
-                                                        <button class="btn btn-sm btn-danger btnDelete"
-                                                            data-id="<?= $data['id'] ?>"
-                                                            title="Hapus data">
-                                                            <i class="bi bi-trash"></i>
-                                                        </button>
+                                                            <button class="btn btn-sm btn-danger btnDelete"
+                                                                data-id="<?= $data['id'] ?>"
+                                                                title="Hapus data">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>
@@ -643,11 +643,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
                                                 <td class="text-center">
                                                     <div class="action-group">
                                                         <?php if (can('barang.kirim')): ?>
-                                                        <button class="btn btn-sm btn-info btnEdit"
-                                                            data-id="<?= $data['id'] ?>"
-                                                            title="Update logistik / pengiriman">
-                                                            <i class="bi bi-truck"></i>
-                                                        </button>
+                                                            <button class="btn btn-sm btn-info btnEdit"
+                                                                data-id="<?= $data['id'] ?>"
+                                                                title="Update logistik / pengiriman">
+                                                                <i class="bi bi-truck"></i>
+                                                            </button>
                                                         <?php endif; ?>
 
                                                         <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
@@ -692,27 +692,33 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
                                                 <td class="text-center">
                                                     <div class="action-group">
                                                         <?php if ($isKeluar): ?>
-                                                            <button class="btn btn-sm btn-info btnEdit"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Update logistik / pengiriman">
-                                                                <i class="bi bi-truck"></i>
-                                                            </button>
+                                                            <?php if (can('barang.kirim')): ?>
+                                                                <button class="btn btn-sm btn-info btnEdit"
+                                                                    data-id="<?= $data['id'] ?>"
+                                                                    title="Update logistik / pengiriman">
+                                                                    <i class="bi bi-truck"></i>
+                                                                </button>
+                                                            <?php endif; ?>
 
                                                             <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
                                                                 <i class="bi bi-lock-fill"></i>
                                                             </button>
                                                         <?php else: ?>
-                                                            <button class="btn btn-sm btn-warning btnEdit"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Edit data barang">
-                                                                <i class="bi bi-pencil"></i>
-                                                            </button>
+                                                            <?php if (can('barang.update')): ?>
+                                                                <button class="btn btn-sm btn-warning btnEdit"
+                                                                    data-id="<?= $data['id'] ?>"
+                                                                    title="Edit data barang">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                            <?php endif; ?>
 
-                                                            <button class="btn btn-sm btn-danger btnDelete"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Hapus data">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
+                                                            <?php if (can('barang.delete')): ?>
+                                                                <button class="btn btn-sm btn-danger btnDelete"
+                                                                    data-id="<?= $data['id'] ?>"
+                                                                    title="Hapus data">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </div>
                                                 </td>

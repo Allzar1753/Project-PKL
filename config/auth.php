@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Ganti sesuai nama folder project di localhost.A
 if (!defined('BASE_URL')) {
-    define('BASE_URL', '/HEXINDO-IT');
+    define('BASE_URL', '/PROJECT-PKL');
 }
 
 function base_url(string $path = ''): string

@@ -1,30 +1,31 @@
 <?php
 include '../config/koneksi.php';
+require_once '../config/auth.php';
+
 require_permission($koneksi, 'barang.delete');
 
 header('Content-Type: application/json');
 
-if(!isset($_GET['id'])){
+$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+
+if ($id <= 0) {
     echo json_encode([
         "status" => "error",
-        "message" => "ID tidak ditemukan"
+        "message" => "ID tidak valid"
     ]);
     exit;
 }
 
-$id = $_GET['id'];
+$delete = mysqli_query($koneksi, "DELETE FROM barang WHERE id = $id");
 
-$delete = mysqli_query($koneksi, "DELETE FROM barang WHERE id='$id'");
-
-if($delete){
+if ($delete) {
     echo json_encode([
         "status" => "success",
         "message" => "Data berhasil dihapus"
     ]);
-}else{
+} else {
     echo json_encode([
         "status" => "error",
-        "message" => "Data gagal dihapus"
+        "message" => "Data gagal dihapus: " . mysqli_error($koneksi)
     ]);
 }
-?>

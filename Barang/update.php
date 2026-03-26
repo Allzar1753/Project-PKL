@@ -1,7 +1,6 @@
 <?php
 include '../config/koneksi.php';
-include '../config/koneksi.php';
-include '../config/auth.php';
+require_once '../config/auth.php';
 require_login();
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);

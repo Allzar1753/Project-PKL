@@ -1,138 +1,186 @@
 <?php
 include '../config/koneksi.php';
+require_once '../config/auth.php';
+
 require_permission($koneksi, 'barang.create');
 
+$merk   = mysqli_query($koneksi, "SELECT * FROM tb_merk");
+$tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe");
+$jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
+$branch = mysqli_query($koneksi, "SELECT * FROM tb_branch");
+$barang = mysqli_query($koneksi, "SELECT * FROM tb_barang");
 
-$merk    = mysqli_query($koneksi, "SELECT * FROM tb_merk");
-$tipe    = mysqli_query($koneksi, "SELECT * FROM tb_tipe");
-$jenis   = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
-$branch  = mysqli_query($koneksi, "SELECT * FROM tb_branch");
-$barang  = mysqli_query($koneksi, "SELECT * FROM tb_barang");
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
 
-if($_SERVER['REQUEST_METHOD'] === 'POST'){
+    $required = [
+        'no_asset',
+        'id_barang',
+        'id_merk',
+        'serial_number',
+        'id_tipe',
+        'id_jenis',
+        'tanggal_masuk',
+        'bermasalah',
+        'id_branch',
+        'user'
+    ];
 
-header('Content-Type: application/json');
+    foreach ($required as $f) {
+        if (!isset($_POST[$f]) || trim((string)$_POST[$f]) === '') {
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Field $f wajib diisi"
+            ]);
+            exit;
+        }
+    }
 
-$required = [
-'no_asset','id_barang','id_merk','serial_number',
-'id_tipe','id_jenis','tanggal_masuk',
-'bermasalah','id_branch','user'
-];
+    $no_asset      = mysqli_real_escape_string($koneksi, trim($_POST['no_asset']));
+    $id_barang     = (int) $_POST['id_barang'];
+    $id_merk       = (int) $_POST['id_merk'];
+    $serial_number = mysqli_real_escape_string($koneksi, trim($_POST['serial_number']));
+    $id_tipe       = (int) $_POST['id_tipe'];
+    $id_jenis      = (int) $_POST['id_jenis'];
+    $tanggal_masuk = mysqli_real_escape_string($koneksi, trim($_POST['tanggal_masuk']));
+    $bermasalah    = mysqli_real_escape_string($koneksi, trim($_POST['bermasalah']));
+    $id_branch     = (int) $_POST['id_branch'];
+    $user          = mysqli_real_escape_string($koneksi, trim($_POST['user']));
 
-foreach($required as $f){
-if(empty($_POST[$f])){
-echo json_encode([
-'success'=>false,
-'error'=>"Field $f wajib diisi"
-]);
-exit;
-}
-}
+    $keterangan_masalah = null;
 
-$no_asset       = mysqli_real_escape_string($koneksi,$_POST['no_asset']);
-$id_barang      = mysqli_real_escape_string($koneksi,$_POST['id_barang']);
-$id_merk        = mysqli_real_escape_string($koneksi,$_POST['id_merk']);
-$serial_number  = mysqli_real_escape_string($koneksi,$_POST['serial_number']);
-$id_tipe        = mysqli_real_escape_string($koneksi,$_POST['id_tipe']);
-$id_jenis       = mysqli_real_escape_string($koneksi,$_POST['id_jenis']);
-$tanggal_masuk  = mysqli_real_escape_string($koneksi,$_POST['tanggal_masuk']);
-$bermasalah     = mysqli_real_escape_string($koneksi,$_POST['bermasalah']);
-$id_branch      = mysqli_real_escape_string($koneksi,$_POST['id_branch']);
-$user           = mysqli_real_escape_string($koneksi,$_POST['user']);
+    if ($bermasalah === 'Iya') {
+        if (empty($_POST['keterangan_masalah']) || trim($_POST['keterangan_masalah']) === '') {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Keterangan masalah wajib diisi jika barang bermasalah'
+            ]);
+            exit;
+        }
 
-$keterangan_masalah = NULL;
+        $keterangan_masalah = mysqli_real_escape_string($koneksi, trim($_POST['keterangan_masalah']));
+    }
 
-if($bermasalah == 'Iya' && !empty($_POST['keterangan_masalah'])){
-$keterangan_masalah = mysqli_real_escape_string($koneksi,$_POST['keterangan_masalah']);
-}
+    $cekDuplikat = mysqli_query($koneksi, "
+        SELECT id, no_asset, serial_number
+        FROM barang
+        WHERE no_asset = '$no_asset' OR serial_number = '$serial_number'
+        LIMIT 1
+    ");
 
-$cek = mysqli_query($koneksi,"SELECT id FROM barang WHERE no_asset='$no_asset'");
-if(mysqli_num_rows($cek) > 0){
-echo json_encode([
-'success'=>false,
-'error'=>'No Asset sudah terdaftar'
-]);
-exit;
-}
+    if (!$cekDuplikat) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Gagal cek duplikasi: ' . mysqli_error($koneksi)
+        ]);
+        exit;
+    }
 
-$id_status = ($bermasalah == 'Iya') ? 5 : 4;
+    if (mysqli_num_rows($cekDuplikat) > 0) {
+        $duplikat = mysqli_fetch_assoc($cekDuplikat);
 
-$foto = NULL;
+        $pesan = 'Data sudah digunakan.';
+        if ($duplikat['no_asset'] === $no_asset && $duplikat['serial_number'] === $serial_number) {
+            $pesan = 'No Asset dan Serial Number sudah terdaftar';
+        } elseif ($duplikat['no_asset'] === $no_asset) {
+            $pesan = 'No Asset sudah terdaftar';
+        } elseif ($duplikat['serial_number'] === $serial_number) {
+            $pesan = 'Serial Number sudah terdaftar';
+        }
 
-if(isset($_FILES['foto']) && $_FILES['foto']['error'] == 0){
+        echo json_encode([
+            'status' => 'error',
+            'message' => $pesan
+        ]);
+        exit;
+    }
 
-$allowed = ['jpg','jpeg','png','gif'];
-$ext = strtolower(pathinfo($_FILES['foto']['name'],PATHINFO_EXTENSION));
+    $id_status = ($bermasalah === 'Iya') ? 5 : 4;
+    $foto = null;
 
-if(!in_array($ext,$allowed)){
-echo json_encode([
-'success'=>false,
-'error'=>'Format foto harus JPG, PNG, GIF'
-]);
-exit;
-}
+    if (isset($_FILES['foto']) && $_FILES['foto']['error'] === 0) {
+        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
 
-if($_FILES['foto']['size'] > 2000000){
-echo json_encode([
-'success'=>false,
-'error'=>'Ukuran foto maksimal 2MB'
-]);
-exit;
-}
+        if (!in_array($ext, $allowed, true)) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Format foto harus JPG, JPEG, PNG, GIF, atau WEBP'
+            ]);
+            exit;
+        }
 
-if(!is_dir("../assets/images")){
-mkdir("../assets/images",0777,true);
-}
+        if ($_FILES['foto']['size'] > 2000000) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Ukuran foto maksimal 2MB'
+            ]);
+            exit;
+        }
 
-$foto_name = uniqid().".".$ext;
-$target = "../assets/images/".$foto_name;
+        if (!is_dir("../assets/images")) {
+            mkdir("../assets/images", 0777, true);
+        }
 
-if(move_uploaded_file($_FILES['foto']['tmp_name'],$target)){
-$foto = $foto_name;
-}
-}
+        $foto_name = uniqid('barang_', true) . "." . $ext;
+        $target = "../assets/images/" . $foto_name;
 
-$query = "
-INSERT INTO barang (
-no_asset,
-id_barang,
-id_merk,
-serial_number,
-id_tipe,
-id_jenis,
-tanggal_masuk,
-bermasalah,
-keterangan_masalah,
-id_status,
-id_branch,
-foto,
-user
-) VALUES (
-'$no_asset',
-'$id_barang',
-'$id_merk',
-'$serial_number',
-'$id_tipe',
-'$id_jenis',
-'$tanggal_masuk',
-'$bermasalah',
-".($keterangan_masalah ? "'$keterangan_masalah'" : "NULL").",
-'$id_status',
-'$id_branch',
-".($foto ? "'$foto'" : "NULL").",
-'$user'
-)";
+        if (!move_uploaded_file($_FILES['foto']['tmp_name'], $target)) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Gagal upload foto'
+            ]);
+            exit;
+        }
 
-if(mysqli_query($koneksi,$query)){
-echo json_encode(['success'=>true]);
-}else{
-echo json_encode([
-'success'=>false,
-'error'=>mysqli_error($koneksi)
-]);
-}
+        $foto = $foto_name;
+    }
 
-exit;
+    $query = "
+        INSERT INTO barang (
+            no_asset,
+            id_barang,
+            id_merk,
+            serial_number,
+            id_tipe,
+            id_jenis,
+            tanggal_masuk,
+            bermasalah,
+            keterangan_masalah,
+            id_status,
+            id_branch,
+            foto,
+            `user`
+        ) VALUES (
+            '$no_asset',
+            '$id_barang',
+            '$id_merk',
+            '$serial_number',
+            '$id_tipe',
+            '$id_jenis',
+            '$tanggal_masuk',
+            '$bermasalah',
+            " . ($keterangan_masalah !== null ? "'$keterangan_masalah'" : "NULL") . ",
+            '$id_status',
+            '$id_branch',
+            " . ($foto !== null ? "'$foto'" : "NULL") . ",
+            '$user'
+        )
+    ";
+
+    if (mysqli_query($koneksi, $query)) {
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Data barang berhasil ditambahkan'
+        ]);
+    } else {
+        echo json_encode([
+            'status' => 'error',
+            'message' => mysqli_error($koneksi)
+        ]);
+    }
+
+    exit;
 }
 ?>
 
@@ -153,8 +201,8 @@ exit;
             <label>Barang</label>
             <select name="id_barang" class="form-control select2" required>
                 <option value="">Pilih Barang...</option>
-                <?php while($row=mysqli_fetch_assoc($barang)): ?>
-                <option value="<?= $row['id_barang'] ?>"><?= $row['nama_barang'] ?></option>
+                <?php while ($row = mysqli_fetch_assoc($barang)): ?>
+                    <option value="<?= $row['id_barang'] ?>"><?= htmlspecialchars($row['nama_barang']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -163,8 +211,8 @@ exit;
             <label>Merk</label>
             <select name="id_merk" class="form-control select2" required>
                 <option value="">Pilih Merk...</option>
-                <?php while($row=mysqli_fetch_assoc($merk)): ?>
-                <option value="<?= $row['id_merk'] ?>"><?= $row['nama_merk'] ?></option>
+                <?php while ($row = mysqli_fetch_assoc($merk)): ?>
+                    <option value="<?= $row['id_merk'] ?>"><?= htmlspecialchars($row['nama_merk']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -173,8 +221,8 @@ exit;
             <label>Tipe</label>
             <select name="id_tipe" class="form-control select2" required>
                 <option value="">Pilih Tipe...</option>
-                <?php while($row=mysqli_fetch_assoc($tipe)): ?>
-                <option value="<?= $row['id_tipe'] ?>"><?= $row['nama_tipe'] ?></option>
+                <?php while ($row = mysqli_fetch_assoc($tipe)): ?>
+                    <option value="<?= $row['id_tipe'] ?>"><?= htmlspecialchars($row['nama_tipe']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -183,8 +231,8 @@ exit;
             <label>Jenis</label>
             <select name="id_jenis" class="form-control select2" required>
                 <option value="">Pilih Jenis...</option>
-                <?php while($row=mysqli_fetch_assoc($jenis)): ?>
-                <option value="<?= $row['id_jenis'] ?>"><?= $row['nama_jenis'] ?></option>
+                <?php while ($row = mysqli_fetch_assoc($jenis)): ?>
+                    <option value="<?= $row['id_jenis'] ?>"><?= htmlspecialchars($row['nama_jenis']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -198,8 +246,8 @@ exit;
             <label>Branch</label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
-                <?php while($row=mysqli_fetch_assoc($branch)): ?>
-                <option value="<?= $row['id_branch'] ?>"><?= $row['nama_branch'] ?></option>
+                <?php while ($row = mysqli_fetch_assoc($branch)): ?>
+                    <option value="<?= $row['id_branch'] ?>"><?= htmlspecialchars($row['nama_branch']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -225,7 +273,7 @@ exit;
 
         <div class="col-md-6">
             <label>Foto</label>
-            <input type="file" name="foto" class="form-control" id="fotoInput">
+            <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
         </div>
 
@@ -238,27 +286,23 @@ exit;
 <script>
 $(document).ready(function(){
     $('#bermasalahSelect').on('change', function(){
-    if($(this).val() === 'Iya'){
-        $('#keteranganMasalahDiv').slideDown();
-        $('textarea[name="keterangan_masalah"]').attr('required',true);
-    } else {
-        $('#keteranganMasalahDiv').slideUp();
-        $('textarea[name="keterangan_masalah"]').removeAttr('required');
-    }
+        if($(this).val() === 'Iya'){
+            $('#keteranganMasalahDiv').slideDown();
+            $('textarea[name="keterangan_masalah"]').attr('required', true);
+        } else {
+            $('#keteranganMasalahDiv').slideUp();
+            $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+        }
+    });
 });
-});
 
-$('#fotoInput').change(function(e){
+$('#fotoInput').change(function(){
+    if (!this.files || !this.files[0]) return;
 
-let reader = new FileReader();
-
-reader.onload = function(e){
-$('#previewFoto')
-.attr('src',e.target.result)
-.show();
-}
-
-reader.readAsDataURL(this.files[0]);
-
+    let reader = new FileReader();
+    reader.onload = function(e){
+        $('#previewFoto').attr('src', e.target.result).show();
+    };
+    reader.readAsDataURL(this.files[0]);
 });
 </script>

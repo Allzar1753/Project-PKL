@@ -1,6 +1,6 @@
 <?php
 include '../config/koneksi.php';
-include '../config/auth.php';
+require_once '../config/auth.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect_to(base_url('auth/login.php'));
@@ -27,5 +27,7 @@ if (!verify_password_and_upgrade($koneksi, $user, $password)) {
 }
 
 login_user($koneksi, $user);
+session_regenerate_id(true);
+
 set_flash('success', 'Login berhasil. Selamat datang, ' . $user['username'] . '.');
-redirect_to(base_url('Barang/index.php'));
+redirect_to(base_url('dashboard/index.php'));

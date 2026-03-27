@@ -8,98 +8,116 @@ if (!function_exists('h')) {
     }
 }
 
+if (!function_exists('isMenuActive')) {
+    function isMenuActive($keyword)
+    {
+        $path = $_SERVER['PHP_SELF'] ?? '';
+        return strpos($path, $keyword) !== false;
+    }
+}
+
 $user = current_user();
 $role = current_role();
-
 $currentPath = $_SERVER['PHP_SELF'] ?? '';
-
-function isMenuActive($keyword)
-{
-    $path = $_SERVER['PHP_SELF'] ?? '';
-    return strpos($path, $keyword) !== false;
-}
 ?>
 
 <style>
     .sidebar-shell {
         min-height: 100vh;
-        background: linear-gradient(180deg, #1f2328 0%, #2c3136 100%);
+        background: linear-gradient(180deg, #1f2328 0%, #2b3137 100%);
         color: #fff;
-        box-shadow: 6px 0 24px rgba(0, 0, 0, 0.08);
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.06);
         position: sticky;
         top: 0;
+        z-index: 10;
     }
 
     .sidebar-brand {
-        padding: 1.4rem 1.2rem 1rem;
+        padding: 1.1rem 1rem 0.9rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .sidebar-brand-title {
         font-weight: 800;
-        font-size: 1.1rem;
-        margin-bottom: 0.15rem;
+        font-size: 1rem;
         color: #fff;
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin-bottom: .15rem;
     }
 
     .sidebar-brand-subtitle {
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.65);
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.62);
     }
 
     .sidebar-user {
-        margin: 1rem 1rem 0;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        margin: .9rem .85rem 0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 16px;
-        padding: 1rem;
+        padding: .95rem;
+        overflow: hidden;
     }
 
     .sidebar-user-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        background: rgba(255, 193, 7, 0.18);
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: rgba(255, 193, 7, 0.16);
         color: #ffc107;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.2rem;
+        font-size: 1.08rem;
         flex-shrink: 0;
     }
 
     .sidebar-user-name {
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: .95rem;
         color: #fff;
         margin-bottom: 0.1rem;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+
+    .sidebar-user-email {
+        color: rgba(255, 255, 255, 0.56);
+        font-size: .78rem;
+        line-height: 1.35;
+        word-break: break-word;
     }
 
     .sidebar-user-role {
         display: inline-flex;
         align-items: center;
         gap: .35rem;
-        font-size: 0.8rem;
+        font-size: .75rem;
         color: #ffe082;
-        background: rgba(255, 193, 7, 0.12);
-        border: 1px solid rgba(255, 193, 7, 0.2);
+        background: rgba(255, 193, 7, 0.10);
+        border: 1px solid rgba(255, 193, 7, 0.18);
         border-radius: 999px;
-        padding: .35rem .65rem;
-        margin-top: .45rem;
+        padding: .34rem .62rem;
+        margin-top: .5rem;
+        max-width: 100%;
+        white-space: normal;
+        line-height: 1.2;
     }
 
     .sidebar-nav-wrap {
-        padding: 1rem;
+        padding: .95rem .85rem 1rem;
     }
 
     .sidebar-section-label {
-        font-size: 0.76rem;
+        font-size: .72rem;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: rgba(255, 255, 255, 0.45);
+        letter-spacing: .08em;
+        color: rgba(255, 255, 255, 0.42);
         font-weight: 700;
-        margin: 1rem 0 0.75rem;
-        padding: 0 .35rem;
+        margin: 1rem 0 .65rem;
+        padding: 0 .25rem;
     }
 
     .sidebar-menu {
@@ -109,19 +127,20 @@ function isMenuActive($keyword)
     }
 
     .sidebar-menu li {
-        margin-bottom: .35rem;
+        margin-bottom: .38rem;
     }
 
     .sidebar-link {
         display: flex;
         align-items: center;
-        gap: .85rem;
+        gap: .82rem;
         text-decoration: none;
-        color: rgba(255, 255, 255, 0.82);
-        padding: .82rem .95rem;
+        color: rgba(255, 255, 255, 0.84);
+        padding: .82rem .9rem;
         border-radius: 14px;
         transition: all .18s ease;
         font-weight: 600;
+        font-size: .96rem;
     }
 
     .sidebar-link:hover {
@@ -132,7 +151,7 @@ function isMenuActive($keyword)
     .sidebar-link.active {
         background: #ffc107;
         color: #212529;
-        box-shadow: 0 8px 20px rgba(255, 193, 7, 0.22);
+        box-shadow: 0 8px 18px rgba(255, 193, 7, 0.18);
     }
 
     .sidebar-link.active .sidebar-icon {
@@ -147,39 +166,40 @@ function isMenuActive($keyword)
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(255, 255, 255, 0.06);
         color: #ffc107;
         font-size: 1rem;
         flex-shrink: 0;
     }
 
     .sidebar-link:hover .sidebar-icon {
-        color: #fff3cd;
         background: rgba(255, 255, 255, 0.12);
+        color: #fff3cd;
     }
 
     .sidebar-footer {
         margin-top: auto;
-        padding: 1rem;
+        padding: .85rem;
     }
 
     .sidebar-logout {
         display: flex;
         align-items: center;
-        gap: .85rem;
+        gap: .8rem;
         text-decoration: none;
         color: #ffb3b3;
-        padding: .82rem .95rem;
+        padding: .82rem .9rem;
         border-radius: 14px;
         font-weight: 700;
+        font-size: .95rem;
         background: rgba(220, 53, 69, 0.08);
-        border: 1px solid rgba(220, 53, 69, 0.16);
+        border: 1px solid rgba(220, 53, 69, 0.14);
         transition: all .18s ease;
     }
 
     .sidebar-logout:hover {
         color: #fff;
-        background: rgba(220, 53, 69, 0.18);
+        background: rgba(220, 53, 69, 0.16);
     }
 
     .sidebar-logout .sidebar-icon {
@@ -195,10 +215,11 @@ function isMenuActive($keyword)
     }
 </style>
 
-<div class="col-md-2 p-0 d-flex flex-column sidebar-shell">
+<div class="col-md-3 col-lg-2 p-0 d-flex flex-column sidebar-shell">
     <div class="sidebar-brand">
         <div class="sidebar-brand-title">
-            <i class="bi bi-hdd-network me-2 text-warning"></i>IT Asset
+            <i class="bi bi-hdd-network text-warning"></i>
+            <span>IT Asset</span>
         </div>
         <div class="sidebar-brand-subtitle">Management System</div>
     </div>
@@ -212,12 +233,12 @@ function isMenuActive($keyword)
                 <div class="sidebar-user-name">
                     <?= h($user['username'] ?? 'User') ?>
                 </div>
-                <div class="text-white-50 small">
+                <div class="sidebar-user-email">
                     <?= h($user['email'] ?? '-') ?>
                 </div>
                 <div class="sidebar-user-role">
                     <i class="bi bi-shield-lock"></i>
-                    <?= h($role ?? '-') ?>
+                    <span><?= h($role ?? '-') ?></span>
                 </div>
             </div>
         </div>

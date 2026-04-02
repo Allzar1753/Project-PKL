@@ -185,34 +185,81 @@ if (!function_exists('verify_password_and_upgrade')) {
     }
 }
 
-if (!function_exists('get_role_permissions')) {
-    function get_role_permissions(mysqli $koneksi, string $role): array
+if (!function_exists('get_all_permissions')) {
+    function get_all_permissions(mysqli $koneksi): array
+    {
+        $permissions = [];
+        $result = mysqli_query($koneksi, "SELECT permission_key FROM rbac_permissions");
+
+        while ($row = mysqli_fetch_assoc($result)) {
+            $permissions[] = $row['permission_key'];
+        }
+
+        return array_values(array_unique($permissions));
+    }
+}
+
+if (!function_exists('get_user_permissions')) {
+    function get_user_permissions(mysqli $koneksi, int $userId, string $role): array
     {
         if ($role === 'super_admin') {
             return ['*'];
         }
 
-        $permissions = [];
+        $finalPermissions = [];
 
-        $sql = "
-            SELECT p.permission_key
+        // 1. Permission bawaan dari role
+        $sqlRole = "
+            SELECT p.id, p.permission_key
             FROM rbac_role_permissions rp
             INNER JOIN rbac_permissions p ON rp.permission_id = p.id
             WHERE rp.role = ?
         ";
+        $stmtRole = mysqli_prepare($koneksi, $sqlRole);
+        mysqli_stmt_bind_param($stmtRole, 's', $role);
+        mysqli_stmt_execute($stmtRole);
 
-        $stmt = mysqli_prepare($koneksi, $sql);
-        mysqli_stmt_bind_param($stmt, 's', $role);
-        mysqli_stmt_execute($stmt);
-
-        $result = mysqli_stmt_get_result($stmt);
-        while ($row = mysqli_fetch_assoc($result)) {
-            $permissions[] = $row['permission_key'];
+        $resultRole = mysqli_stmt_get_result($stmtRole);
+        while ($row = mysqli_fetch_assoc($resultRole)) {
+            $finalPermissions[(int)$row['id']] = $row['permission_key'];
         }
+        mysqli_stmt_close($stmtRole);
 
-        mysqli_stmt_close($stmt);
+        // 2. Tambahan permission khusus user
+        $sqlAllow = "
+            SELECT p.id, p.permission_key
+            FROM rbac_user_permissions up
+            INNER JOIN rbac_permissions p ON up.permission_id = p.id
+            WHERE up.user_id = ?
+        ";
+        $stmtAllow = mysqli_prepare($koneksi, $sqlAllow);
+        mysqli_stmt_bind_param($stmtAllow, 'i', $userId);
+        mysqli_stmt_execute($stmtAllow);
 
-        return array_values(array_unique($permissions));
+        $resultAllow = mysqli_stmt_get_result($stmtAllow);
+        while ($row = mysqli_fetch_assoc($resultAllow)) {
+            $finalPermissions[(int)$row['id']] = $row['permission_key'];
+        }
+        mysqli_stmt_close($stmtAllow);
+
+        // 3. Permission yang dicabut khusus user
+        $sqlDeny = "
+            SELECT permission_id
+            FROM rbac_user_denied_permissions
+            WHERE user_id = ?
+        ";
+        $stmtDeny = mysqli_prepare($koneksi, $sqlDeny);
+        mysqli_stmt_bind_param($stmtDeny, 'i', $userId);
+        mysqli_stmt_execute($stmtDeny);
+
+        $resultDeny = mysqli_stmt_get_result($stmtDeny);
+        while ($row = mysqli_fetch_assoc($resultDeny)) {
+            $permissionId = (int)$row['permission_id'];
+            unset($finalPermissions[$permissionId]);
+        }
+        mysqli_stmt_close($stmtDeny);
+
+        return array_values(array_unique($finalPermissions));
     }
 }
 
@@ -223,7 +270,15 @@ if (!function_exists('refresh_permissions')) {
             return;
         }
 
-        $_SESSION['user']['permissions'] = get_role_permissions($koneksi, current_role() ?? '');
+        $userId = current_user_id();
+        $role = current_role() ?? '';
+
+        if (!$userId) {
+            $_SESSION['user']['permissions'] = [];
+            return;
+        }
+
+        $_SESSION['user']['permissions'] = get_user_permissions($koneksi, $userId, $role);
     }
 }
 

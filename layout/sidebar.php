@@ -284,30 +284,73 @@ $currentPath = $_SERVER['PHP_SELF'] ?? '';
             <?php endif; ?>
         </ul>
 
-        <?php if (is_super_admin()): ?>
+        <?php if (can('users.view') || can('role_permissions.manage')): ?>
             <div class="sidebar-section-label">Administration</div>
             <ul class="sidebar-menu">
-                <li>
-                    <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= isMenuActive('/users/') ? 'active' : '' ?>">
-                        <span class="sidebar-icon"><i class="bi bi-people"></i></span>
-                        <span>Kelola User</span>
-                    </a>
-                </li>
+                <?php if (can('users.view')): ?>
+                    <li>
+                        <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= isMenuActive('/users/') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-people"></i></span>
+                            <span>Kelola User</span>
+                        </a>
+                    </li>
+                <?php endif; ?>
 
-                <li>
-                    <a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= strpos($currentPath, 'role_permissions.php') !== false ? 'active' : '' ?>">
-                        <span class="sidebar-icon"><i class="bi bi-shield-check"></i></span>
-                        <span>Hak Akses</span>
-                    </a>
-                </li>
+                <?php if (can('role_permissions.manage')): ?>
+                    <li>
+                        <a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= strpos($currentPath, 'role_permissions.php') !== false ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-shield-check"></i></span>
+                            <span>Hak Akses</span>
+                        </a>
+                    </li>
+                <?php endif; ?>
             </ul>
         <?php endif; ?>
     </div>
 
     <div class="sidebar-footer">
-        <a href="<?= h(base_url('auth/logout.php')) ?>" class="sidebar-logout">
+        <a href="#" id="btnLogoutConfirm" class="sidebar-logout">
             <span class="sidebar-icon"><i class="bi bi-box-arrow-right"></i></span>
             <span>Logout</span>
         </a>
     </div>
 </div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const logoutButton = document.getElementById('btnLogoutConfirm');
+
+        if (!logoutButton) {
+            return;
+        }
+
+        logoutButton.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            if (typeof Swal === 'undefined') {
+                const confirmed = confirm('Apakah Anda ingin logout?');
+                if (confirmed) {
+                    window.location.href = '<?= h(base_url('auth/logout.php')) ?>';
+                }
+                return;
+            }
+
+            Swal.fire({
+                title: 'Logout?',
+                text: 'Apakah Anda ingin logout dari sistem?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, logout',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = '<?= h(base_url('auth/logout.php')) ?>';
+                }
+            });
+        });
+    });
+</script>

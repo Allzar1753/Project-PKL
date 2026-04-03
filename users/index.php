@@ -136,12 +136,6 @@ function bulk_field_error(array $errors, int $rowIndex, string $field): string
     return (string) ($errors[$rowIndex][$field] ?? '');
 }
 
-
-
-
-
-
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -172,13 +166,142 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
-
         $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
         mysqli_stmt_bind_param($stmt, 'ssss', $username, $email, $hash, $role);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
-        set_flash('success', 'User baru berhasil dibuat.');
+        set_flash('success', 'User berhasil dibuat.');
+        redirect_to(base_url('users/index.php'));
+    }
+
+    if ($action === 'save_users') {
+        $rawRows = $_POST['users'] ?? [];
+
+        if (!is_array($rawRows)) {
+            $rawRows = [];
+        }
+
+        if (count($rawRows) > 10) {
+            set_create_user_form_state(
+                normalize_create_user_rows(array_slice($rawRows, 0, 10)),
+                [],
+                'Maksimal 10 baris user dalam satu proses.'
+            );
+            redirect_to(base_url('users/index.php'));
+        }
+
+        $rows = normalize_create_user_rows($rawRows);
+        $rowErrors = [];
+        $filledRows = [];
+        $generalError = '';
+
+        foreach ($rows as $index => $row) {
+            if (!create_user_row_has_value($row)) {
+                continue;
+            }
+
+            $filledRows[$index] = $row;
+
+            if ($row['username'] === '') {
+                $rowErrors[$index]['username'] = 'Username wajib diisi.';
+            }
+
+            if ($row['email'] === '') {
+                $rowErrors[$index]['email'] = 'Email wajib diisi.';
+            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+                $rowErrors[$index]['email'] = 'Format email tidak valid.';
+            }
+
+            if ($row['password'] === '') {
+                $rowErrors[$index]['password'] = 'Password wajib diisi.';
+            }
+        }
+
+        if (empty($filledRows)) {
+            $generalError = 'Isi minimal 1 baris user.';
+            set_create_user_form_state($rows, $rowErrors, $generalError);
+            redirect_to(base_url('users/index.php'));
+        }
+
+        $usernameGroups = [];
+        $emailGroups = [];
+
+        foreach ($filledRows as $index => $row) {
+            $usernameKey = strtolower($row['username']);
+            $emailKey = strtolower($row['email']);
+
+            if ($row['username'] !== '') {
+                $usernameGroups[$usernameKey][] = $index;
+            }
+
+            if ($row['email'] !== '') {
+                $emailGroups[$emailKey][] = $index;
+            }
+        }
+
+        foreach ($usernameGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['username'] = 'Username duplikat.';
+                }
+            }
+        }
+
+        foreach ($emailGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['email'] = 'Email duplikat.';
+                }
+            }
+        }
+
+        foreach ($filledRows as $index => $row) {
+            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
+                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
+            }
+
+            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
+                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
+            }
+        }
+
+        if (!empty($rowErrors) || $generalError !== '') {
+            set_create_user_form_state($rows, $rowErrors, $generalError);
+            redirect_to(base_url('users/index.php'));
+        }
+
+        mysqli_begin_transaction($koneksi);
+
+        try {
+            $stmt = mysqli_prepare(
+                $koneksi,
+                "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)"
+            );
+
+            $insertedCount = 0;
+
+            foreach ($filledRows as $row) {
+                $hash = password_hash($row['password'], PASSWORD_DEFAULT);
+                mysqli_stmt_bind_param($stmt, 'ssss', $row['username'], $row['email'], $hash, $row['role']);
+
+                if (!mysqli_stmt_execute($stmt)) {
+                    throw new Exception(mysqli_stmt_error($stmt));
+                }
+
+                $insertedCount++;
+            }
+
+            mysqli_stmt_close($stmt);
+            mysqli_commit($koneksi);
+
+            clear_create_user_form_state();
+            set_flash('success', $insertedCount . ' user berhasil dibuat.');
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            set_create_user_form_state($rows, [], 'Terjadi kesalahan saat menyimpan data user.');
+        }
+
         redirect_to(base_url('users/index.php'));
     }
 
@@ -386,144 +509,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('users/index.php'));
     }
 
-    // Update 
-
-    if ($action === 'bulk_create') {
-        $rawRows = $_POST['bulk_users'] ?? [];
-
-        if (!is_array($rawRows)) {
-            $rawRows = [];
-        }
-
-        if (count($rawRows) > 10) {
-            set_flash('error', 'Maksimal 10 user dalam satu proses.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $rows = normalize_bulk_users($rawRows);
-        $rowErrors = [];
-        $filledRows = [];
-
-        foreach ($rows as $index => $row) {
-            if (!bulk_row_has_input($row)) {
-                continue;
-            }
-
-            $filledRows[$index] = $row;
-
-            if ($row['username'] === '') {
-                $rowErrors[$index]['username'] = 'Username wajib diisi.';
-            }
-
-            if ($row['email'] === '') {
-                $rowErrors[$index]['email'] = 'Email wajib diisi.';
-            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
-                $rowErrors[$index]['email'] = 'Format email tidak valid.';
-            }
-
-            if ($row['password'] === '') {
-                $rowErrors[$index]['password'] = 'Password wajib diisi.';
-            }
-        }
-
-        if (empty($filledRows)) {
-            set_bulk_form_state($rows, $rowErrors);
-            set_flash('error', 'Isi minimal 1 user pada form tambah banyak.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $usernameGroups = [];
-        $emailGroups = [];
-
-        foreach ($filledRows as $index => $row) {
-            $usernameKey = strtolower($row['username']);
-            $emailKey = strtolower($row['email']);
-
-            if ($row['username'] !== '') {
-                $usernameGroups[$usernameKey][] = $index;
-            }
-
-            if ($row['email'] !== '') {
-                $emailGroups[$emailKey][] = $index;
-            }
-        }
-
-        foreach ($usernameGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['username'] = 'Username duplikat di form.';
-                }
-            }
-        }
-
-        foreach ($emailGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['email'] = 'Email duplikat di form.';
-                }
-            }
-        }
-
-        foreach ($filledRows as $index => $row) {
-            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
-                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
-            }
-
-            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
-                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
-            }
-        }
-
-        if (!empty($rowErrors)) {
-            set_bulk_form_state($rows, $rowErrors);
-            set_flash('error', 'Periksa kembali form tambah banyak user.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        mysqli_begin_transaction($koneksi);
-
-        try {
-            $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
-
-            $insertedCount = 0;
-
-            foreach ($filledRows as $row) {
-                $hash = password_hash($row['password'], PASSWORD_DEFAULT);
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'ssss',
-                    $row['username'],
-                    $row['email'],
-                    $hash,
-                    $row['role']
-                );
-
-                if (!mysqli_stmt_execute($stmt)) {
-                    throw new Exception(mysqli_stmt_error($stmt));
-                }
-
-                $insertedCount++;
-            }
-
-            mysqli_stmt_close($stmt);
-            mysqli_commit($koneksi);
-
-            clear_bulk_form_state();
-            set_flash('success', $insertedCount . ' user berhasil dibuat.');
-        } catch (Throwable $e) {
-            mysqli_rollback($koneksi);
-            set_bulk_form_state($rows, []);
-            set_flash('error', 'Gagal membuat banyak user sekaligus.');
-        }
-
-        redirect_to(base_url('users/index.php'));
-    }
-
-
-
-
-
     if ($action === 'delete') {
         $id = (int) ($_POST['id'] ?? 0);
         $targetUser = find_user_by_id($koneksi, $id);
@@ -553,10 +538,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+function default_create_user_rows(): array
+{
+    return [
+        ['username' => '', 'email' => '', 'password' => '', 'role' => 'user']
+    ];
+}
+
+function normalize_create_user_rows(array $rows): array
+{
+    $normalized = [];
+
+    foreach ($rows as $row) {
+        $normalized[] = [
+            'username' => trim((string) ($row['username'] ?? '')),
+            'email' => trim((string) ($row['email'] ?? '')),
+            'password' => '', // password tidak diisi ulang demi keamanan
+            'role' => normalize_role((string) ($row['role'] ?? 'user'))
+        ];
+    }
+
+    return $normalized;
+}
+
+function create_user_row_has_value(array $row): bool
+{
+    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '';
+}
+
+function set_create_user_form_state(array $rows, array $errors = [], string $generalError = ''): void
+{
+    $_SESSION['create_user_old'] = $rows;
+    $_SESSION['create_user_errors'] = $errors;
+    $_SESSION['create_user_general_error'] = $generalError;
+}
+
+function clear_create_user_form_state(): void
+{
+    unset($_SESSION['create_user_old'], $_SESSION['create_user_errors'], $_SESSION['create_user_general_error']);
+}
+
+function pull_create_user_rows_old(): array
+{
+    $rows = $_SESSION['create_user_old'] ?? [];
+    unset($_SESSION['create_user_old']);
+
+    if (!is_array($rows) || empty($rows)) {
+        return default_create_user_rows();
+    }
+
+    $rows = normalize_create_user_rows($rows);
+
+    foreach ($rows as &$row) {
+        $row['password'] = '';
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function pull_create_user_rows_errors(): array
+{
+    $errors = $_SESSION['create_user_errors'] ?? [];
+    unset($_SESSION['create_user_errors']);
+
+    return is_array($errors) ? $errors : [];
+}
+
+function pull_create_user_general_error(): string
+{
+    $message = $_SESSION['create_user_general_error'] ?? '';
+    unset($_SESSION['create_user_general_error']);
+
+    return $message;
+}
+
+function create_user_field_error(array $errors, int $rowIndex, string $field): string
+{
+    return (string) ($errors[$rowIndex][$field] ?? '');
+}
+
+
 $alertError = get_flash('error');
 $alertSuccess = get_flash('success');
 $bulkOldRows = pull_bulk_form_old();
 $bulkErrors = pull_bulk_form_errors();
+$createUserRowsOld = pull_create_user_rows_old();
+$createUserRowsErrors = pull_create_user_rows_errors();
+$createUserGeneralError = pull_create_user_general_error();
 
 if (empty($bulkOldRows)) {
     $bulkOldRows = [
@@ -790,6 +859,83 @@ function role_badge_class(string $role): string
         .invalid-feedback {
             display: block;
         }
+
+        .multi-user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .multi-user-info {
+            color: var(--muted);
+            font-size: 0.92rem;
+            margin-bottom: 0;
+        }
+
+        .multi-user-note {
+            color: var(--muted);
+            font-size: 0.84rem;
+            margin-top: .45rem;
+        }
+
+        .multi-user-counter {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffe69c;
+            border-radius: 999px;
+            padding: .45rem .8rem;
+            font-weight: 700;
+            font-size: .85rem;
+        }
+
+        .multi-user-wrap {
+            overflow-x: auto;
+        }
+
+        .multi-user-table {
+            min-width: 1020px;
+        }
+
+        .multi-user-table th {
+            white-space: nowrap;
+        }
+
+        .multi-user-table td {
+            vertical-align: top;
+        }
+
+        .multi-user-table .form-control,
+        .multi-user-table .form-select {
+            min-width: 170px;
+        }
+
+        .multi-user-table .invalid-feedback {
+            display: block;
+            font-size: .8rem;
+        }
+
+        .row-number-cell {
+            width: 70px;
+            white-space: nowrap;
+            font-weight: 700;
+        }
+
+        .row-action-cell {
+            width: 140px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 991.98px) {
+            .multi-user-table {
+                min-width: 960px;
+            }
+        }
     </style>
 </head>
 
@@ -839,24 +985,24 @@ function role_badge_class(string $role): string
             });
         });
 
-        const bulkForm = document.getElementById('bulkCreateForm');
-        const bulkRowsContainer = document.getElementById('bulkUserRows');
-        const bulkTemplate = document.getElementById('bulkUserRowTemplate');
-        const addBulkRowButton = document.getElementById('btnAddBulkRow');
-        const bulkRowCounter = document.getElementById('bulkRowCounter');
-        const bulkMaxRows = 10;
+        const form = document.getElementById('multiUserCreateForm');
+        const rowContainer = document.getElementById('userRowContainer');
+        const rowTemplate = document.getElementById('userRowTemplate');
+        const addRowButton = document.getElementById('btnAddUserRow');
+        const rowCounter = document.getElementById('userRowCounter');
+        const maxRows = 10;
 
-        if (!bulkForm || !bulkRowsContainer || !bulkTemplate || !addBulkRowButton || !bulkRowCounter) {
+        if (!form || !rowContainer || !rowTemplate || !addRowButton || !rowCounter) {
             return;
         }
 
-        function updateBulkRows() {
-            const rows = bulkRowsContainer.querySelectorAll('.bulk-user-row');
+        function updateRows() {
+            const rows = rowContainer.querySelectorAll('.user-create-row');
 
             rows.forEach(function(row, index) {
                 row.dataset.rowIndex = index;
 
-                const numberEl = row.querySelector('.bulk-row-number');
+                const numberEl = row.querySelector('.user-row-number');
                 if (numberEl) {
                     numberEl.textContent = index + 1;
                 }
@@ -865,14 +1011,21 @@ function role_badge_class(string $role): string
                     field.name = field.dataset.nameTemplate.replace(/__INDEX__/g, index);
                 });
 
-                const removeButton = row.querySelector('.btnRemoveBulkRow');
+                const removeButton = row.querySelector('.btnRemoveUserRow');
                 if (removeButton) {
                     removeButton.disabled = rows.length === 1;
                 }
             });
 
-            bulkRowCounter.textContent = rows.length;
-            addBulkRowButton.disabled = rows.length >= bulkMaxRows;
+            rowCounter.textContent = rows.length;
+            addRowButton.disabled = rows.length >= maxRows;
+        }
+
+        function clearGeneralError() {
+            const generalError = document.querySelector('.form-card .alert.alert-danger');
+            if (generalError) {
+                generalError.remove();
+            }
         }
 
         function clearRowErrors(row) {
@@ -899,6 +1052,16 @@ function role_badge_class(string $role): string
             }
         }
 
+        function setGeneralError(message) {
+            clearGeneralError();
+
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger py-2 px-3 mb-3';
+            alert.textContent = message;
+
+            form.parentElement.insertBefore(alert, form);
+        }
+
         function getRowData(row) {
             return {
                 username: row.querySelector('[data-field="username"]').value.trim(),
@@ -908,29 +1071,31 @@ function role_badge_class(string $role): string
             };
         }
 
-        function addBulkRow(data = {}) {
-            const currentRows = bulkRowsContainer.querySelectorAll('.bulk-user-row').length;
-            if (currentRows >= bulkMaxRows) {
+        function addRow(data = {}) {
+            const currentRows = rowContainer.querySelectorAll('.user-create-row').length;
+            if (currentRows >= maxRows) {
                 return;
             }
 
-            const fragment = bulkTemplate.content.cloneNode(true);
-            const row = fragment.querySelector('.bulk-user-row');
+            const fragment = rowTemplate.content.cloneNode(true);
+            const row = fragment.querySelector('.user-create-row');
 
             row.querySelector('[data-field="username"]').value = data.username || '';
             row.querySelector('[data-field="email"]').value = data.email || '';
             row.querySelector('[data-field="password"]').value = '';
             row.querySelector('[data-field="role"]').value = data.role || 'user';
 
-            bulkRowsContainer.appendChild(row);
-            updateBulkRows();
+            rowContainer.appendChild(row);
+            updateRows();
         }
 
-        function validateBulkForm() {
+        function validateForm() {
             let isValid = true;
             let filledCount = 0;
 
-            const rows = Array.from(bulkRowsContainer.querySelectorAll('.bulk-user-row'));
+            clearGeneralError();
+
+            const rows = Array.from(rowContainer.querySelectorAll('.user-create-row'));
             const usernameMap = {};
             const emailMap = {};
 
@@ -938,9 +1103,9 @@ function role_badge_class(string $role): string
                 clearRowErrors(row);
 
                 const data = getRowData(row);
-                const hasInput = data.username !== '' || data.email !== '' || data.password !== '';
+                const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
 
-                if (!hasInput) {
+                if (!hasValue) {
                     return;
                 }
 
@@ -984,15 +1149,15 @@ function role_badge_class(string $role): string
                 }
             });
 
-            if (filledCount === 0 && rows.length > 0) {
-                setFieldError(rows[0], 'username', 'Isi minimal 1 user.');
+            if (filledCount === 0) {
+                setGeneralError('Isi minimal 1 baris user.');
                 isValid = false;
             }
 
             Object.keys(usernameMap).forEach(function(key) {
                 if (usernameMap[key].length > 1) {
                     usernameMap[key].forEach(function(row) {
-                        setFieldError(row, 'username', 'Username duplikat di form.');
+                        setFieldError(row, 'username', 'Username duplikat.');
                     });
                     isValid = false;
                 }
@@ -1001,7 +1166,7 @@ function role_badge_class(string $role): string
             Object.keys(emailMap).forEach(function(key) {
                 if (emailMap[key].length > 1) {
                     emailMap[key].forEach(function(row) {
-                        setFieldError(row, 'email', 'Email duplikat di form.');
+                        setFieldError(row, 'email', 'Email duplikat.');
                     });
                     isValid = false;
                 }
@@ -1013,54 +1178,62 @@ function role_badge_class(string $role): string
             };
         }
 
-        addBulkRowButton.addEventListener('click', function() {
-            addBulkRow();
+        addRowButton.addEventListener('click', function() {
+            addRow();
         });
 
-        bulkRowsContainer.addEventListener('click', function(e) {
-            const removeButton = e.target.closest('.btnRemoveBulkRow');
+        rowContainer.addEventListener('click', function(e) {
+            const removeButton = e.target.closest('.btnRemoveUserRow');
             if (!removeButton) {
                 return;
             }
 
-            const row = removeButton.closest('.bulk-user-row');
+            const row = removeButton.closest('.user-create-row');
             if (!row) {
                 return;
             }
 
-            const totalRows = bulkRowsContainer.querySelectorAll('.bulk-user-row').length;
+            const totalRows = rowContainer.querySelectorAll('.user-create-row').length;
             if (totalRows <= 1) {
                 return;
             }
 
             row.remove();
-            updateBulkRows();
+            updateRows();
+            clearGeneralError();
         });
 
-        bulkRowsContainer.addEventListener('input', function(e) {
+        rowContainer.addEventListener('input', function(e) {
             const field = e.target.closest('.form-control, .form-select');
             if (!field) {
                 return;
             }
 
             field.classList.remove('is-invalid');
+
             const feedback = field.parentElement.querySelector('.invalid-feedback');
             if (feedback) {
                 feedback.textContent = '';
             }
+
+            clearGeneralError();
         });
 
-        bulkForm.addEventListener('submit', function(e) {
+        rowContainer.addEventListener('change', function() {
+            clearGeneralError();
+        });
+
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            const result = validateBulkForm();
+            const result = validateForm();
             if (!result.isValid) {
                 return;
             }
 
             Swal.fire({
-                title: 'Simpan banyak user?',
-                text: result.filledCount + ' user akan dibuat sekaligus.',
+                title: 'Simpan user?',
+                text: result.filledCount + ' user akan dibuat.',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'Ya, simpan',
@@ -1068,12 +1241,12 @@ function role_badge_class(string $role): string
                 confirmButtonColor: '#198754'
             }).then((swalResult) => {
                 if (swalResult.isConfirmed) {
-                    bulkForm.submit();
+                    form.submit();
                 }
             });
         });
 
-        updateBulkRows();
+        updateRows();
     });
 </script>
 
@@ -1090,7 +1263,7 @@ function role_badge_class(string $role): string
                     </div>
 
                     <a href="<?= e(base_url('users/role_permissions.php')) ?>" class="btn btn-outline-dark">
-                        Atur Hak Akses Role
+                        Hak Akses Role Default
                     </a>
                 </div>
 
@@ -1325,98 +1498,183 @@ function role_badge_class(string $role): string
                     </template>
                 </div>
 
-                <div class="table-card">
-                    <div class="card-header bg-warning-custom">
+                <div class="form-card mb-4">
+                    <div class="multi-user-header">
                         <div>
-                            <h6 class="fw-bold mb-1">Daftar User</h6>
-                            <div class="section-subinfo">Kelola akun pengguna, ubah role, reset password, dan hapus user bila diperlukan.</div>
+                            <h4 class="fw-bold mb-2">Tambah User</h4>
+                            <p class="multi-user-info">
+                                Satu form ini bisa dipakai untuk menambah 1 sampai 10 user sekaligus.
+                            </p>
+                            <div class="multi-user-note">
+                                Catatan: jika submit gagal karena validasi server, password perlu diisi ulang.
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="multi-user-counter">
+                                <span id="userRowCounter"><?= count($createUserRowsOld) ?></span> / 10 baris
+                            </span>
+
+                            <button type="button" id="btnAddUserRow" class="btn btn-outline-primary">
+                                <i class="bi bi-plus-circle me-1"></i>Tambah Baris
+                            </button>
                         </div>
                     </div>
 
-                    <div class="table-wrap">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width:70px;">ID</th>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th style="width:220px;">Role</th>
-                                    <th style="width:250px;">Password Baru</th>
-                                    <th style="width:170px;">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($users as $user): ?>
-                                    <?php $updateFormId = 'updateForm' . (int) $user['id']; ?>
+                    <?php if ($createUserGeneralError !== ''): ?>
+                        <div class="alert alert-danger py-2 px-3 mb-3">
+                            <?= e($createUserGeneralError) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" id="multiUserCreateForm" novalidate>
+                        <input type="hidden" name="action" value="save_users">
+
+                        <div class="multi-user-wrap">
+                            <table class="table align-middle multi-user-table mb-0">
+                                <thead>
                                     <tr>
-                                        <td class="fw-bold pt-4"><?= (int) $user['id'] ?></td>
+                                        <th class="row-number-cell">Baris</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Password</th>
+                                        <th style="width:180px;">Role</th>
+                                        <th class="row-action-cell">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="userRowContainer">
+                                    <?php foreach ($createUserRowsOld as $index => $row): ?>
+                                        <tr class="user-create-row" data-row-index="<?= $index ?>">
+                                            <td class="row-number-cell">
+                                                <span class="user-row-number"><?= $index + 1 ?></span>
+                                            </td>
 
-                                        <td>
-                                            <form id="<?= e($updateFormId)  ?>" method="POST" class="formUpdateUser">
-                                                <input type="hidden" name="action" value="update">
-                                                <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
-                                            </form>
-                                            <input type="text" name="username" class="form-control table-form-control" value="<?= e($user['username']) ?>" required form="<?= e($updateFormId) ?>">
-                                        </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'username') ? 'is-invalid' : '' ?>"
+                                                    value="<?= e($row['username']) ?>"
+                                                    data-field="username"
+                                                    data-name-template="users[__INDEX__][username]"
+                                                    name="users[<?= $index ?>][username]">
+                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'username')) ?></div>
+                                            </td>
 
-                                        <td>
-                                            <input type="email" name="email" class="form-control table-form-control" value="<?= e($user['email']) ?>" required form="<?= e($updateFormId) ?>">
-                                        </td>
+                                            <td>
+                                                <input
+                                                    type="email"
+                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'email') ? 'is-invalid' : '' ?>"
+                                                    value="<?= e($row['email']) ?>"
+                                                    data-field="email"
+                                                    data-name-template="users[__INDEX__][email]"
+                                                    name="users[<?= $index ?>][email]">
+                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'email')) ?></div>
+                                            </td>
 
-                                        <td>
-                                            <div class="role-stack">
-                                                <select name="role" class="form-select" form="<?= e($updateFormId) ?>">
-                                                    <option value="super_admin" <?= $user['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
-                                                    <option value="admin" <?= $user['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                    <option value="user" <?= $user['role'] === 'user' ? 'selected' : '' ?>>User</option>
+                                            <td>
+                                                <input
+                                                    type="password"
+                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>"
+                                                    value=""
+                                                    data-field="password"
+                                                    data-name-template="users[__INDEX__][password]"
+                                                    name="users[<?= $index ?>][password]">
+                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
+                                            </td>
+
+                                            <td>
+                                                <select
+                                                    class="form-select"
+                                                    data-field="role"
+                                                    data-name-template="users[__INDEX__][role]"
+                                                    name="users[<?= $index ?>][role]">
+                                                    <option value="user" <?= $row['role'] === 'user' ? 'selected' : '' ?>>User</option>
+                                                    <option value="admin" <?= $row['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                                    <option value="super_admin" <?= $row['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                 </select>
-                                            </div>
-                                        </td>
+                                                <div class="invalid-feedback"></div>
+                                            </td>
 
-                                        <td>
-                                            <input type="password" name="new_password" class="form-control table-password" placeholder="Kosongkan jika tidak diubah" form="<?= e($updateFormId) ?>">
-                                        </td>
-
-                                        <td>
-                                            <div class="action-stack">
-                                                <button type="button"
-                                                    class="btn btn-primary btn-sm btnUpdateUser"
-                                                    data-form-id="<?= e($updateFormId) ?>"
-                                                    data-username="<?= e($user['username']) ?>">
-                                                    Update
+                                            <td class="row-action-cell">
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-outline-danger btn-sm btnRemoveUserRow"
+                                                    <?= count($createUserRowsOld) === 1 ? 'disabled' : '' ?>>
+                                                    Hapus
                                                 </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
 
-                                                <!-- Tambahana untuk Aksi -->
-                                                <?php if ($user['role'] !== 'super_admin'): ?>
-                                                    <a href="<?= e(base_url('users/user_permissions.php?user_id=' . (int) $user['id'])) ?>"
-                                                        class="btn btn-warning btn-sm">
-                                                        Hak Akses
-                                                    </a>
-                                                <?php endif; ?>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="submit" class="btn btn-success">
+                                Simpan User
+                            </button>
+                        </div>
+                    </form>
 
-                                                <form method="POST" class="formDeleteUser d-inline">
-                                                    <input type="hidden" name="action" value="delete">
-                                                    <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
-                                                    <input type="hidden" name="username" value="<?= e($user['username']) ?>">
-                                                    <button type="button" class="btn btn-danger btn-sm btnDeleteUser">
-                                                        Hapus
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
+                    <template id="userRowTemplate">
+                        <tr class="user-create-row" data-row-index="0">
+                            <td class="row-number-cell">
+                                <span class="user-row-number">1</span>
+                            </td>
 
-                                <?php if (empty($users)): ?>
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted py-5">
-                                            Tidak ada data user.
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    value=""
+                                    data-field="username"
+                                    data-name-template="users[__INDEX__][username]"
+                                    name="">
+                                <div class="invalid-feedback"></div>
+                            </td>
+
+                            <td>
+                                <input
+                                    type="email"
+                                    class="form-control"
+                                    value=""
+                                    data-field="email"
+                                    data-name-template="users[__INDEX__][email]"
+                                    name="">
+                                <div class="invalid-feedback"></div>
+                            </td>
+
+                            <td>
+                                <input
+                                    type="password"
+                                    class="form-control"
+                                    value=""
+                                    data-field="password"
+                                    data-name-template="users[__INDEX__][password]"
+                                    name="">
+                                <div class="invalid-feedback"></div>
+                            </td>
+
+                            <td>
+                                <select
+                                    class="form-select"
+                                    data-field="role"
+                                    data-name-template="users[__INDEX__][role]"
+                                    name="">
+                                    <option value="user" selected>User</option>
+                                    <option value="admin">Admin</option>
+                                    <option value="super_admin">Super Admin</option>
+                                </select>
+                                <div class="invalid-feedback"></div>
+                            </td>
+
+                            <td class="row-action-cell">
+                                <button type="button" class="btn btn-outline-danger btn-sm btnRemoveUserRow">
+                                    Hapus
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
                 </div>
 
             </div>

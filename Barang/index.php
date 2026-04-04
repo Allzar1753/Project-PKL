@@ -3,7 +3,6 @@ include '../config/koneksi.php';
 require_once '../config/auth.php';
 require_permission($koneksi, 'barang.view');
 
-
 function h($value)
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -184,9 +183,9 @@ if ($filter === 'masuk') {
 $from_row = $total_rows > 0 ? $offset + 1 : 0;
 $to_row   = min($offset + $limit, $total_rows);
 
-$btnSemua  = $filter === '' ? 'btn-dark' : 'btn-outline-dark';
-$btnMasuk  = $filter === 'masuk' ? 'btn-success' : 'btn-outline-success';
-$btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
+$btnSemua  = $filter === '' ? 'btn-mode is-active' : 'btn-mode';
+$btnMasuk  = $filter === 'masuk' ? 'btn-mode is-active' : 'btn-mode';
+$btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 ?>
 
 <!DOCTYPE html>
@@ -196,77 +195,334 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Barang - IT Asset Management</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary: #ffc107;
-            --dark: #212529;
-            --muted: #6c757d;
+            --orange-1: #ff7a00;
+            --orange-2: #ff9800;
+            --orange-3: #ffb000;
+            --orange-4: #ffd166;
+            --orange-5: #fff3e0;
+
+            --dark-1: #111111;
+            --dark-2: #1f1f1f;
+            --dark-3: #2a2a2a;
+            --text-main: #1e1e1e;
+            --text-soft: #6b7280;
+
+            --white: #ffffff;
+            --surface: #ffffff;
+            --surface-soft: #fffaf3;
+            --border-soft: rgba(255, 152, 0, 0.14);
+
+            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07);
+            --shadow-hover: 0 18px 42px rgba(255, 122, 0, 0.14);
+
+            --radius-xl: 28px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            background: #f8f9fa;
-            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 20%),
+                linear-gradient(180deg, #fff8f1 0%, #fffaf5 36%, #ffffff 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
         }
 
-        .text-warning-custom {
-            color: var(--primary);
+        .page-shell {
+            padding: 28px;
         }
 
-        .bg-warning-custom {
-            background: var(--primary);
+        .page-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--radius-xl);
+            background:
+                linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(42, 42, 42, 0.90) 30%, rgba(255, 122, 0, 0.96) 100%);
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
+            padding: 1.6rem;
+            margin-bottom: 1.4rem;
         }
 
-        .card-soft {
+        .page-hero::before {
+            content: "";
+            position: absolute;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            top: -90px;
+            right: -60px;
+        }
+
+        .page-hero::after {
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255, 209, 102, 0.18);
+            left: -60px;
+            bottom: -70px;
+        }
+
+        .page-hero .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .page-title {
+            color: #fff;
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: .35rem;
+            letter-spacing: -0.02em;
+        }
+
+        .page-desc {
+            color: rgba(255, 255, 255, 0.84);
+            margin-bottom: 0;
+            line-height: 1.7;
+            max-width: 760px;
+            font-size: .94rem;
+        }
+
+        .btn-add-item {
             border: none;
-            border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+            background: #fff;
+            color: #111;
+            font-weight: 800;
+            border-radius: 999px;
+            padding: .82rem 1.25rem;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
         }
 
-        .btn-warning-custom {
-            background: var(--primary);
-            color: #000;
-            font-weight: 700;
-            border: none;
-            border-radius: 10px;
+        .btn-add-item:hover {
+            background: #fff7ea;
+            color: #111;
         }
 
-        .btn-warning-custom:hover {
-            background: #e0a800;
+        .ui-card {
+            background: var(--surface);
+            border: 1px solid var(--border-soft);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
         }
 
         .toolbar-card {
+            padding: 1.15rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .toolbar-label {
+            font-size: .84rem;
+            font-weight: 700;
+            color: var(--dark-2);
+            margin-bottom: .55rem;
+        }
+
+        .search-wrap .input-group {
+            background: #fff;
+            border: 1px solid rgba(255, 152, 0, 0.18);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .search-wrap .form-control {
             border: none;
-            border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+            box-shadow: none;
+            padding: .88rem 1rem;
+            font-size: .94rem;
+        }
+
+        .search-wrap .form-control:focus {
+            box-shadow: none;
+        }
+
+        .search-btn {
+            border: none;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
+            color: #fff;
+            font-weight: 700;
+            padding: 0 1.1rem;
+        }
+
+        .search-btn:hover {
+            color: #fff;
+            filter: brightness(.98);
+        }
+
+        .reset-btn {
+            border: none;
+            background: #1f1f1f;
+            color: #fff;
+            font-weight: 700;
+            padding: 0 1rem;
+        }
+
+        .reset-btn:hover {
+            color: #fff;
+            background: #111;
+        }
+
+        .mode-switch {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .6rem;
+        }
+
+        .btn-mode {
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            padding: .72rem 1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 152, 0, 0.18);
+            background: #fff;
+            color: #3d3d3d;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all .2s ease;
+            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04);
+        }
+
+        .btn-mode:hover {
+            transform: translateY(-1px);
+            color: #111;
+            background: #fff7ea;
+        }
+
+        .btn-mode.is-active {
+            background: linear-gradient(135deg, #111111, #ff8f00);
+            color: #fff;
+            border-color: transparent;
         }
 
         .summary-card {
-            border: none;
-            border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+            border: 1px solid rgba(255, 176, 0, 0.15);
+            box-shadow: var(--shadow-soft);
             height: 100%;
+            padding: 1.15rem;
+            transition: all .25s ease;
         }
 
-        .summary-card h3 {
+        .summary-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
+        }
+
+        .summary-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .summary-label {
+            color: var(--text-soft);
+            font-size: .84rem;
+            font-weight: 700;
+            margin-bottom: .4rem;
+        }
+
+        .summary-value {
             font-size: 2rem;
+            line-height: 1;
             font-weight: 800;
-            margin-bottom: 0;
+            margin-bottom: .35rem;
+            color: var(--dark-1);
+        }
+
+        .summary-note {
+            color: var(--text-soft);
+            font-size: .82rem;
+        }
+
+        .summary-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            color: #fff;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
+            box-shadow: 0 10px 24px rgba(255, 152, 0, 0.2);
         }
 
         .table-card {
-            border: none;
-            border-radius: 14px;
             overflow: hidden;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
         }
 
         .table-card .card-header {
-            border-bottom: none;
-            padding: 1rem 1.25rem;
+            border: none;
+            padding: 1.1rem 1.2rem;
+            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
+            color: #fff;
+        }
+
+        .table-title {
+            font-size: 1rem;
+            font-weight: 800;
+            margin-bottom: .2rem;
+        }
+
+        .table-subinfo {
+            font-size: .84rem;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .limit-box {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 999px;
+            padding: .45rem .55rem .45rem .85rem;
+        }
+
+        .limit-box .form-select {
+            min-width: 86px;
+            border-radius: 999px;
+            border: none;
+            box-shadow: none;
+            font-weight: 700;
+        }
+
+        .limit-box .section-label {
+            color: rgba(255, 255, 255, 0.88);
+            font-size: .82rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .table-responsive {
+            background: #fff;
         }
 
         .table {
@@ -274,113 +530,262 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
         }
 
         .table thead th {
-            background: #fff;
-            color: #212529;
-            font-weight: 700;
-            border-bottom: 1px solid #dee2e6;
+            background: #fffaf2;
+            color: #2c2c2c;
+            font-weight: 800;
+            border-bottom: 1px solid #f0dfc3;
             white-space: nowrap;
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .table tbody tr {
+            transition: all .18s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #fffaf4;
         }
 
         .table tbody td {
             vertical-align: top;
             padding-top: 1rem;
             padding-bottom: 1rem;
+            border-color: #f2ede5;
+        }
+
+        .asset-code {
+            font-weight: 800;
+            color: var(--dark-1);
         }
 
         .meta-line {
             display: block;
-            font-size: 0.92rem;
-            line-height: 1.45;
-            color: #212529;
+            font-size: .9rem;
+            line-height: 1.5;
+            color: #222;
         }
 
         .meta-muted {
             display: block;
-            font-size: 0.9rem;
-            color: var(--muted);
-            line-height: 1.45;
+            font-size: .88rem;
+            color: var(--text-soft);
+            line-height: 1.5;
+        }
+
+        .meta-muted i,
+        .meta-line i {
+            color: #d98710;
         }
 
         .thumb-img {
-            width: 58px;
-            height: 58px;
+            width: 62px;
+            height: 62px;
             object-fit: cover;
-            border-radius: 10px;
+            border-radius: 14px;
             cursor: pointer;
-            border: 1px solid #dee2e6;
+            border: 1px solid #e8dcc9;
+            box-shadow: 0 6px 18px rgba(17, 17, 17, 0.06);
         }
 
         .thumb-placeholder {
-            width: 58px;
-            height: 58px;
-            border-radius: 10px;
-            border: 1px dashed #ced4da;
+            width: 62px;
+            height: 62px;
+            border-radius: 14px;
+            border: 1px dashed #d8c7aa;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: #adb5bd;
-            background: #fff;
+            color: #c6a56e;
+            background: #fff9f1;
         }
 
         .action-group {
             display: flex;
             justify-content: center;
-            gap: .4rem;
+            gap: .45rem;
             flex-wrap: wrap;
         }
 
-        .section-label {
-            font-size: 0.85rem;
-            color: var(--muted);
-        }
-
-        .toolbar-actions .btn {
-            border-radius: 10px;
-            font-weight: 600;
-        }
-
-        .search-input {
-            border-radius: 12px 0 0 12px !important;
-        }
-
-        .search-btn {
-            border-radius: 0 !important;
-        }
-
-        .reset-btn {
-            border-radius: 0 12px 12px 0 !important;
-        }
-
-        .limit-select {
-            max-width: 90px;
-        }
-
-        .table-subinfo {
-            font-size: 0.9rem;
-            color: var(--muted);
+        .action-group .btn {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.06);
         }
 
         .mode-badge {
-            font-size: .82rem;
-            font-weight: 600;
+            font-size: .78rem;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: .38rem .65rem;
+        }
+
+        .badge.rounded-pill {
+            padding: .5rem .78rem;
+            font-size: .74rem;
+            font-weight: 700;
+            letter-spacing: .1px;
+        }
+
+        .badge.rounded-pill.bg-success {
+            background: linear-gradient(135deg, #111111, #2e2e2e) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-danger {
+            background: linear-gradient(135deg, #ff7a00, #ff9f1a) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-primary {
+            background: linear-gradient(135deg, #ff8c00, #ffb000) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-secondary {
+            background: #fff7ea !important;
+            color: #6b4a00 !important;
+            border: 1px solid rgba(255, 176, 0, 0.25) !important;
+        }
+
+        .badge.rounded-pill.bg-warning.text-dark {
+            background: linear-gradient(135deg, #ffd166, #ffbf47) !important;
+            color: #5b3a00 !important;
+            border: none !important;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ff9f1a, #ffb000);
+            border: none;
+            color: #fff;
+        }
+
+        .btn-warning:hover {
+            color: #fff;
+            filter: brightness(.98);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff7a00, #ff9f1a);
+            border: none;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #111111, #3a3a3a);
+            border: none;
+            color: #fff;
+        }
+
+        .btn-info:hover,
+        .btn-dark:hover,
+        .btn-danger:hover {
+            filter: brightness(.98);
+        }
+
+        .pagination {
+            gap: .35rem;
         }
 
         .pagination .page-link {
-            border-radius: 8px;
-            margin-right: 4px;
-            color: #212529;
+            border-radius: 12px;
+            color: #2a2a2a;
+            border: 1px solid #ead9bf;
+            padding: .6rem .85rem;
+            font-weight: 700;
+            box-shadow: none;
+        }
+
+        .pagination .page-link:hover {
+            background: #fff4de;
+            color: #111;
         }
 
         .pagination .page-item.active .page-link {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: #000;
-            font-weight: 700;
+            background: linear-gradient(135deg, #111111, #ff8f00);
+            border-color: transparent;
+            color: #fff;
         }
 
-        @media (max-width: 992px) {
-            .toolbar-actions {
-                margin-top: 1rem;
+        .empty-state {
+            text-align: center;
+            color: var(--text-soft);
+            padding: 2.2rem 1rem !important;
+        }
+
+        .empty-state i {
+            display: block;
+            font-size: 1.8rem;
+            margin-bottom: .55rem;
+            color: var(--orange-2);
+        }
+
+        .modal-content {
+            border: none;
+            border-radius: 22px;
+            overflow: hidden;
+        }
+
+        .modal-header.bg-warning-custom {
+            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%) !important;
+            color: #fff;
+            border: none;
+        }
+
+        .modal-header .btn-close {
+            filter: invert(1);
+        }
+
+        .select2-container--default .select2-selection--single,
+        .select2-container--default .select2-selection--multiple {
+            border-radius: 12px !important;
+            border: 1px solid #ddd !important;
+            min-height: 42px;
+            padding-top: 5px;
+        }
+
+        @media (max-width: 991.98px) {
+            .page-shell {
+                padding: 18px;
+            }
+
+            .page-hero {
+                padding: 1.3rem 1.2rem;
+            }
+
+            .page-title {
+                font-size: 1.4rem;
+            }
+
+            .toolbar-card {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .page-title {
+                font-size: 1.2rem;
+            }
+
+            .page-desc {
+                font-size: .9rem;
+            }
+
+            .btn-add-item {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .limit-box {
+                width: 100%;
+                justify-content: space-between;
             }
         }
     </style>
@@ -392,306 +797,290 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
 
             <?php include '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10 p-4">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-                    <div>
-                        <h3 class="fw-bold text-warning-custom mb-1">Data Peralatan IT</h3>
-                        <p class="text-muted mb-0">Manajemen Inventaris Aset Teknologi</p>
-                    </div>
-                    <?php if (can('barang.create')): ?>
-                        <button class="btn btn-success px-4 py-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
-                            <i class="bi bi-plus-circle me-2"></i>Add Item
-                        </button>
-                    <?php endif; ?>
-                </div>
+            <div class="col-md-10">
+                <div class="page-shell">
 
-                <div class="card toolbar-card p-3 mb-4">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-lg-8">
-                            <form method="GET">
-                                <input type="hidden" name="filter" value="<?= $filter_value ?>">
-                                <input type="hidden" name="limit" value="<?= $limit ?>">
-
-                                <label class="form-label fw-semibold">Pencarian Barang</label>
-                                <div class="input-group">
-                                    <input type="text"
-                                        name="cari"
-                                        class="form-control search-input"
-                                        placeholder="Cari asset / nama barang / serial number / merk..."
-                                        value="<?= $search_value ?>">
-                                    <button class="btn btn-warning-custom search-btn" type="submit">
-                                        <i class="bi bi-search me-2"></i>Cari
-                                    </button>
-                                    <a href="index.php" class="btn btn-dark reset-btn">Reset</a>
-                                </div>
-                            </form>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <div class="toolbar-actions">
-                                <label class="form-label fw-semibold">Mode Tampilan</label>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <a href="index.php?cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="btn <?= $btnSemua ?>">
-                                        <i class="bi bi-grid-1x2-fill me-1"></i>Semua Barang
-                                    </a>
-                                    <a href="index.php?filter=masuk&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="btn <?= $btnMasuk ?>">
-                                        <i class="bi bi-box-arrow-in-down me-1"></i>Barang Masuk
-                                    </a>
-                                    <a href="index.php?filter=keluar&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="btn <?= $btnKeluar ?>">
-                                        <i class="bi bi-box-arrow-up me-1"></i>Barang Keluar
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <div class="summary-card p-3">
-                            <h6 class="text-muted">Total Inventaris</h6>
-                            <h3 id="totalInventaris" class="fw-bold"><?= $total ?></h3>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="summary-card p-3">
-                            <h6 class="text-muted">Barang Masuk</h6>
-                            <h3 id="barangMasuk" class="fw-bold text-success"><?= $masuk ?></h3>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="summary-card p-3">
-                            <h6 class="text-muted">Barang Keluar</h6>
-                            <h3 id="barangKeluar" class="fw-bold text-danger"><?= $keluar ?></h3>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card table-card">
-                    <div class="card-header bg-warning-custom">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="page-hero">
+                        <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
                             <div>
-                                <h6 class="fw-bold mb-1">
-                                    <i class="<?= $tableIcon ?> me-2"></i><?= h($tableTitle) ?>
-                                </h6>
-                                <div class="table-subinfo">
-                                    Menampilkan <?= $from_row ?> - <?= $to_row ?> dari <?= $total_rows ?> data
-                                </div>
+                                <h1 class="page-title">Data Peralatan IT</h1>
+                                <p class="page-desc">
+                                    Kelola inventaris aset teknologi dengan tampilan yang lebih rapi, konsisten, dan nyaman dipantau untuk aktivitas harian.
+                                </p>
                             </div>
 
-                            <form method="GET" class="d-flex align-items-center gap-2 mb-0">
-                                <input type="hidden" name="cari" value="<?= $search_value ?>">
-                                <input type="hidden" name="filter" value="<?= $filter_value ?>">
-
-                                <span class="section-label">Tampilkan</span>
-                                <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm limit-select">
-                                    <option value="5" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
-                                    <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
-                                    <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
-                                    <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
-                                </select>
-                            </form>
+                            <?php if (can('barang.create')): ?>
+                                <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalCreate">
+                                    <i class="bi bi-plus-circle me-2"></i>Tambah Barang
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>No</th>
-                                    <th>Asset</th>
-                                    <th>Nama Barang</th>
-                                    <th>Detail</th>
+                    <div class="ui-card toolbar-card">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-7">
+                                <form method="GET" class="search-wrap">
+                                    <input type="hidden" name="filter" value="<?= $filter_value ?>">
+                                    <input type="hidden" name="limit" value="<?= $limit ?>">
 
-                                    <?php if ($filter === 'masuk'): ?>
-                                        <th>Logistik Masuk</th>
-                                        <th>Masalah</th>
-                                        <th>Foto</th>
-                                        <th class="text-center">Aksi</th>
-                                    <?php elseif ($filter === 'keluar'): ?>
-                                        <th>Logistik Keluar</th>
-                                        <th>Status Pengiriman</th>
-                                        <th>Foto Resi</th>
-                                        <th class="text-center">Aksi</th>
-                                    <?php else: ?>
-                                        <th>Lokasi / User</th>
-                                        <th>Status Barang</th>
-                                        <th>Status Pengiriman</th>
-                                        <th>Foto</th>
-                                        <th class="text-center">Aksi</th>
-                                    <?php endif; ?>
-                                </tr>
-                            </thead>
+                                    <label class="toolbar-label">Pencarian Barang</label>
+                                    <div class="input-group">
+                                        <input
+                                            type="text"
+                                            name="cari"
+                                            class="form-control"
+                                            placeholder="Cari asset, nama barang, serial number, merk, cabang..."
+                                            value="<?= $search_value ?>">
+                                        <button class="btn search-btn" type="submit">
+                                            <i class="bi bi-search me-2"></i>Cari
+                                        </button>
+                                        <a href="index.php" class="btn reset-btn">
+                                            Reset
+                                        </a>
+                                    </div>
+                                </form>
+                            </div>
 
-                            <tbody>
-                                <?php if (mysqli_num_rows($query) > 0): ?>
-                                    <?php $no = $offset + 1; ?>
+                            <div class="col-lg-5">
+                                <label class="toolbar-label">Mode Tampilan</label>
+                                <div class="mode-switch">
+                                    <a href="index.php?cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnSemua ?>">
+                                        <i class="bi bi-grid-1x2-fill"></i>Semua Barang
+                                    </a>
+                                    <a href="index.php?filter=masuk&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnMasuk ?>">
+                                        <i class="bi bi-box-arrow-in-down"></i>Barang Masuk
+                                    </a>
+                                    <a href="index.php?filter=keluar&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnKeluar ?>">
+                                        <i class="bi bi-box-arrow-up"></i>Barang Keluar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                    <?php while ($data = mysqli_fetch_assoc($query)): ?>
-                                        <?php
-                                        $shippingStatus = resolveShippingStatus($data);
-                                        $isKeluar = !empty($data['tanggal_keluar']);
-                                        ?>
-                                        <tr>
-                                            <td><?= $no++ ?></td>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Total Inventaris</div>
+                                        <div class="summary-value" id="totalInventaris"><?= $total ?></div>
+                                        <div class="summary-note">Seluruh aset yang tercatat di sistem</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-box-seam"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                            <td>
-                                                <div class="fw-bold"><?= h($data['no_asset'] ?? '-') ?></div>
-                                                <small class="meta-muted"><?= h($data['serial_number'] ?? '-') ?></small>
-                                            </td>
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Barang Masuk</div>
+                                        <div class="summary-value" id="barangMasuk"><?= $masuk ?></div>
+                                        <div class="summary-note">Item yang masih aktif di inventaris</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-box-arrow-in-down"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                            <td>
-                                                <div class="fw-semibold"><?= h($data['nama_barang'] ?? '-') ?></div>
-                                                <span class="badge bg-light text-dark border mode-badge"><?= h($data['nama_merk'] ?? '-') ?></span>
-                                            </td>
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Barang Keluar</div>
+                                        <div class="summary-value" id="barangKeluar"><?= $keluar ?></div>
+                                        <div class="summary-note">Item yang sudah keluar atau dikirim</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-box-arrow-up"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                            <td>
-                                                <span class="meta-line"><b>Tipe:</b> <?= h($data['nama_tipe'] ?? '-') ?></span>
-                                                <span class="meta-line"><b>Jenis:</b> <?= h($data['nama_jenis'] ?? '-') ?></span>
-                                            </td>
+                    <div class="card table-card ui-card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <div>
+                                    <div class="table-title">
+                                        <i class="<?= $tableIcon ?> me-2"></i><?= h($tableTitle) ?>
+                                    </div>
+                                    <div class="table-subinfo">
+                                        Menampilkan <?= $from_row ?> - <?= $to_row ?> dari <?= $total_rows ?> data
+                                    </div>
+                                </div>
 
-                                            <?php if ($filter === 'masuk'): ?>
+                                <form method="GET" class="mb-0">
+                                    <input type="hidden" name="cari" value="<?= $search_value ?>">
+                                    <input type="hidden" name="filter" value="<?= $filter_value ?>">
+
+                                    <div class="limit-box">
+                                        <span class="section-label">Tampilkan</span>
+                                        <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm">
+                                            <option value="5" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
+                                            <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
+                                            <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
+                                            <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
+                                        </select>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Asset</th>
+                                        <th>Nama Barang</th>
+                                        <th>Detail</th>
+
+                                        <?php if ($filter === 'masuk'): ?>
+                                            <th>Logistik Masuk</th>
+                                            <th>Masalah</th>
+                                            <th>Foto</th>
+                                            <th class="text-center">Aksi</th>
+                                        <?php elseif ($filter === 'keluar'): ?>
+                                            <th>Logistik Keluar</th>
+                                            <th>Status Pengiriman</th>
+                                            <th>Foto Resi</th>
+                                            <th class="text-center">Aksi</th>
+                                        <?php else: ?>
+                                            <th>Lokasi / User</th>
+                                            <th>Status Barang</th>
+                                            <th>Status Pengiriman</th>
+                                            <th>Foto</th>
+                                            <th class="text-center">Aksi</th>
+                                        <?php endif; ?>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    <?php if (mysqli_num_rows($query) > 0): ?>
+                                        <?php $no = $offset + 1; ?>
+
+                                        <?php while ($data = mysqli_fetch_assoc($query)): ?>
+                                            <?php
+                                            $shippingStatus = resolveShippingStatus($data);
+                                            $isKeluar = !empty($data['tanggal_keluar']);
+                                            ?>
+                                            <tr>
+                                                <td><?= $no++ ?></td>
+
                                                 <td>
-                                                    <span class="badge bg-success mb-2">
-                                                        <i class="bi bi-box-arrow-in-down me-1"></i>Masuk
-                                                    </span>
-                                                    <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
-                                                    <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
-                                                    <span class="meta-muted"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
+                                                    <div class="asset-code"><?= h($data['no_asset'] ?? '-') ?></div>
+                                                    <small class="meta-muted"><?= h($data['serial_number'] ?? '-') ?></small>
                                                 </td>
 
                                                 <td>
-                                                    <?php if (($data['bermasalah'] ?? '') === 'Iya'): ?>
-                                                        <span class="badge bg-danger rounded-pill mb-2">
-                                                            <i class="bi bi-exclamation-triangle me-1"></i>Bermasalah
+                                                    <div class="fw-bold mb-1"><?= h($data['nama_barang'] ?? '-') ?></div>
+                                                    <span class="badge bg-light text-dark border mode-badge"><?= h($data['nama_merk'] ?? '-') ?></span>
+                                                </td>
+
+                                                <td>
+                                                    <span class="meta-line"><b>Tipe:</b> <?= h($data['nama_tipe'] ?? '-') ?></span>
+                                                    <span class="meta-line"><b>Jenis:</b> <?= h($data['nama_jenis'] ?? '-') ?></span>
+                                                </td>
+
+                                                <?php if ($filter === 'masuk'): ?>
+                                                    <td>
+                                                        <span class="badge bg-success mb-2">
+                                                            <i class="bi bi-box-arrow-in-down me-1"></i>Masuk
                                                         </span>
-                                                        <span class="meta-line text-danger"><?= h($data['keterangan_masalah'] ?? '-') ?></span>
-                                                    <?php else: ?>
-                                                        <span class="text-muted">-</span>
-                                                    <?php endif; ?>
-                                                </td>
+                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
+                                                    </td>
 
-                                                <td>
-                                                    <?php if (!empty($data['foto'])): ?>
-                                                        <img src="../assets/images/<?= h($data['foto']) ?>"
-                                                            class="thumb-img previewFoto"
-                                                            data-foto="../assets/images/<?= h($data['foto']) ?>">
-                                                    <?php else: ?>
-                                                        <span class="thumb-placeholder"><i class="bi bi-image"></i></span>
-                                                    <?php endif; ?>
-                                                </td>
-
-                                                <td class="text-center">
-                                                    <div class="action-group">
-                                                        <?php if (can('barang.update')): ?>
-                                                            <button class="btn btn-sm btn-warning btnEdit"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Edit data barang">
-                                                                <i class="bi bi-pencil"></i>
-                                                            </button>
+                                                    <td>
+                                                        <?php if (($data['bermasalah'] ?? '') === 'Iya'): ?>
+                                                            <span class="badge bg-danger rounded-pill mb-2">
+                                                                <i class="bi bi-exclamation-triangle me-1"></i>Bermasalah
+                                                            </span>
+                                                            <span class="meta-line text-danger"><?= h($data['keterangan_masalah'] ?? '-') ?></span>
+                                                        <?php else: ?>
+                                                            <span class="text-muted">-</span>
                                                         <?php endif; ?>
-                                                        <?php if (can('barang.delete')): ?>
-                                                            <button class="btn btn-sm btn-danger btnDelete"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Hapus data">
-                                                                <i class="bi bi-trash"></i>
-                                                            </button>
+                                                    </td>
+
+                                                    <td>
+                                                        <?php if (!empty($data['foto'])): ?>
+                                                            <img src="../assets/images/<?= h($data['foto']) ?>"
+                                                                class="thumb-img previewFoto"
+                                                                data-foto="../assets/images/<?= h($data['foto']) ?>">
+                                                        <?php else: ?>
+                                                            <span class="thumb-placeholder"><i class="bi bi-image"></i></span>
                                                         <?php endif; ?>
-                                                    </div>
-                                                </td>
+                                                    </td>
 
-                                            <?php elseif ($filter === 'keluar'): ?>
-                                                <td>
-                                                    <span class="badge bg-danger mb-2">
-                                                        <i class="bi bi-box-arrow-up me-1"></i>Keluar
-                                                    </span>
-                                                    <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_keluar']) ? h($data['tanggal_keluar']) : '-' ?></span>
-                                                    <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_tujuan']) ? h($data['branch_tujuan']) : '-' ?></span>
-                                                    <span class="meta-line"><i class="bi bi-truck"></i> <?= !empty($data['jasa_pengiriman']) ? h($data['jasa_pengiriman']) : '-' ?></span>
-                                                    <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi']) ? h($data['nomor_resi']) : '-' ?></span>
-                                                    <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['estimasi_pengiriman']) ? h($data['estimasi_pengiriman']) : '-' ?></span>
-                                                </td>
+                                                    <td class="text-center">
+                                                        <div class="action-group">
+                                                            <?php if (can('barang.update')): ?>
+                                                                <button class="btn btn-sm btn-warning btnEdit"
+                                                                    data-id="<?= $data['id'] ?>"
+                                                                    title="Edit data barang">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                            <?php if (can('barang.delete')): ?>
+                                                                <button class="btn btn-sm btn-danger btnDelete"
+                                                                    data-id="<?= $data['id'] ?>"
+                                                                    title="Hapus data">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </td>
 
-                                                <td>
-                                                    <div class="mb-2"><?= shippingBadge($shippingStatus) ?></div>
-
-                                                    <?php if (!empty($data['tanggal_diterima'])): ?>
-                                                        <span class="meta-line"><i class="bi bi-calendar-check"></i> Diterima: <?= h($data['tanggal_diterima']) ?></span>
-                                                    <?php endif; ?>
-
-                                                    <?php if (!empty($data['nama_penerima'])): ?>
-                                                        <span class="meta-line"><i class="bi bi-person-check"></i> <?= h($data['nama_penerima']) ?></span>
-                                                    <?php endif; ?>
-
-                                                    <?php if (!empty($data['catatan_pengiriman'])): ?>
-                                                        <span class="meta-muted"><?= h($data['catatan_pengiriman']) ?></span>
-                                                    <?php endif; ?>
-                                                </td>
-
-                                                <td>
-                                                    <?php if (!empty($data['foto_resi'])): ?>
-                                                        <img src="../assets/images/<?= h($data['foto_resi']) ?>"
-                                                            class="thumb-img previewFoto"
-                                                            data-foto="../assets/images/<?= h($data['foto_resi']) ?>">
-                                                    <?php else: ?>
-                                                        <span class="thumb-placeholder"><i class="bi bi-receipt"></i></span>
-                                                    <?php endif; ?>
-                                                </td>
-
-                                                <td class="text-center">
-                                                    <div class="action-group">
-                                                        <?php if (can('barang.kirim')): ?>
-                                                            <button class="btn btn-sm btn-info btnEdit"
-                                                                data-id="<?= $data['id'] ?>"
-                                                                title="Update logistik / pengiriman">
-                                                                <i class="bi bi-truck"></i>
-                                                            </button>
-                                                        <?php endif; ?>
-
-                                                        <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
-                                                            <i class="bi bi-lock-fill"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-
-                                            <?php else: ?>
-                                                <td>
-                                                    <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
-                                                    <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
-                                                    <span class="meta-muted"><i class="bi bi-calendar"></i> Masuk: <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
-                                                </td>
-
-                                                <td>
-                                                    <div class="mb-2"><?= barangBadge($data['bermasalah'] ?? 'Tidak') ?></div>
-                                                    <span class="meta-muted"><?= h($data['nama_status'] ?? '-') ?></span>
-                                                </td>
-
-                                                <td>
-                                                    <div class="mb-2"><?= shippingBadge($shippingStatus) ?></div>
-
-                                                    <?php if ($isKeluar): ?>
-                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= h($data['tanggal_keluar']) ?></span>
+                                                <?php elseif ($filter === 'keluar'): ?>
+                                                    <td>
+                                                        <span class="badge bg-danger mb-2">
+                                                            <i class="bi bi-box-arrow-up me-1"></i>Keluar
+                                                        </span>
+                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_keluar']) ? h($data['tanggal_keluar']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_tujuan']) ? h($data['branch_tujuan']) : '-' ?></span>
-                                                    <?php else: ?>
-                                                        <span class="meta-muted">Belum ada proses pengiriman</span>
-                                                    <?php endif; ?>
-                                                </td>
+                                                        <span class="meta-line"><i class="bi bi-truck"></i> <?= !empty($data['jasa_pengiriman']) ? h($data['jasa_pengiriman']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi']) ? h($data['nomor_resi']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['estimasi_pengiriman']) ? h($data['estimasi_pengiriman']) : '-' ?></span>
+                                                    </td>
 
-                                                <td>
-                                                    <?php if (!empty($data['foto'])): ?>
-                                                        <img src="../assets/images/<?= h($data['foto']) ?>"
-                                                            class="thumb-img previewFoto"
-                                                            data-foto="../assets/images/<?= h($data['foto']) ?>">
-                                                    <?php else: ?>
-                                                        <span class="thumb-placeholder"><i class="bi bi-image"></i></span>
-                                                    <?php endif; ?>
-                                                </td>
+                                                    <td>
+                                                        <div class="mb-2"><?= shippingBadge($shippingStatus) ?></div>
 
-                                                <td class="text-center">
-                                                    <div class="action-group">
-                                                        <?php if ($isKeluar): ?>
+                                                        <?php if (!empty($data['tanggal_diterima'])): ?>
+                                                            <span class="meta-line"><i class="bi bi-calendar-check"></i> Diterima: <?= h($data['tanggal_diterima']) ?></span>
+                                                        <?php endif; ?>
+
+                                                        <?php if (!empty($data['nama_penerima'])): ?>
+                                                            <span class="meta-line"><i class="bi bi-person-check"></i> <?= h($data['nama_penerima']) ?></span>
+                                                        <?php endif; ?>
+
+                                                        <?php if (!empty($data['catatan_pengiriman'])): ?>
+                                                            <span class="meta-muted"><?= h($data['catatan_pengiriman']) ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+
+                                                    <td>
+                                                        <?php if (!empty($data['foto_resi'])): ?>
+                                                            <img src="../assets/images/<?= h($data['foto_resi']) ?>"
+                                                                class="thumb-img previewFoto"
+                                                                data-foto="../assets/images/<?= h($data['foto_resi']) ?>">
+                                                        <?php else: ?>
+                                                            <span class="thumb-placeholder"><i class="bi bi-receipt"></i></span>
+                                                        <?php endif; ?>
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <div class="action-group">
                                                             <?php if (can('barang.kirim')): ?>
                                                                 <button class="btn btn-sm btn-info btnEdit"
                                                                     data-id="<?= $data['id'] ?>"
@@ -703,54 +1092,106 @@ $btnKeluar = $filter === 'keluar' ? 'btn-danger' : 'btn-outline-danger';
                                                             <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
                                                                 <i class="bi bi-lock-fill"></i>
                                                             </button>
+                                                        </div>
+                                                    </td>
+
+                                                <?php else: ?>
+                                                    <td>
+                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-calendar"></i> Masuk: <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                    </td>
+
+                                                    <td>
+                                                        <div class="mb-2"><?= barangBadge($data['bermasalah'] ?? 'Tidak') ?></div>
+                                                        <span class="meta-muted"><?= h($data['nama_status'] ?? '-') ?></span>
+                                                    </td>
+
+                                                    <td>
+                                                        <div class="mb-2"><?= shippingBadge($shippingStatus) ?></div>
+
+                                                        <?php if ($isKeluar): ?>
+                                                            <span class="meta-line"><i class="bi bi-calendar"></i> <?= h($data['tanggal_keluar']) ?></span>
+                                                            <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_tujuan']) ? h($data['branch_tujuan']) : '-' ?></span>
                                                         <?php else: ?>
-                                                            <?php if (can('barang.update')): ?>
-                                                                <button class="btn btn-sm btn-warning btnEdit"
-                                                                    data-id="<?= $data['id'] ?>"
-                                                                    title="Edit data barang">
-                                                                    <i class="bi bi-pencil"></i>
-                                                                </button>
-                                                            <?php endif; ?>
-
-                                                            <?php if (can('barang.delete')): ?>
-                                                                <button class="btn btn-sm btn-danger btnDelete"
-                                                                    data-id="<?= $data['id'] ?>"
-                                                                    title="Hapus data">
-                                                                    <i class="bi bi-trash"></i>
-                                                                </button>
-                                                            <?php endif; ?>
+                                                            <span class="meta-muted">Belum ada proses pengiriman</span>
                                                         <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                            <?php endif; ?>
+                                                    </td>
+
+                                                    <td>
+                                                        <?php if (!empty($data['foto'])): ?>
+                                                            <img src="../assets/images/<?= h($data['foto']) ?>"
+                                                                class="thumb-img previewFoto"
+                                                                data-foto="../assets/images/<?= h($data['foto']) ?>">
+                                                        <?php else: ?>
+                                                            <span class="thumb-placeholder"><i class="bi bi-image"></i></span>
+                                                        <?php endif; ?>
+                                                    </td>
+
+                                                    <td class="text-center">
+                                                        <div class="action-group">
+                                                            <?php if ($isKeluar): ?>
+                                                                <?php if (can('barang.kirim')): ?>
+                                                                    <button class="btn btn-sm btn-info btnEdit"
+                                                                        data-id="<?= $data['id'] ?>"
+                                                                        title="Update logistik / pengiriman">
+                                                                        <i class="bi bi-truck"></i>
+                                                                    </button>
+                                                                <?php endif; ?>
+
+                                                                <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
+                                                                    <i class="bi bi-lock-fill"></i>
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <?php if (can('barang.update')): ?>
+                                                                    <button class="btn btn-sm btn-warning btnEdit"
+                                                                        data-id="<?= $data['id'] ?>"
+                                                                        title="Edit data barang">
+                                                                        <i class="bi bi-pencil"></i>
+                                                                    </button>
+                                                                <?php endif; ?>
+
+                                                                <?php if (can('barang.delete')): ?>
+                                                                    <button class="btn btn-sm btn-danger btnDelete"
+                                                                        data-id="<?= $data['id'] ?>"
+                                                                        title="Hapus data">
+                                                                        <i class="bi bi-trash"></i>
+                                                                    </button>
+                                                                <?php endif; ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </td>
+                                                <?php endif; ?>
+                                            </tr>
+                                        <?php endwhile; ?>
+
+                                    <?php else: ?>
+                                        <tr>
+                                            <td colspan="<?= $emptyColspan ?>" class="empty-state">
+                                                <i class="bi bi-inbox"></i>
+                                                Data tidak ditemukan.
+                                            </td>
                                         </tr>
-                                    <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
 
-                                <?php else: ?>
-                                    <tr>
-                                        <td colspan="<?= $emptyColspan ?>" class="text-center text-muted py-5">
-                                            <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                                            Data tidak ditemukan.
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                        <div class="p-3 p-md-4">
+                            <nav>
+                                <ul class="pagination mb-0 flex-wrap">
+                                    <?php for ($i = 1; $i <= $total_pages; $i++) : ?>
+                                        <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
+                                            <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>&cari=<?= urlencode($search_input) ?>&filter=<?= urlencode($filter) ?>">
+                                                <?= $i ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
 
-                    <div class="p-3">
-                        <nav>
-                            <ul class="pagination mb-0 flex-wrap">
-                                <?php for ($i = 1; $i <= $total_pages; $i++) : ?>
-                                    <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
-                                        <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>&cari=<?= urlencode($search_input) ?>&filter=<?= urlencode($filter) ?>">
-                                            <?= $i ?>
-                                        </a>
-                                    </li>
-                                <?php endfor; ?>
-                            </ul>
-                        </nav>
-                    </div>
                 </div>
             </div>
         </div>

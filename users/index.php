@@ -70,7 +70,6 @@ function email_exists(mysqli $koneksi, string $email, ?int $ignoreId = null): bo
     return $exists;
 }
 
-// Update 
 function normalize_bulk_users(array $rows): array
 {
     $normalized = [];
@@ -115,7 +114,7 @@ function pull_bulk_form_old(): array
     foreach ($rows as &$row) {
         $row['username'] = trim((string) ($row['username'] ?? ''));
         $row['email'] = trim((string) ($row['email'] ?? ''));
-        $row['password'] = ''; // password tidak diisi ulang demi keamanan
+        $row['password'] = '';
         $row['role'] = normalize_role((string) ($row['role'] ?? 'user'));
     }
     unset($row);
@@ -437,8 +436,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('users/index.php'));
     }
 
-
-
     if ($action === 'update') {
         $id = (int) ($_POST['id'] ?? 0);
         $username = trim($_POST['username'] ?? '');
@@ -553,7 +550,7 @@ function normalize_create_user_rows(array $rows): array
         $normalized[] = [
             'username' => trim((string) ($row['username'] ?? '')),
             'email' => trim((string) ($row['email'] ?? '')),
-            'password' => '', // password tidak diisi ulang demi keamanan
+            'password' => '',
             'role' => normalize_role((string) ($row['role'] ?? 'user'))
         ];
     }
@@ -618,7 +615,6 @@ function create_user_field_error(array $errors, int $rowIndex, string $field): s
     return (string) ($errors[$rowIndex][$field] ?? '');
 }
 
-
 $alertError = get_flash('error');
 $alertSuccess = get_flash('success');
 $bulkOldRows = pull_bulk_form_old();
@@ -632,8 +628,6 @@ if (empty($bulkOldRows)) {
         ['username' => '', 'email' => '', 'password' => '', 'role' => 'user']
     ];
 }
-
-
 
 $usersResult = mysqli_query(
     $koneksi,
@@ -650,14 +644,55 @@ while ($row = mysqli_fetch_assoc($usersResult)) {
 function role_badge_class(string $role): string
 {
     if ($role === 'super_admin') {
-        return 'bg-dark';
+        return 'role-badge super-admin';
     }
 
     if ($role === 'admin') {
-        return 'bg-warning text-dark';
+        return 'role-badge admin';
     }
 
-    return 'bg-primary';
+    return 'role-badge user';
+}
+
+function role_label(string $role): string
+{
+    if ($role === 'super_admin') {
+        return 'Super Admin';
+    }
+
+    if ($role === 'admin') {
+        return 'Admin';
+    }
+
+    return 'User';
+}
+
+function role_icon(string $role): string
+{
+    if ($role === 'super_admin') {
+        return 'bi-shield-lock';
+    }
+
+    if ($role === 'admin') {
+        return 'bi-person-gear';
+    }
+
+    return 'bi-person';
+}
+
+$totalUsers = count($users);
+$superAdminTotal = 0;
+$adminTotal = 0;
+$userTotal = 0;
+
+foreach ($users as $item) {
+    if ($item['role'] === 'super_admin') {
+        $superAdminTotal++;
+    } elseif ($item['role'] === 'admin') {
+        $adminTotal++;
+    } else {
+        $userTotal++;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -667,1019 +702,1647 @@ function role_badge_class(string $role): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola User - IT Asset</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary: #ffc107;
-            --dark: #212529;
-            --muted: #6c757d;
+            --orange-1: #ff7a00;
+            --orange-2: #ff9800;
+            --orange-3: #ffb000;
+            --orange-4: #ffd166;
+            --orange-5: #fff3e0;
+
+            --dark-1: #111111;
+            --dark-2: #1f1f1f;
+            --text-main: #1e1e1e;
+            --text-soft: #6b7280;
+
+            --surface: #ffffff;
+            --surface-soft: #fffaf3;
+            --border-soft: rgba(255, 152, 0, 0.14);
+
+            --shadow-soft: 0 14px 40px rgba(17, 17, 17, 0.08);
+            --shadow-hover: 0 18px 46px rgba(255, 122, 0, 0.14);
+
+            --radius-xl: 28px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            background: #f5f7fb;
-            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.09), transparent 18%),
+                linear-gradient(180deg, #fff8f1 0%, #fffaf5 35%, #ffffff 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
         }
 
-        .text-warning-custom {
-            color: var(--primary);
+        .page-wrap {
+            padding: 28px;
         }
 
-        .page-card,
-        .summary-card,
-        .table-card,
-        .form-card {
+        .hero-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--radius-xl);
+            background: linear-gradient(135deg, rgba(17, 17, 17, 0.95) 0%, rgba(42, 42, 42, 0.90) 30%, rgba(255, 122, 0, 0.96) 100%);
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
+            padding: 1.55rem 1.6rem;
+            margin-bottom: 1.35rem;
+        }
+
+        .hero-card::before {
+            content: "";
+            position: absolute;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            top: -90px;
+            right: -65px;
+        }
+
+        .hero-card::after {
+            content: "";
+            position: absolute;
+            width: 170px;
+            height: 170px;
+            border-radius: 50%;
+            background: rgba(255, 209, 102, 0.16);
+            left: -55px;
+            bottom: -65px;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .page-title {
+            color: #fff;
+            font-size: 1.85rem;
+            font-weight: 800;
+            margin-bottom: .35rem;
+            letter-spacing: -0.02em;
+        }
+
+        .page-subtitle {
+            color: rgba(255, 255, 255, 0.84);
+            margin-bottom: 0;
+            line-height: 1.7;
+            max-width: 760px;
+            font-size: .94rem;
+        }
+
+        .hero-action {
             border: none;
-            border-radius: 16px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
             background: #fff;
+            color: #111;
+            font-weight: 800;
+            border-radius: 999px;
+            padding: .82rem 1.2rem;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .hero-action:hover {
+            background: #fff7ea;
+            color: #111;
+        }
+
+        .alert {
+            border: none;
+            border-radius: 18px;
+            padding: 14px 16px;
+            box-shadow: 0 10px 24px rgba(17, 17, 17, 0.04);
+        }
+
+        .section-card {
+            background: #fff;
+            border: 1px solid var(--border-soft);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
         }
 
         .summary-card {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+            border: 1px solid rgba(255, 176, 0, 0.15);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
             height: 100%;
-            padding: 1.25rem;
+            padding: 1.15rem;
+            transition: all .25s ease;
         }
 
-        .summary-card h3 {
+        .summary-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
+        }
+
+        .summary-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .summary-label {
+            font-size: .84rem;
+            color: var(--text-soft);
+            font-weight: 700;
+            margin-bottom: .38rem;
+        }
+
+        .summary-value {
             font-size: 2rem;
             font-weight: 800;
-            margin-bottom: 0;
+            line-height: 1;
+            color: var(--dark-1);
+            margin-bottom: .35rem;
         }
 
-        .bg-warning-custom {
-            background: var(--primary);
+        .summary-note {
+            font-size: .82rem;
+            color: var(--text-soft);
+            line-height: 1.5;
         }
 
-        .table-card .card-header {
-            border-bottom: none;
-            padding: 1rem 1.25rem;
-            border-radius: 16px 16px 0 0;
-        }
-
-        .btn-warning-custom {
-            background: var(--primary);
-            border: none;
-            color: #212529;
-            font-weight: 700;
-            border-radius: 10px;
-        }
-
-        .btn-warning-custom:hover {
-            background: #e0a800;
-            color: #212529;
-        }
-
-        .table thead th {
-            background: #212529;
+        .summary-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
             color: #fff;
-            font-weight: 700;
-            white-space: nowrap;
-            border-bottom: none;
-            padding-top: 1rem;
-            padding-bottom: 1rem;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
+            box-shadow: 0 10px 24px rgba(255, 152, 0, 0.20);
         }
 
-        .table tbody td {
-            vertical-align: top;
-            padding: 1rem 0.85rem;
+        .form-shell,
+        .list-shell {
+            background: #fff;
+            border: 1px solid var(--border-soft);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
         }
 
-        .section-subinfo {
-            color: var(--muted);
-            font-size: 0.9rem;
+        .shell-header {
+            padding: 1.1rem 1.2rem;
+            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
+            color: #fff;
         }
 
-        .form-control,
-        .form-select {
-            border-radius: 12px;
-            min-height: 46px;
+        .shell-title {
+            font-size: 1rem;
+            font-weight: 800;
+            margin-bottom: .2rem;
+        }
+
+        .shell-subtitle {
+            font-size: .84rem;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .shell-body {
+            padding: 1.2rem;
+            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
         }
 
         .form-label {
             font-weight: 700;
+            color: var(--dark-1);
             margin-bottom: .45rem;
+            font-size: .88rem;
         }
 
-        .form-card {
-            padding: 1.5rem;
+        .form-control,
+        .form-select {
+            border-radius: 14px;
+            min-height: 46px;
+            border: 1px solid #e9dcc8;
+            box-shadow: none;
+            padding: .8rem .95rem;
         }
 
-        .table-form-control {
-            min-width: 180px;
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #f0c63d;
+            box-shadow: 0 0 0 .2rem rgba(255, 193, 7, 0.14);
         }
 
-        .table-password {
-            min-width: 220px;
+        .btn-main {
+            border: none;
+            border-radius: 14px;
+            font-weight: 800;
+            padding: .82rem 1rem;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
+            color: #fff;
+            box-shadow: 0 12px 28px rgba(255, 152, 0, 0.18);
+            transition: all .22s ease;
         }
 
-        .role-stack {
-            min-width: 180px;
+        .btn-main:hover {
+            color: #fff;
+            transform: translateY(-1px);
+            filter: brightness(.98);
         }
 
-        .action-stack {
+        .btn-soft {
+            border-radius: 14px;
+            font-weight: 700;
+            padding: .78rem 1rem;
+            border: 1px solid #e3dfd8;
+            background: #fff;
+            color: #333;
+        }
+
+        .btn-soft:hover {
+            background: #fff7ea;
+            color: #111;
+            border-color: rgba(255, 152, 0, 0.18);
+        }
+
+        .nav-tabs.custom-tabs {
+            border-bottom: none;
+            gap: .65rem;
+        }
+
+        .nav-tabs.custom-tabs .nav-link {
+            border: 1px solid #e8ddca;
+            border-radius: 999px;
+            padding: .72rem 1rem;
+            font-weight: 800;
+            color: #444;
+            background: #fff;
+        }
+
+        .nav-tabs.custom-tabs .nav-link.active {
+            background: linear-gradient(135deg, #111111, #ff8f00);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 10px 24px rgba(255, 143, 0, 0.16);
+        }
+
+        .helper-note {
+            background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%);
+            border: 1px solid rgba(255, 152, 0, 0.12);
+            border-radius: 16px;
+            padding: .95rem 1rem;
+            color: var(--text-soft);
+            font-size: .88rem;
+            line-height: 1.6;
+        }
+
+        .row-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            border-radius: 999px;
+            background: #fff3de;
+            color: #8b4f00;
+            border: 1px solid rgba(255, 152, 0, 0.16);
+            padding: .35rem .7rem;
+            font-size: .8rem;
+            font-weight: 800;
+        }
+
+        .user-card {
+            border: 1px solid rgba(255, 176, 0, 0.12);
+            border-radius: 18px;
+            background: #fff;
+            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04);
+            overflow: hidden;
+        }
+
+        .user-card + .user-card {
+            margin-top: 1rem;
+        }
+
+        .user-top {
+            padding: 1rem 1rem;
+            background: linear-gradient(180deg, #fffdf9 0%, #fff7ee 100%);
+        }
+
+        .user-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #111111, #ff8f00);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 800;
+            box-shadow: 0 10px 24px rgba(255, 143, 0, 0.16);
+            flex-shrink: 0;
+        }
+
+        .user-name {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--dark-1);
+            margin-bottom: .15rem;
+        }
+
+        .user-email {
+            font-size: .88rem;
+            color: var(--text-soft);
+            line-height: 1.5;
+        }
+
+        .role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            border-radius: 999px;
+            padding: .42rem .75rem;
+            font-size: .76rem;
+            font-weight: 800;
+        }
+
+        .role-badge.super-admin {
+            background: #222;
+            color: #fff;
+        }
+
+        .role-badge.admin {
+            background: #fff3de;
+            color: #8b4f00;
+            border: 1px solid rgba(255, 152, 0, 0.16);
+        }
+
+        .role-badge.user {
+            background: #eef6ff;
+            color: #285ea8;
+            border: 1px solid rgba(40, 94, 168, 0.15);
+        }
+
+        .user-actions {
             display: flex;
             gap: .5rem;
             flex-wrap: wrap;
         }
 
-        .title-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .table-wrap {
-            overflow-x: auto;
-        }
-
-        @media (max-width: 1200px) {
-
-            .table-form-control,
-            .table-password,
-            .role-stack {
-                min-width: 160px;
-            }
-        }
-
-        .bulk-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-item: start;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
-        }
-
-        .bulk-card-info {
-            color: var(--muted);
-            font-size: 0.92rem;
-            margin-bottom: 0;
-        }
-
-        .bluk-counter-badge {
-            background: #fff3cb;
-            color: #856404;
-            border: 1px solid #ffe69c;
+        .btn-pill {
             border-radius: 999px;
-            padding: .45rem .8rem;
-            font-weight: 700;
-            font-size: .85rem;
+            font-weight: 800;
+            padding: .68rem 1rem;
         }
 
-        .bulk-user-row {
-            border: 1px solid #dee2e6;
-            border-radius: 16px;
+        .btn-edit {
+            background: linear-gradient(135deg, #111111, #2d2d2d);
+            color: #fff;
+            border: none;
+        }
+
+        .btn-delete {
+            background: #fff;
+            color: #c62828;
+            border: 1px solid rgba(198, 40, 40, 0.18);
+        }
+
+        .btn-edit:hover,
+        .btn-delete:hover {
+            transform: translateY(-1px);
+        }
+
+        .edit-area {
             padding: 1rem;
-            background: #fafbfc;
-            margin-bottom: 1rem;
+            border-top: 1px solid #f0ece4;
+            background: #fff;
         }
 
-        .bulk-user-row:last-child {
-            margin-bottom: 0;
+        .table-lite {
+            width: 100%;
+            min-width: 980px;
         }
 
-        .bulk-row-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: .75rem;
-            flex-wrap: wrap;
-            margin-bottom: .75rem;
-        }
-
-        .bulk-row-note {
+        .table-lite th {
+            white-space: nowrap;
             font-size: .85rem;
-            color: var(--muted);
-            margin-top: .5rem;
+            color: #444;
+            padding-bottom: .85rem;
+        }
+
+        .table-lite td {
+            vertical-align: top;
+            padding-top: .8rem;
+            padding-bottom: .8rem;
+            border-top: 1px solid #f2ece2;
+        }
+
+        .table-lite .form-control,
+        .table-lite .form-select {
+            min-width: 160px;
         }
 
         .invalid-feedback {
             display: block;
         }
 
-        .multi-user-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1rem;
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-soft);
         }
 
-        .multi-user-info {
-            color: var(--muted);
-            font-size: 0.92rem;
-            margin-bottom: 0;
-        }
-
-        .multi-user-note {
-            color: var(--muted);
-            font-size: 0.84rem;
-            margin-top: .45rem;
-        }
-
-        .multi-user-counter {
-            display: inline-flex;
-            align-items: center;
-            gap: .35rem;
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffe69c;
-            border-radius: 999px;
-            padding: .45rem .8rem;
-            font-weight: 700;
-            font-size: .85rem;
-        }
-
-        .multi-user-wrap {
-            overflow-x: auto;
-        }
-
-        .multi-user-table {
-            min-width: 1020px;
-        }
-
-        .multi-user-table th {
-            white-space: nowrap;
-        }
-
-        .multi-user-table td {
-            vertical-align: top;
-        }
-
-        .multi-user-table .form-control,
-        .multi-user-table .form-select {
-            min-width: 170px;
-        }
-
-        .multi-user-table .invalid-feedback {
+        .empty-state i {
             display: block;
-            font-size: .8rem;
-        }
-
-        .row-number-cell {
-            width: 70px;
-            white-space: nowrap;
-            font-weight: 700;
-        }
-
-        .row-action-cell {
-            width: 140px;
-            white-space: nowrap;
+            font-size: 1.7rem;
+            margin-bottom: .45rem;
+            color: var(--orange-2);
         }
 
         @media (max-width: 991.98px) {
-            .multi-user-table {
-                min-width: 960px;
+            .page-wrap {
+                padding: 18px;
+            }
+
+            .hero-card {
+                padding: 1.3rem 1.15rem;
+            }
+
+            .page-title {
+                font-size: 1.4rem;
+            }
+
+            .summary-value {
+                font-size: 1.7rem;
+            }
+
+            .shell-body,
+            .shell-header {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .page-title {
+                font-size: 1.2rem;
+            }
+
+            .page-subtitle {
+                font-size: .9rem;
+            }
+
+            .hero-action,
+            .btn-main,
+            .btn-soft,
+            .btn-pill {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .nav-tabs.custom-tabs .nav-link {
+                width: 100%;
+                text-align: center;
             }
         }
     </style>
 </head>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.btnUpdateUser').forEach(function(button) {
-            button.addEventListener('click', function() {
-                const formId = this.dataset.formId;
-                const username = this.dataset.username;
-                const form = document.getElementById(formId);
-
-                Swal.fire({
-                    title: 'Update user?',
-                    text: 'Data user "' + username + '" akan diperbarui.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, update',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#0d6efd'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        form.submit();
-                    }
-                });
-            });
-        });
-
-        document.querySelectorAll('.btnDeleteUser').forEach(function(button) {
-            button.addEventListener('click', function() {
-                const form = this.closest('.formDeleteUser');
-                const usernameInput = form.querySelector('input[name="username"]');
-                const username = usernameInput ? usernameInput.value : 'user ini';
-
-                Swal.fire({
-                    title: 'Hapus user?',
-                    text: 'User "' + username + '" akan dihapus dan tidak bisa dikembalikan.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, hapus',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#dc3545'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        form.submit();
-                    }
-                });
-            });
-        });
-
-        const form = document.getElementById('multiUserCreateForm');
-        const rowContainer = document.getElementById('userRowContainer');
-        const rowTemplate = document.getElementById('userRowTemplate');
-        const addRowButton = document.getElementById('btnAddUserRow');
-        const rowCounter = document.getElementById('userRowCounter');
-        const maxRows = 10;
-
-        if (!form || !rowContainer || !rowTemplate || !addRowButton || !rowCounter) {
-            return;
-        }
-
-        function updateRows() {
-            const rows = rowContainer.querySelectorAll('.user-create-row');
-
-            rows.forEach(function(row, index) {
-                row.dataset.rowIndex = index;
-
-                const numberEl = row.querySelector('.user-row-number');
-                if (numberEl) {
-                    numberEl.textContent = index + 1;
-                }
-
-                row.querySelectorAll('[data-name-template]').forEach(function(field) {
-                    field.name = field.dataset.nameTemplate.replace(/__INDEX__/g, index);
-                });
-
-                const removeButton = row.querySelector('.btnRemoveUserRow');
-                if (removeButton) {
-                    removeButton.disabled = rows.length === 1;
-                }
-            });
-
-            rowCounter.textContent = rows.length;
-            addRowButton.disabled = rows.length >= maxRows;
-        }
-
-        function clearGeneralError() {
-            const generalError = document.querySelector('.form-card .alert.alert-danger');
-            if (generalError) {
-                generalError.remove();
-            }
-        }
-
-        function clearRowErrors(row) {
-            row.querySelectorAll('.form-control, .form-select').forEach(function(field) {
-                field.classList.remove('is-invalid');
-            });
-
-            row.querySelectorAll('.invalid-feedback').forEach(function(feedback) {
-                feedback.textContent = '';
-            });
-        }
-
-        function setFieldError(row, fieldName, message) {
-            const field = row.querySelector('[data-field="' + fieldName + '"]');
-            if (!field) {
-                return;
-            }
-
-            field.classList.add('is-invalid');
-
-            const feedback = field.parentElement.querySelector('.invalid-feedback');
-            if (feedback) {
-                feedback.textContent = message;
-            }
-        }
-
-        function setGeneralError(message) {
-            clearGeneralError();
-
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-danger py-2 px-3 mb-3';
-            alert.textContent = message;
-
-            form.parentElement.insertBefore(alert, form);
-        }
-
-        function getRowData(row) {
-            return {
-                username: row.querySelector('[data-field="username"]').value.trim(),
-                email: row.querySelector('[data-field="email"]').value.trim(),
-                password: row.querySelector('[data-field="password"]').value,
-                role: row.querySelector('[data-field="role"]').value
-            };
-        }
-
-        function addRow(data = {}) {
-            const currentRows = rowContainer.querySelectorAll('.user-create-row').length;
-            if (currentRows >= maxRows) {
-                return;
-            }
-
-            const fragment = rowTemplate.content.cloneNode(true);
-            const row = fragment.querySelector('.user-create-row');
-
-            row.querySelector('[data-field="username"]').value = data.username || '';
-            row.querySelector('[data-field="email"]').value = data.email || '';
-            row.querySelector('[data-field="password"]').value = '';
-            row.querySelector('[data-field="role"]').value = data.role || 'user';
-
-            rowContainer.appendChild(row);
-            updateRows();
-        }
-
-        function validateForm() {
-            let isValid = true;
-            let filledCount = 0;
-
-            clearGeneralError();
-
-            const rows = Array.from(rowContainer.querySelectorAll('.user-create-row'));
-            const usernameMap = {};
-            const emailMap = {};
-
-            rows.forEach(function(row) {
-                clearRowErrors(row);
-
-                const data = getRowData(row);
-                const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
-
-                if (!hasValue) {
-                    return;
-                }
-
-                filledCount++;
-
-                if (data.username === '') {
-                    setFieldError(row, 'username', 'Username wajib diisi.');
-                    isValid = false;
-                }
-
-                if (data.email === '') {
-                    setFieldError(row, 'email', 'Email wajib diisi.');
-                    isValid = false;
-                } else {
-                    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    if (!emailPattern.test(data.email)) {
-                        setFieldError(row, 'email', 'Format email tidak valid.');
-                        isValid = false;
-                    }
-                }
-
-                if (data.password === '') {
-                    setFieldError(row, 'password', 'Password wajib diisi.');
-                    isValid = false;
-                }
-
-                if (data.username !== '') {
-                    const usernameKey = data.username.toLowerCase();
-                    if (!usernameMap[usernameKey]) {
-                        usernameMap[usernameKey] = [];
-                    }
-                    usernameMap[usernameKey].push(row);
-                }
-
-                if (data.email !== '') {
-                    const emailKey = data.email.toLowerCase();
-                    if (!emailMap[emailKey]) {
-                        emailMap[emailKey] = [];
-                    }
-                    emailMap[emailKey].push(row);
-                }
-            });
-
-            if (filledCount === 0) {
-                setGeneralError('Isi minimal 1 baris user.');
-                isValid = false;
-            }
-
-            Object.keys(usernameMap).forEach(function(key) {
-                if (usernameMap[key].length > 1) {
-                    usernameMap[key].forEach(function(row) {
-                        setFieldError(row, 'username', 'Username duplikat.');
-                    });
-                    isValid = false;
-                }
-            });
-
-            Object.keys(emailMap).forEach(function(key) {
-                if (emailMap[key].length > 1) {
-                    emailMap[key].forEach(function(row) {
-                        setFieldError(row, 'email', 'Email duplikat.');
-                    });
-                    isValid = false;
-                }
-            });
-
-            return {
-                isValid: isValid,
-                filledCount: filledCount
-            };
-        }
-
-        addRowButton.addEventListener('click', function() {
-            addRow();
-        });
-
-        rowContainer.addEventListener('click', function(e) {
-            const removeButton = e.target.closest('.btnRemoveUserRow');
-            if (!removeButton) {
-                return;
-            }
-
-            const row = removeButton.closest('.user-create-row');
-            if (!row) {
-                return;
-            }
-
-            const totalRows = rowContainer.querySelectorAll('.user-create-row').length;
-            if (totalRows <= 1) {
-                return;
-            }
-
-            row.remove();
-            updateRows();
-            clearGeneralError();
-        });
-
-        rowContainer.addEventListener('input', function(e) {
-            const field = e.target.closest('.form-control, .form-select');
-            if (!field) {
-                return;
-            }
-
-            field.classList.remove('is-invalid');
-
-            const feedback = field.parentElement.querySelector('.invalid-feedback');
-            if (feedback) {
-                feedback.textContent = '';
-            }
-
-            clearGeneralError();
-        });
-
-        rowContainer.addEventListener('change', function() {
-            clearGeneralError();
-        });
-
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const result = validateForm();
-            if (!result.isValid) {
-                return;
-            }
-
-            Swal.fire({
-                title: 'Simpan user?',
-                text: result.filledCount + ' user akan dibuat.',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Ya, simpan',
-                cancelButtonText: 'Batal',
-                confirmButtonColor: '#198754'
-            }).then((swalResult) => {
-                if (swalResult.isConfirmed) {
-                    form.submit();
-                }
-            });
-        });
-
-        updateRows();
-    });
-</script>
 
 <body>
     <div class="container-fluid">
         <div class="row">
             <?php require_once '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10 p-4">
-                <div class="title-bar mb-4">
-                    <div>
-                        <h3 class="fw-bold text-warning-custom mb-1">Kelola User</h3>
-                        <p class="text-muted mb-0">Manajemen akun pengguna sistem dan kontrol role akses.</p>
-                    </div>
+            <div class="col-md-10">
+                <div class="page-wrap">
 
-                    <a href="<?= e(base_url('users/role_permissions.php')) ?>" class="btn btn-outline-dark">
-                        Hak Akses Role Default
-                    </a>
-                </div>
+                    <div class="hero-card">
+                        <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
+                            <div>
+                                <h1 class="page-title">Kelola User</h1>
+                                <p class="page-subtitle">
+                                    Manajemen akun pengguna, pengaturan role, dan kontrol akses sistem dalam tampilan yang lebih rapi, modern, dan nyaman digunakan.
+                                </p>
+                            </div>
 
-                <?php if ($alertError): ?>
-                    <div class="alert alert-danger"><?= e($alertError) ?></div>
-                <?php endif; ?>
-
-                <?php if ($alertSuccess): ?>
-                    <div class="alert alert-success"><?= e($alertSuccess) ?></div>
-                <?php endif; ?>
-
-                <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <h6 class="text-muted">Total User</h6>
-                            <h3><?= count($users) ?></h3>
+                            <a href="<?= e(base_url('users/role_permissions.php')) ?>" class="hero-action">
+                                <i class="bi bi-shield-check me-2"></i>Hak Akses Role
+                            </a>
                         </div>
                     </div>
 
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <h6 class="text-muted">Super Admin</h6>
-                            <h3 class="text-dark"><?= count_super_admins($koneksi) ?></h3>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="summary-card">
-                            <h6 class="text-muted">Role Aktif Sistem</h6>
-                            <h3 class="text-warning-custom">3</h3>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-card mb-4">
-                    <h4 class="fw-bold mb-4">Tambah User Baru</h4>
-
-                    <form method="POST">
-                        <input type="hidden" name="action" value="create">
-
-                        <div class="row g-3 align-items-end">
-                            <div class="col-lg-3 col-md-6">
-                                <label class="form-label">Username</label>
-                                <input type="text" name="username" class="form-control" required>
-                            </div>
-
-                            <div class="col-lg-3 col-md-6">
-                                <label class="form-label">Email</label>
-                                <input type="email" name="email" class="form-control" required>
-                            </div>
-
-                            <div class="col-lg-3 col-md-6">
-                                <label class="form-label">Password</label>
-                                <input type="password" name="password" class="form-control" required>
-                            </div>
-
-                            <div class="col-lg-2 col-md-4">
-                                <label class="form-label">Role</label>
-                                <select name="role" class="form-select">
-                                    <option value="user">User</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="super_admin">Super Admin</option>
-                                </select>
-                            </div>
-
-                            <div class="col-lg-1 col-md-2 d-grid">
-                                <button type="submit" class="btn btn-success">Simpan</button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- UpdateBulk Actions -->
-                <div class="form-card mb-4">
-                    <div class="bulk-card-header">
-                        <div>
-                            <h4 class="fw-bold mb-2">Tambah Banyak User</h4>
-                            <p class="bulk-card-info mb-0">
-                                Buat banyak user sekaligus dalam satu proses. Maksimal 10 user.
-                            </p>
-                            <div class="bulk-row-note">
-                                Catatan: bila proses gagal, password perlu diisi ulang.
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="bulk-counter-badge">
-                                <span id="bulkRowCounter"><?= count($bulkOldRows) ?></span> / 10 baris
-                            </span>
-                            <button type="button" id="btnAddBulkRow" class="btn btn-outline-primary">
-                                <i class="bi bi-plus-circle me-1"></i>Tambah Baris
-                            </button>
-                        </div>
-                    </div>
-
-                    <form method="POST" id="bulkCreateForm" novalidate>
-                        <input type="hidden" name="action" value="bulk_create">
-
-                        <div id="bulkUserRows">
-                            <?php foreach ($bulkOldRows as $index => $bulkRow): ?>
-                                <div class="bulk-user-row" data-row-index="<?= $index ?>">
-                                    <div class="bulk-row-top">
-                                        <h6 class="bulk-row-title">Baris <span class="bulk-row-number"><?= $index + 1 ?></span></h6>
-                                        <button type="button" class="btn btn-outline-danger btn-sm btnRemoveBulkRow" <?= count($bulkOldRows) === 1 ? 'disabled' : '' ?>>
-                                            Hapus Baris
-                                        </button>
-                                    </div>
-
-                                    <div class="row g-3">
-                                        <div class="col-lg-3 col-md-6">
-                                            <label class="form-label">Username</label>
-                                            <input
-                                                type="text"
-                                                class="form-control <?= bulk_field_error($bulkErrors, $index, 'username') ? 'is-invalid' : '' ?>"
-                                                value="<?= e($bulkRow['username']) ?>"
-                                                data-field="username"
-                                                data-name-template="bulk_users[__INDEX__][username]"
-                                                name="bulk_users[<?= $index ?>][username]">
-                                            <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'username')) ?></div>
-                                        </div>
-
-                                        <div class="col-lg-3 col-md-6">
-                                            <label class="form-label">Email</label>
-                                            <input
-                                                type="email"
-                                                class="form-control <?= bulk_field_error($bulkErrors, $index, 'email') ? 'is-invalid' : '' ?>"
-                                                value="<?= e($bulkRow['email']) ?>"
-                                                data-field="email"
-                                                data-name-template="bulk_users[__INDEX__][email]"
-                                                name="bulk_users[<?= $index ?>][email]">
-                                            <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'email')) ?></div>
-                                        </div>
-
-                                        <div class="col-lg-3 col-md-6">
-                                            <label class="form-label">Password</label>
-                                            <input
-                                                type="password"
-                                                class="form-control <?= bulk_field_error($bulkErrors, $index, 'password') ? 'is-invalid' : '' ?>"
-                                                value=""
-                                                data-field="password"
-                                                data-name-template="bulk_users[__INDEX__][password]"
-                                                name="bulk_users[<?= $index ?>][password]">
-                                            <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'password')) ?></div>
-                                        </div>
-
-                                        <div class="col-lg-3 col-md-6">
-                                            <label class="form-label">Role</label>
-                                            <select
-                                                class="form-select"
-                                                data-field="role"
-                                                data-name-template="bulk_users[__INDEX__][role]"
-                                                name="bulk_users[<?= $index ?>][role]">
-                                                <option value="user" <?= $bulkRow['role'] === 'user' ? 'selected' : '' ?>>User</option>
-                                                <option value="admin" <?= $bulkRow['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                <option value="super_admin" <?= $bulkRow['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
-                                            </select>
-                                            <div class="invalid-feedback"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-
-                        <div class="d-flex justify-content-end mt-3">
-                            <button type="submit" class="btn btn-success">
-                                Simpan Banyak User
-                            </button>
-                        </div>
-                    </form>
-
-                    <template id="bulkUserRowTemplate">
-                        <div class="bulk-user-row" data-row-index="0">
-                            <div class="bulk-row-top">
-                                <h6 class="bulk-row-title">Baris <span class="bulk-row-number">1</span></h6>
-                                <button type="button" class="btn btn-outline-danger btn-sm btnRemoveBulkRow">
-                                    Hapus Baris
-                                </button>
-                            </div>
-
-                            <div class="row g-3">
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label">Username</label>
-                                    <input
-                                        type="text"
-                                        class="form-control"
-                                        value=""
-                                        data-field="username"
-                                        data-name-template="bulk_users[__INDEX__][username]"
-                                        name="">
-                                    <div class="invalid-feedback"></div>
-                                </div>
-
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label">Email</label>
-                                    <input
-                                        type="email"
-                                        class="form-control"
-                                        value=""
-                                        data-field="email"
-                                        data-name-template="bulk_users[__INDEX__][email]"
-                                        name="">
-                                    <div class="invalid-feedback"></div>
-                                </div>
-
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label">Password</label>
-                                    <input
-                                        type="password"
-                                        class="form-control"
-                                        value=""
-                                        data-field="password"
-                                        data-name-template="bulk_users[__INDEX__][password]"
-                                        name="">
-                                    <div class="invalid-feedback"></div>
-                                </div>
-
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label">Role</label>
-                                    <select
-                                        class="form-select"
-                                        data-field="role"
-                                        data-name-template="bulk_users[__INDEX__][role]"
-                                        name="">
-                                        <option value="user" selected>User</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="super_admin">Super Admin</option>
-                                    </select>
-                                    <div class="invalid-feedback"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-
-                <div class="form-card mb-4">
-                    <div class="multi-user-header">
-                        <div>
-                            <h4 class="fw-bold mb-2">Tambah User</h4>
-                            <p class="multi-user-info">
-                                Satu form ini bisa dipakai untuk menambah 1 sampai 10 user sekaligus.
-                            </p>
-                            <div class="multi-user-note">
-                                Catatan: jika submit gagal karena validasi server, password perlu diisi ulang.
-                            </div>
-                        </div>
-
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <span class="multi-user-counter">
-                                <span id="userRowCounter"><?= count($createUserRowsOld) ?></span> / 10 baris
-                            </span>
-
-                            <button type="button" id="btnAddUserRow" class="btn btn-outline-primary">
-                                <i class="bi bi-plus-circle me-1"></i>Tambah Baris
-                            </button>
-                        </div>
-                    </div>
-
-                    <?php if ($createUserGeneralError !== ''): ?>
-                        <div class="alert alert-danger py-2 px-3 mb-3">
-                            <?= e($createUserGeneralError) ?>
-                        </div>
+                    <?php if ($alertError): ?>
+                        <div class="alert alert-danger"><?= e($alertError) ?></div>
                     <?php endif; ?>
 
-                    <form method="POST" id="multiUserCreateForm" novalidate>
-                        <input type="hidden" name="action" value="save_users">
+                    <?php if ($alertSuccess): ?>
+                        <div class="alert alert-success"><?= e($alertSuccess) ?></div>
+                    <?php endif; ?>
 
-                        <div class="multi-user-wrap">
-                            <table class="table align-middle multi-user-table mb-0">
-                                <thead>
-                                    <tr>
-                                        <th class="row-number-cell">Baris</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Password</th>
-                                        <th style="width:180px;">Role</th>
-                                        <th class="row-action-cell">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="userRowContainer">
-                                    <?php foreach ($createUserRowsOld as $index => $row): ?>
-                                        <tr class="user-create-row" data-row-index="<?= $index ?>">
-                                            <td class="row-number-cell">
-                                                <span class="user-row-number"><?= $index + 1 ?></span>
-                                            </td>
-
-                                            <td>
-                                                <input
-                                                    type="text"
-                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'username') ? 'is-invalid' : '' ?>"
-                                                    value="<?= e($row['username']) ?>"
-                                                    data-field="username"
-                                                    data-name-template="users[__INDEX__][username]"
-                                                    name="users[<?= $index ?>][username]">
-                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'username')) ?></div>
-                                            </td>
-
-                                            <td>
-                                                <input
-                                                    type="email"
-                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'email') ? 'is-invalid' : '' ?>"
-                                                    value="<?= e($row['email']) ?>"
-                                                    data-field="email"
-                                                    data-name-template="users[__INDEX__][email]"
-                                                    name="users[<?= $index ?>][email]">
-                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'email')) ?></div>
-                                            </td>
-
-                                            <td>
-                                                <input
-                                                    type="password"
-                                                    class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>"
-                                                    value=""
-                                                    data-field="password"
-                                                    data-name-template="users[__INDEX__][password]"
-                                                    name="users[<?= $index ?>][password]">
-                                                <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
-                                            </td>
-
-                                            <td>
-                                                <select
-                                                    class="form-select"
-                                                    data-field="role"
-                                                    data-name-template="users[__INDEX__][role]"
-                                                    name="users[<?= $index ?>][role]">
-                                                    <option value="user" <?= $row['role'] === 'user' ? 'selected' : '' ?>>User</option>
-                                                    <option value="admin" <?= $row['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                    <option value="super_admin" <?= $row['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
-                                                </select>
-                                                <div class="invalid-feedback"></div>
-                                            </td>
-
-                                            <td class="row-action-cell">
-                                                <button
-                                                    type="button"
-                                                    class="btn btn-outline-danger btn-sm btnRemoveUserRow"
-                                                    <?= count($createUserRowsOld) === 1 ? 'disabled' : '' ?>>
-                                                    Hapus
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Total User</div>
+                                        <div class="summary-value"><?= $totalUsers ?></div>
+                                        <div class="summary-note">Semua akun yang terdaftar di sistem</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-people"></i>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="d-flex justify-content-end mt-3">
-                            <button type="submit" class="btn btn-success">
-                                Simpan User
-                            </button>
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Super Admin</div>
+                                        <div class="summary-value"><?= $superAdminTotal ?></div>
+                                        <div class="summary-note">Akun dengan akses penuh sistem</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-shield-lock"></i>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </form>
 
-                    <template id="userRowTemplate">
-                        <tr class="user-create-row" data-row-index="0">
-                            <td class="row-number-cell">
-                                <span class="user-row-number">1</span>
-                            </td>
+                        <div class="col-md-4">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Admin & User</div>
+                                        <div class="summary-value"><?= $adminTotal + $userTotal ?></div>
+                                        <div class="summary-note">Akun operasional aktif di sistem</div>
+                                    </div>
+                                    <div class="summary-icon">
+                                        <i class="bi bi-person-gear"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                            <td>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    value=""
-                                    data-field="username"
-                                    data-name-template="users[__INDEX__][username]"
-                                    name="">
-                                <div class="invalid-feedback"></div>
-                            </td>
+                    <div class="row g-4 mb-4">
+                        <div class="col-lg-4">
+                            <div class="form-shell h-100">
+                                <div class="shell-header">
+                                    <div class="shell-title">Tambah User Baru</div>
+                                    <div class="shell-subtitle">Buat 1 akun dengan cepat dan langsung simpan.</div>
+                                </div>
 
-                            <td>
-                                <input
-                                    type="email"
-                                    class="form-control"
-                                    value=""
-                                    data-field="email"
-                                    data-name-template="users[__INDEX__][email]"
-                                    name="">
-                                <div class="invalid-feedback"></div>
-                            </td>
+                                <div class="shell-body">
+                                    <form method="POST">
+                                        <input type="hidden" name="action" value="create">
 
-                            <td>
-                                <input
-                                    type="password"
-                                    class="form-control"
-                                    value=""
-                                    data-field="password"
-                                    data-name-template="users[__INDEX__][password]"
-                                    name="">
-                                <div class="invalid-feedback"></div>
-                            </td>
+                                        <div class="mb-3">
+                                            <label class="form-label">Username</label>
+                                            <input type="text" name="username" class="form-control" required>
+                                        </div>
 
-                            <td>
-                                <select
-                                    class="form-select"
-                                    data-field="role"
-                                    data-name-template="users[__INDEX__][role]"
-                                    name="">
-                                    <option value="user" selected>User</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="super_admin">Super Admin</option>
-                                </select>
-                                <div class="invalid-feedback"></div>
-                            </td>
+                                        <div class="mb-3">
+                                            <label class="form-label">Email</label>
+                                            <input type="email" name="email" class="form-control" required>
+                                        </div>
 
-                            <td class="row-action-cell">
-                                <button type="button" class="btn btn-outline-danger btn-sm btnRemoveUserRow">
-                                    Hapus
-                                </button>
-                            </td>
-                        </tr>
-                    </template>
+                                        <div class="mb-3">
+                                            <label class="form-label">Password</label>
+                                            <input type="password" name="password" class="form-control" required>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">Role</label>
+                                            <select name="role" class="form-select">
+                                                <option value="user">User</option>
+                                                <option value="admin">Admin</option>
+                                                <option value="super_admin">Super Admin</option>
+                                            </select>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-main w-100">
+                                            <i class="bi bi-plus-circle me-2"></i>Simpan User
+                                        </button>
+                                    </form>
+
+                                    <div class="helper-note mt-3">
+                                        Form ini cocok untuk menambah satu akun secara cepat tanpa membuka tabel massal.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-8">
+                            <div class="form-shell h-100">
+                                <div class="shell-header">
+                                    <div class="shell-title">Tambah Banyak User</div>
+                                    <div class="shell-subtitle">Pilih tampilan form yang paling nyaman untuk input banyak akun sekaligus.</div>
+                                </div>
+
+                                <div class="shell-body">
+                                    <ul class="nav nav-tabs custom-tabs mb-4" id="userFormTabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabBulkCard" type="button">
+                                                Form Kartu
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabBulkTable" type="button">
+                                                Form Tabel
+                                            </button>
+                                        </li>
+                                    </ul>
+
+                                    <div class="tab-content">
+                                        <div class="tab-pane fade show active" id="tabBulkCard">
+                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                                <div class="helper-note flex-grow-1">
+                                                    Isi banyak user dalam format kartu. Cocok untuk input bertahap dan lebih nyaman di layar kecil.
+                                                </div>
+
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <span class="row-badge">
+                                                        <span id="bulkRowCounter"><?= count($bulkOldRows) ?></span> / 10 baris
+                                                    </span>
+                                                    <button type="button" id="btnAddBulkRow" class="btn btn-soft">
+                                                        <i class="bi bi-plus-circle me-1"></i>Tambah Baris
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <form method="POST" id="bulkCreateForm" novalidate>
+                                                <input type="hidden" name="action" value="bulk_create">
+
+                                                <div id="bulkUserRows">
+                                                    <?php foreach ($bulkOldRows as $index => $bulkRow): ?>
+                                                        <div class="section-card p-3 mb-3 bulk-user-row" data-row-index="<?= $index ?>">
+                                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                                                <div class="row-badge">
+                                                                    Baris <span class="bulk-row-number"><?= $index + 1 ?></span>
+                                                                </div>
+
+                                                                <button type="button" class="btn btn-outline-danger btn-sm btnRemoveBulkRow" <?= count($bulkOldRows) === 1 ? 'disabled' : '' ?>>
+                                                                    Hapus Baris
+                                                                </button>
+                                                            </div>
+
+                                                            <div class="row g-3">
+                                                                <div class="col-lg-6">
+                                                                    <label class="form-label">Username</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        class="form-control <?= bulk_field_error($bulkErrors, $index, 'username') ? 'is-invalid' : '' ?>"
+                                                                        value="<?= e($bulkRow['username']) ?>"
+                                                                        data-field="username"
+                                                                        data-name-template="bulk_users[__INDEX__][username]"
+                                                                        name="bulk_users[<?= $index ?>][username]">
+                                                                    <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'username')) ?></div>
+                                                                </div>
+
+                                                                <div class="col-lg-6">
+                                                                    <label class="form-label">Email</label>
+                                                                    <input
+                                                                        type="email"
+                                                                        class="form-control <?= bulk_field_error($bulkErrors, $index, 'email') ? 'is-invalid' : '' ?>"
+                                                                        value="<?= e($bulkRow['email']) ?>"
+                                                                        data-field="email"
+                                                                        data-name-template="bulk_users[__INDEX__][email]"
+                                                                        name="bulk_users[<?= $index ?>][email]">
+                                                                    <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'email')) ?></div>
+                                                                </div>
+
+                                                                <div class="col-lg-6">
+                                                                    <label class="form-label">Password</label>
+                                                                    <input
+                                                                        type="password"
+                                                                        class="form-control <?= bulk_field_error($bulkErrors, $index, 'password') ? 'is-invalid' : '' ?>"
+                                                                        value=""
+                                                                        data-field="password"
+                                                                        data-name-template="bulk_users[__INDEX__][password]"
+                                                                        name="bulk_users[<?= $index ?>][password]">
+                                                                    <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'password')) ?></div>
+                                                                </div>
+
+                                                                <div class="col-lg-6">
+                                                                    <label class="form-label">Role</label>
+                                                                    <select
+                                                                        class="form-select"
+                                                                        data-field="role"
+                                                                        data-name-template="bulk_users[__INDEX__][role]"
+                                                                        name="bulk_users[<?= $index ?>][role]">
+                                                                        <option value="user" <?= $bulkRow['role'] === 'user' ? 'selected' : '' ?>>User</option>
+                                                                        <option value="admin" <?= $bulkRow['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                                                        <option value="super_admin" <?= $bulkRow['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                                                                    </select>
+                                                                    <div class="invalid-feedback"></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                </div>
+
+                                                <div class="d-flex justify-content-end">
+                                                    <button type="submit" class="btn btn-main">
+                                                        <i class="bi bi-check2-circle me-2"></i>Simpan Banyak User
+                                                    </button>
+                                                </div>
+                                            </form>
+
+                                            <template id="bulkUserRowTemplate">
+                                                <div class="section-card p-3 mb-3 bulk-user-row" data-row-index="0">
+                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                                        <div class="row-badge">
+                                                            Baris <span class="bulk-row-number">1</span>
+                                                        </div>
+
+                                                        <button type="button" class="btn btn-outline-danger btn-sm btnRemoveBulkRow">
+                                                            Hapus Baris
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="row g-3">
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Username</label>
+                                                            <input
+                                                                type="text"
+                                                                class="form-control"
+                                                                value=""
+                                                                data-field="username"
+                                                                data-name-template="bulk_users[__INDEX__][username]"
+                                                                name="">
+                                                            <div class="invalid-feedback"></div>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Email</label>
+                                                            <input
+                                                                type="email"
+                                                                class="form-control"
+                                                                value=""
+                                                                data-field="email"
+                                                                data-name-template="bulk_users[__INDEX__][email]"
+                                                                name="">
+                                                            <div class="invalid-feedback"></div>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Password</label>
+                                                            <input
+                                                                type="password"
+                                                                class="form-control"
+                                                                value=""
+                                                                data-field="password"
+                                                                data-name-template="bulk_users[__INDEX__][password]"
+                                                                name="">
+                                                            <div class="invalid-feedback"></div>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Role</label>
+                                                            <select
+                                                                class="form-select"
+                                                                data-field="role"
+                                                                data-name-template="bulk_users[__INDEX__][role]"
+                                                                name="">
+                                                                <option value="user" selected>User</option>
+                                                                <option value="admin">Admin</option>
+                                                                <option value="super_admin">Super Admin</option>
+                                                            </select>
+                                                            <div class="invalid-feedback"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <div class="tab-pane fade" id="tabBulkTable">
+                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                                <div class="helper-note flex-grow-1">
+                                                    Form tabel cocok untuk input cepat saat ingin mengisi banyak user sekaligus dalam satu pandangan.
+                                                </div>
+
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <span class="row-badge">
+                                                        <span id="userRowCounter"><?= count($createUserRowsOld) ?></span> / 10 baris
+                                                    </span>
+
+                                                    <button type="button" id="btnAddUserRow" class="btn btn-soft">
+                                                        <i class="bi bi-plus-circle me-1"></i>Tambah Baris
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <?php if ($createUserGeneralError !== ''): ?>
+                                                <div class="alert alert-danger py-2 px-3 mb-3">
+                                                    <?= e($createUserGeneralError) ?>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <form method="POST" id="multiUserCreateForm" novalidate>
+                                                <input type="hidden" name="action" value="save_users">
+
+                                                <div class="table-responsive">
+                                                    <table class="table-lite">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style="width:90px;">Baris</th>
+                                                                <th>Username</th>
+                                                                <th>Email</th>
+                                                                <th>Password</th>
+                                                                <th style="width:180px;">Role</th>
+                                                                <th style="width:140px;">Aksi</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="userRowContainer">
+                                                            <?php foreach ($createUserRowsOld as $index => $row): ?>
+                                                                <tr class="user-create-row" data-row-index="<?= $index ?>">
+                                                                    <td>
+                                                                        <span class="row-badge user-row-number"><?= $index + 1 ?></span>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'username') ? 'is-invalid' : '' ?>"
+                                                                            value="<?= e($row['username']) ?>"
+                                                                            data-field="username"
+                                                                            data-name-template="users[__INDEX__][username]"
+                                                                            name="users[<?= $index ?>][username]">
+                                                                        <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'username')) ?></div>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <input
+                                                                            type="email"
+                                                                            class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'email') ? 'is-invalid' : '' ?>"
+                                                                            value="<?= e($row['email']) ?>"
+                                                                            data-field="email"
+                                                                            data-name-template="users[__INDEX__][email]"
+                                                                            name="users[<?= $index ?>][email]">
+                                                                        <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'email')) ?></div>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <input
+                                                                            type="password"
+                                                                            class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>"
+                                                                            value=""
+                                                                            data-field="password"
+                                                                            data-name-template="users[__INDEX__][password]"
+                                                                            name="users[<?= $index ?>][password]">
+                                                                        <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <select
+                                                                            class="form-select"
+                                                                            data-field="role"
+                                                                            data-name-template="users[__INDEX__][role]"
+                                                                            name="users[<?= $index ?>][role]">
+                                                                            <option value="user" <?= $row['role'] === 'user' ? 'selected' : '' ?>>User</option>
+                                                                            <option value="admin" <?= $row['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                                                            <option value="super_admin" <?= $row['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                                                                        </select>
+                                                                        <div class="invalid-feedback"></div>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <button
+                                                                            type="button"
+                                                                            class="btn btn-outline-danger btn-sm btnRemoveUserRow"
+                                                                            <?= count($createUserRowsOld) === 1 ? 'disabled' : '' ?>>
+                                                                            Hapus
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+
+                                                <div class="d-flex justify-content-end mt-3">
+                                                    <button type="submit" class="btn btn-main">
+                                                        <i class="bi bi-check2-circle me-2"></i>Simpan User
+                                                    </button>
+                                                </div>
+                                            </form>
+
+                                            <template id="userRowTemplate">
+                                                <tr class="user-create-row" data-row-index="0">
+                                                    <td>
+                                                        <span class="row-badge user-row-number">1</span>
+                                                    </td>
+
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            class="form-control"
+                                                            value=""
+                                                            data-field="username"
+                                                            data-name-template="users[__INDEX__][username]"
+                                                            name="">
+                                                        <div class="invalid-feedback"></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <input
+                                                            type="email"
+                                                            class="form-control"
+                                                            value=""
+                                                            data-field="email"
+                                                            data-name-template="users[__INDEX__][email]"
+                                                            name="">
+                                                        <div class="invalid-feedback"></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <input
+                                                            type="password"
+                                                            class="form-control"
+                                                            value=""
+                                                            data-field="password"
+                                                            data-name-template="users[__INDEX__][password]"
+                                                            name="">
+                                                        <div class="invalid-feedback"></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <select
+                                                            class="form-select"
+                                                            data-field="role"
+                                                            data-name-template="users[__INDEX__][role]"
+                                                            name="">
+                                                            <option value="user" selected>User</option>
+                                                            <option value="admin">Admin</option>
+                                                            <option value="super_admin">Super Admin</option>
+                                                        </select>
+                                                        <div class="invalid-feedback"></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <button type="button" class="btn btn-outline-danger btn-sm btnRemoveUserRow">
+                                                            Hapus
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="list-shell">
+                        <div class="shell-header">
+                            <div class="shell-title">Daftar User Sistem</div>
+                            <div class="shell-subtitle">Tampilan user dibuat lebih rapi per kartu agar mudah dibaca dan dikelola.</div>
+                        </div>
+
+                        <div class="shell-body">
+                            <?php if (!empty($users)): ?>
+                                <?php foreach ($users as $index => $user): ?>
+                                    <?php $collapseId = 'editUserCollapse' . (int) $user['id']; ?>
+                                    <div class="user-card">
+                                        <div class="user-top">
+                                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                                                <div class="d-flex align-items-start gap-3">
+                                                    <div class="user-avatar">
+                                                        <?= strtoupper(substr($user['username'], 0, 1)) ?>
+                                                    </div>
+
+                                                    <div>
+                                                        <div class="user-name"><?= e($user['username']) ?></div>
+                                                        <div class="user-email"><?= e($user['email']) ?></div>
+                                                        <div class="mt-2">
+                                                            <span class="<?= role_badge_class($user['role']) ?>">
+                                                                <i class="bi <?= role_icon($user['role']) ?>"></i>
+                                                                <?= role_label($user['role']) ?>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="user-actions">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-pill btn-edit"
+                                                        data-bs-toggle="collapse"
+                                                        data-bs-target="#<?= $collapseId ?>">
+                                                        <i class="bi bi-pencil-square me-2"></i>Edit User
+                                                    </button>
+
+                                                    <form method="POST" class="formDeleteUser">
+                                                        <input type="hidden" name="action" value="delete">
+                                                        <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
+                                                        <input type="hidden" name="username" value="<?= e($user['username']) ?>">
+
+                                                        <button type="button" class="btn btn-pill btn-delete btnDeleteUser">
+                                                            <i class="bi bi-trash3 me-2"></i>Hapus
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="collapse" id="<?= $collapseId ?>">
+                                            <div class="edit-area">
+                                                <form method="POST" id="updateUserForm<?= (int) $user['id'] ?>">
+                                                    <input type="hidden" name="action" value="update">
+                                                    <input type="hidden" name="id" value="<?= (int) $user['id'] ?>">
+
+                                                    <div class="row g-3">
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label">Username</label>
+                                                            <input type="text" name="username" class="form-control" value="<?= e($user['username']) ?>" required>
+                                                        </div>
+
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label">Email</label>
+                                                            <input type="email" name="email" class="form-control" value="<?= e($user['email']) ?>" required>
+                                                        </div>
+
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label">Role</label>
+                                                            <select name="role" class="form-select">
+                                                                <option value="user" <?= $user['role'] === 'user' ? 'selected' : '' ?>>User</option>
+                                                                <option value="admin" <?= $user['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                                                <option value="super_admin" <?= $user['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Password Baru</label>
+                                                            <input type="password" name="new_password" class="form-control" placeholder="Kosongkan jika tidak ingin mengganti password">
+                                                        </div>
+
+                                                        <div class="col-lg-6 d-flex align-items-end">
+                                                            <button
+                                                                type="button"
+                                                                class="btn btn-main w-100 btnUpdateUser"
+                                                                data-form-id="updateUserForm<?= (int) $user['id'] ?>"
+                                                                data-username="<?= e($user['username']) ?>">
+                                                                <i class="bi bi-check2-circle me-2"></i>Simpan Perubahan
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="bi bi-inbox"></i>
+                                    Belum ada data user.
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
                 </div>
-
             </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.btnUpdateUser').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const formId = this.dataset.formId;
+                    const username = this.dataset.username;
+                    const form = document.getElementById(formId);
+
+                    Swal.fire({
+                        title: 'Update user?',
+                        text: 'Data user "' + username + '" akan diperbarui.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, update',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#ff9800'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+            });
+
+            document.querySelectorAll('.btnDeleteUser').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const form = this.closest('.formDeleteUser');
+                    const usernameInput = form.querySelector('input[name="username"]');
+                    const username = usernameInput ? usernameInput.value : 'user ini';
+
+                    Swal.fire({
+                        title: 'Hapus user?',
+                        text: 'User "' + username + '" akan dihapus dan tidak bisa dikembalikan.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, hapus',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#dc3545'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+            });
+
+            const bulkForm = document.getElementById('bulkCreateForm');
+            const bulkContainer = document.getElementById('bulkUserRows');
+            const bulkTemplate = document.getElementById('bulkUserRowTemplate');
+            const bulkAddButton = document.getElementById('btnAddBulkRow');
+            const bulkCounter = document.getElementById('bulkRowCounter');
+            const bulkMaxRows = 10;
+
+            function updateBulkRows() {
+                const rows = bulkContainer.querySelectorAll('.bulk-user-row');
+
+                rows.forEach(function(row, index) {
+                    row.dataset.rowIndex = index;
+
+                    const numberEl = row.querySelector('.bulk-row-number');
+                    if (numberEl) {
+                        numberEl.textContent = index + 1;
+                    }
+
+                    row.querySelectorAll('[data-name-template]').forEach(function(field) {
+                        field.name = field.dataset.nameTemplate.replace(/__INDEX__/g, index);
+                    });
+
+                    const removeButton = row.querySelector('.btnRemoveBulkRow');
+                    if (removeButton) {
+                        removeButton.disabled = rows.length === 1;
+                    }
+                });
+
+                bulkCounter.textContent = rows.length;
+                bulkAddButton.disabled = rows.length >= bulkMaxRows;
+            }
+
+            function clearBulkRowErrors(row) {
+                row.querySelectorAll('.form-control, .form-select').forEach(function(field) {
+                    field.classList.remove('is-invalid');
+                });
+
+                row.querySelectorAll('.invalid-feedback').forEach(function(feedback) {
+                    feedback.textContent = '';
+                });
+            }
+
+            function setBulkFieldError(row, fieldName, message) {
+                const field = row.querySelector('[data-field="' + fieldName + '"]');
+                if (!field) return;
+
+                field.classList.add('is-invalid');
+                const feedback = field.parentElement.querySelector('.invalid-feedback');
+                if (feedback) {
+                    feedback.textContent = message;
+                }
+            }
+
+            function getBulkRowData(row) {
+                return {
+                    username: row.querySelector('[data-field="username"]').value.trim(),
+                    email: row.querySelector('[data-field="email"]').value.trim(),
+                    password: row.querySelector('[data-field="password"]').value,
+                    role: row.querySelector('[data-field="role"]').value
+                };
+            }
+
+            function addBulkRow(data = {}) {
+                const currentRows = bulkContainer.querySelectorAll('.bulk-user-row').length;
+                if (currentRows >= bulkMaxRows) return;
+
+                const fragment = bulkTemplate.content.cloneNode(true);
+                const row = fragment.querySelector('.bulk-user-row');
+
+                row.querySelector('[data-field="username"]').value = data.username || '';
+                row.querySelector('[data-field="email"]').value = data.email || '';
+                row.querySelector('[data-field="password"]').value = '';
+                row.querySelector('[data-field="role"]').value = data.role || 'user';
+
+                bulkContainer.appendChild(row);
+                updateBulkRows();
+            }
+
+            function validateBulkForm() {
+                let isValid = true;
+                let filledCount = 0;
+                const rows = Array.from(bulkContainer.querySelectorAll('.bulk-user-row'));
+                const usernameMap = {};
+                const emailMap = {};
+
+                rows.forEach(function(row) {
+                    clearBulkRowErrors(row);
+                    const data = getBulkRowData(row);
+                    const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
+
+                    if (!hasValue) return;
+                    filledCount++;
+
+                    if (data.username === '') {
+                        setBulkFieldError(row, 'username', 'Username wajib diisi.');
+                        isValid = false;
+                    }
+
+                    if (data.email === '') {
+                        setBulkFieldError(row, 'email', 'Email wajib diisi.');
+                        isValid = false;
+                    } else {
+                        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailPattern.test(data.email)) {
+                            setBulkFieldError(row, 'email', 'Format email tidak valid.');
+                            isValid = false;
+                        }
+                    }
+
+                    if (data.password === '') {
+                        setBulkFieldError(row, 'password', 'Password wajib diisi.');
+                        isValid = false;
+                    }
+
+                    if (data.username !== '') {
+                        const usernameKey = data.username.toLowerCase();
+                        if (!usernameMap[usernameKey]) usernameMap[usernameKey] = [];
+                        usernameMap[usernameKey].push(row);
+                    }
+
+                    if (data.email !== '') {
+                        const emailKey = data.email.toLowerCase();
+                        if (!emailMap[emailKey]) emailMap[emailKey] = [];
+                        emailMap[emailKey].push(row);
+                    }
+                });
+
+                if (filledCount === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Form kosong',
+                        text: 'Isi minimal 1 user pada form tambah banyak.'
+                    });
+                    return {
+                        isValid: false,
+                        filledCount: 0
+                    };
+                }
+
+                Object.keys(usernameMap).forEach(function(key) {
+                    if (usernameMap[key].length > 1) {
+                        usernameMap[key].forEach(function(row) {
+                            setBulkFieldError(row, 'username', 'Username duplikat.');
+                        });
+                        isValid = false;
+                    }
+                });
+
+                Object.keys(emailMap).forEach(function(key) {
+                    if (emailMap[key].length > 1) {
+                        emailMap[key].forEach(function(row) {
+                            setBulkFieldError(row, 'email', 'Email duplikat.');
+                        });
+                        isValid = false;
+                    }
+                });
+
+                return {
+                    isValid: isValid,
+                    filledCount: filledCount
+                };
+            }
+
+            if (bulkAddButton) {
+                bulkAddButton.addEventListener('click', function() {
+                    addBulkRow();
+                });
+            }
+
+            if (bulkContainer) {
+                bulkContainer.addEventListener('click', function(e) {
+                    const removeButton = e.target.closest('.btnRemoveBulkRow');
+                    if (!removeButton) return;
+
+                    const row = removeButton.closest('.bulk-user-row');
+                    if (!row) return;
+
+                    const totalRows = bulkContainer.querySelectorAll('.bulk-user-row').length;
+                    if (totalRows <= 1) return;
+
+                    row.remove();
+                    updateBulkRows();
+                });
+
+                bulkContainer.addEventListener('input', function(e) {
+                    const field = e.target.closest('.form-control, .form-select');
+                    if (!field) return;
+
+                    field.classList.remove('is-invalid');
+                    const feedback = field.parentElement.querySelector('.invalid-feedback');
+                    if (feedback) {
+                        feedback.textContent = '';
+                    }
+                });
+            }
+
+            if (bulkForm) {
+                bulkForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    const result = validateBulkForm();
+                    if (!result.isValid) return;
+
+                    Swal.fire({
+                        title: 'Simpan user?',
+                        text: result.filledCount + ' user akan dibuat.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, simpan',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#16a34a'
+                    }).then((swalResult) => {
+                        if (swalResult.isConfirmed) {
+                            bulkForm.submit();
+                        }
+                    });
+                });
+
+                updateBulkRows();
+            }
+
+            const form = document.getElementById('multiUserCreateForm');
+            const rowContainer = document.getElementById('userRowContainer');
+            const rowTemplate = document.getElementById('userRowTemplate');
+            const addRowButton = document.getElementById('btnAddUserRow');
+            const rowCounter = document.getElementById('userRowCounter');
+            const maxRows = 10;
+
+            function updateRows() {
+                const rows = rowContainer.querySelectorAll('.user-create-row');
+
+                rows.forEach(function(row, index) {
+                    row.dataset.rowIndex = index;
+
+                    const numberEl = row.querySelector('.user-row-number');
+                    if (numberEl) {
+                        numberEl.textContent = index + 1;
+                    }
+
+                    row.querySelectorAll('[data-name-template]').forEach(function(field) {
+                        field.name = field.dataset.nameTemplate.replace(/__INDEX__/g, index);
+                    });
+
+                    const removeButton = row.querySelector('.btnRemoveUserRow');
+                    if (removeButton) {
+                        removeButton.disabled = rows.length === 1;
+                    }
+                });
+
+                rowCounter.textContent = rows.length;
+                addRowButton.disabled = rows.length >= maxRows;
+            }
+
+            function clearGeneralError() {
+                const generalError = form.parentElement.querySelector('.alert.alert-danger');
+                if (generalError && generalError.textContent.includes('Isi minimal 1 baris user.')) {
+                    generalError.remove();
+                }
+            }
+
+            function clearRowErrors(row) {
+                row.querySelectorAll('.form-control, .form-select').forEach(function(field) {
+                    field.classList.remove('is-invalid');
+                });
+
+                row.querySelectorAll('.invalid-feedback').forEach(function(feedback) {
+                    feedback.textContent = '';
+                });
+            }
+
+            function setFieldError(row, fieldName, message) {
+                const field = row.querySelector('[data-field="' + fieldName + '"]');
+                if (!field) return;
+
+                field.classList.add('is-invalid');
+
+                const feedback = field.parentElement.querySelector('.invalid-feedback');
+                if (feedback) {
+                    feedback.textContent = message;
+                }
+            }
+
+            function setGeneralError(message) {
+                clearGeneralError();
+
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger py-2 px-3 mb-3';
+                alert.textContent = message;
+
+                form.parentElement.insertBefore(alert, form);
+            }
+
+            function getRowData(row) {
+                return {
+                    username: row.querySelector('[data-field="username"]').value.trim(),
+                    email: row.querySelector('[data-field="email"]').value.trim(),
+                    password: row.querySelector('[data-field="password"]').value,
+                    role: row.querySelector('[data-field="role"]').value
+                };
+            }
+
+            function addRow(data = {}) {
+                const currentRows = rowContainer.querySelectorAll('.user-create-row').length;
+                if (currentRows >= maxRows) return;
+
+                const fragment = rowTemplate.content.cloneNode(true);
+                const row = fragment.querySelector('.user-create-row');
+
+                row.querySelector('[data-field="username"]').value = data.username || '';
+                row.querySelector('[data-field="email"]').value = data.email || '';
+                row.querySelector('[data-field="password"]').value = '';
+                row.querySelector('[data-field="role"]').value = data.role || 'user';
+
+                rowContainer.appendChild(row);
+                updateRows();
+            }
+
+            function validateForm() {
+                let isValid = true;
+                let filledCount = 0;
+
+                clearGeneralError();
+
+                const rows = Array.from(rowContainer.querySelectorAll('.user-create-row'));
+                const usernameMap = {};
+                const emailMap = {};
+
+                rows.forEach(function(row) {
+                    clearRowErrors(row);
+
+                    const data = getRowData(row);
+                    const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
+
+                    if (!hasValue) return;
+
+                    filledCount++;
+
+                    if (data.username === '') {
+                        setFieldError(row, 'username', 'Username wajib diisi.');
+                        isValid = false;
+                    }
+
+                    if (data.email === '') {
+                        setFieldError(row, 'email', 'Email wajib diisi.');
+                        isValid = false;
+                    } else {
+                        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (!emailPattern.test(data.email)) {
+                            setFieldError(row, 'email', 'Format email tidak valid.');
+                            isValid = false;
+                        }
+                    }
+
+                    if (data.password === '') {
+                        setFieldError(row, 'password', 'Password wajib diisi.');
+                        isValid = false;
+                    }
+
+                    if (data.username !== '') {
+                        const usernameKey = data.username.toLowerCase();
+                        if (!usernameMap[usernameKey]) {
+                            usernameMap[usernameKey] = [];
+                        }
+                        usernameMap[usernameKey].push(row);
+                    }
+
+                    if (data.email !== '') {
+                        const emailKey = data.email.toLowerCase();
+                        if (!emailMap[emailKey]) {
+                            emailMap[emailKey] = [];
+                        }
+                        emailMap[emailKey].push(row);
+                    }
+                });
+
+                if (filledCount === 0) {
+                    setGeneralError('Isi minimal 1 baris user.');
+                    isValid = false;
+                }
+
+                Object.keys(usernameMap).forEach(function(key) {
+                    if (usernameMap[key].length > 1) {
+                        usernameMap[key].forEach(function(row) {
+                            setFieldError(row, 'username', 'Username duplikat.');
+                        });
+                        isValid = false;
+                    }
+                });
+
+                Object.keys(emailMap).forEach(function(key) {
+                    if (emailMap[key].length > 1) {
+                        emailMap[key].forEach(function(row) {
+                            setFieldError(row, 'email', 'Email duplikat.');
+                        });
+                        isValid = false;
+                    }
+                });
+
+                return {
+                    isValid: isValid,
+                    filledCount: filledCount
+                };
+            }
+
+            if (addRowButton) {
+                addRowButton.addEventListener('click', function() {
+                    addRow();
+                });
+            }
+
+            if (rowContainer) {
+                rowContainer.addEventListener('click', function(e) {
+                    const removeButton = e.target.closest('.btnRemoveUserRow');
+                    if (!removeButton) return;
+
+                    const row = removeButton.closest('.user-create-row');
+                    if (!row) return;
+
+                    const totalRows = rowContainer.querySelectorAll('.user-create-row').length;
+                    if (totalRows <= 1) return;
+
+                    row.remove();
+                    updateRows();
+                    clearGeneralError();
+                });
+
+                rowContainer.addEventListener('input', function(e) {
+                    const field = e.target.closest('.form-control, .form-select');
+                    if (!field) return;
+
+                    field.classList.remove('is-invalid');
+
+                    const feedback = field.parentElement.querySelector('.invalid-feedback');
+                    if (feedback) {
+                        feedback.textContent = '';
+                    }
+
+                    clearGeneralError();
+                });
+
+                rowContainer.addEventListener('change', function() {
+                    clearGeneralError();
+                });
+            }
+
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    const result = validateForm();
+                    if (!result.isValid) return;
+
+                    Swal.fire({
+                        title: 'Simpan user?',
+                        text: result.filledCount + ' user akan dibuat.',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, simpan',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#16a34a'
+                    }).then((swalResult) => {
+                        if (swalResult.isConfirmed) {
+                            form.submit();
+                        }
+                    });
+                });
+
+                updateRows();
+            }
+        });
+    </script>
 </body>
 
 </html>

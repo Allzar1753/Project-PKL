@@ -51,6 +51,8 @@ function fetchAllAssoc($query)
     return $rows;
 }
 
+$previewLimit = 3;
+
 $totalInventaris = (int) mysqli_fetch_assoc(mysqli_query(
     $koneksi,
     "SELECT COUNT(*) AS total FROM barang"
@@ -107,7 +109,6 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
     $baseJoin
     WHERE barang.tanggal_keluar IS NULL
     ORDER BY barang.id DESC
-    LIMIT 5
 ");
 $barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
 
@@ -125,7 +126,6 @@ $qBarangKeluarTerbaru = mysqli_query($koneksi, "
     $baseJoin
     WHERE barang.tanggal_keluar IS NOT NULL
     ORDER BY barang.id DESC
-    LIMIT 5
 ");
 $barangKeluarTerbaru = fetchAllAssoc($qBarangKeluarTerbaru);
 
@@ -142,7 +142,6 @@ $qBarangBermasalah = mysqli_query($koneksi, "
     $baseJoin
     WHERE barang.bermasalah = 'Iya'
     ORDER BY barang.id DESC
-    LIMIT 5
 ");
 $barangBermasalah = fetchAllAssoc($qBarangBermasalah);
 
@@ -166,7 +165,6 @@ $qPengirimanBelumDiterima = mysqli_query($koneksi, "
             OR barang.status_pengiriman != 'Sudah diterima'
       )
     ORDER BY barang.id DESC
-    LIMIT 5
 ");
 $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 ?>
@@ -177,219 +175,343 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - IT Asset Management</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary: #ffc107;
-            --dark: #212529;
-            --muted: #6c757d;
-            --surface: #ffffff;
-            --surface-soft: #f8f9fa;
-            --border-soft: #e9ecef;
-            --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.05);
-            --radius-lg: 18px;
-            --radius-md: 14px;
+            --orange-1: #ff7a00;
+            --orange-2: #ff9800;
+            --orange-3: #ffb000;
+            --orange-4: #ffd166;
+            --orange-5: #fff3e0;
+
+            --dark-1: #111111;
+            --dark-2: #1f1f1f;
+            --dark-3: #2a2a2a;
+            --text-main: #1e1e1e;
+            --text-soft: #6b7280;
+
+            --white: #ffffff;
+            --border-soft: rgba(255, 152, 0, 0.14);
+
+            --shadow-soft: 0 14px 40px rgba(17, 17, 17, 0.08);
+            --shadow-hover: 0 18px 46px rgba(255, 122, 0, 0.18);
+
+            --radius-xl: 28px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            background: #f6f8fb;
-            font-family: 'Inter', sans-serif;
-            color: #212529;
+            background:
+                radial-gradient(circle at top left, rgba(255, 176, 0, 0.18), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 22%),
+                linear-gradient(180deg, #fff8f1 0%, #fffaf5 35%, #ffffff 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
+            min-height: 100vh;
         }
 
         .page-content {
-            padding: 28px;
+            padding: 30px;
         }
 
         .text-warning-custom {
-            color: var(--primary);
+            color: var(--orange-2) !important;
         }
 
         .dashboard-hero {
-            background: #fff;
-            border: 1px solid var(--border-soft);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-soft);
-            padding: 1.5rem 1.5rem;
-            margin-bottom: 1.25rem;
+            position: relative;
+            overflow: hidden;
+            border: 0;
+            border-radius: var(--radius-xl);
+            background:
+                linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(42, 42, 42, 0.90) 28%, rgba(255, 122, 0, 0.96) 100%);
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.22);
+            padding: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .dashboard-hero::before {
+            content: "";
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            top: -100px;
+            right: -60px;
+        }
+
+        .dashboard-hero::after {
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255, 208, 102, 0.18);
+            bottom: -70px;
+            left: -50px;
         }
 
         .dashboard-hero h1 {
-            font-size: 1.5rem;
+            position: relative;
+            z-index: 2;
+            font-size: 1.85rem;
             font-weight: 800;
-            margin-bottom: .35rem;
+            color: #fff;
+            margin-bottom: .45rem;
+            letter-spacing: -0.02em;
         }
 
         .dashboard-hero p {
-            color: var(--muted);
+            position: relative;
+            z-index: 2;
+            color: rgba(255, 255, 255, 0.86);
             margin-bottom: 0;
             max-width: 760px;
+            line-height: 1.7;
+            font-size: .95rem;
         }
 
         .role-badge {
-            background: #fff8db;
-            color: #8a6d00;
-            border: 1px solid #ffe082;
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 999px;
-            padding: .45rem .85rem;
+            padding: .65rem 1rem;
             font-weight: 700;
-            font-size: .85rem;
+            font-size: .86rem;
             white-space: nowrap;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
         }
 
         .summary-card {
-            background: var(--surface);
-            border: 1px solid var(--border-soft);
-            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+            border: 1px solid rgba(255, 176, 0, 0.15);
+            border-radius: 22px;
             box-shadow: var(--shadow-soft);
             height: 100%;
-            padding: 1rem 1rem;
+            padding: 1.15rem 1.1rem;
+            transition: all .25s ease;
+        }
+
+        .summary-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
+        }
+
+        .summary-card::after {
+            content: "";
+            position: absolute;
+            right: -12px;
+            bottom: -18px;
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 176, 0, 0.18) 0%, rgba(255, 176, 0, 0) 70%);
+        }
+
+        .summary-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
         }
 
         .summary-label {
-            font-size: .86rem;
-            color: var(--muted);
-            margin-bottom: .35rem;
+            font-size: .84rem;
+            color: var(--text-soft);
+            margin-bottom: .45rem;
+            font-weight: 600;
         }
 
         .summary-value {
-            font-size: 1.8rem;
+            font-size: 2rem;
             line-height: 1;
             font-weight: 800;
-            margin-bottom: .35rem;
+            margin-bottom: .45rem;
+            color: var(--dark-1);
+            letter-spacing: -0.03em;
         }
 
         .summary-note {
-            font-size: .85rem;
-            color: var(--muted);
+            font-size: .83rem;
+            color: #7b7b7b;
+            line-height: 1.5;
         }
 
         .summary-icon {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
+            font-size: 1.28rem;
             flex-shrink: 0;
+            color: #fff !important;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3)) !important;
+            box-shadow: 0 10px 24px rgba(255, 152, 0, 0.22);
         }
 
         .panel-card {
-            background: var(--surface);
-            border: 1px solid var(--border-soft);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-soft);
             overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(255, 176, 0, 0.13);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-soft);
             height: 100%;
+            display: flex;
+            flex-direction: column;
         }
 
         .panel-header {
-            padding: 1rem 1.2rem;
-            border-bottom: 1px solid var(--border-soft);
-            background: #fff;
+            padding: 1.15rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 176, 0, 0.16);
+            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel-header::after {
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            top: -90px;
+            right: -70px;
+            background: rgba(255, 255, 255, 0.09);
         }
 
         .panel-title {
-            font-size: 1rem;
+            position: relative;
+            z-index: 1;
+            font-size: 1.02rem;
             font-weight: 800;
-            margin-bottom: .2rem;
+            margin-bottom: .22rem;
+            color: #fff;
+            letter-spacing: -0.02em;
         }
 
         .panel-subtitle {
-            font-size: .87rem;
-            color: var(--muted);
+            position: relative;
+            z-index: 1;
+            font-size: .84rem;
+            color: rgba(255, 255, 255, 0.80);
+            line-height: 1.5;
         }
 
         .panel-body {
-            padding: 1rem 1.2rem;
-        }
-
-        .panel-section-title {
-            font-size: .92rem;
-            font-weight: 700;
-            margin-bottom: .9rem;
+            padding: 1.15rem 1.2rem;
+            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
+            flex: 1;
             display: flex;
-            align-items: center;
-            gap: .5rem;
-        }
-
-        .panel-divider {
-            border-top: 1px solid var(--border-soft);
+            flex-direction: column;
         }
 
         .activity-list {
             display: flex;
             flex-direction: column;
-            gap: .8rem;
+            gap: .9rem;
         }
 
         .activity-item {
-            border: 1px solid var(--border-soft);
-            border-radius: var(--radius-md);
-            padding: .95rem 1rem;
-            background: #fff;
+            position: relative;
+            border: 1px solid rgba(255, 176, 0, 0.14);
+            border-left: 5px solid var(--orange-2);
+            border-radius: 18px;
+            padding: 1rem;
+            background: #ffffff;
+            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04);
+            transition: all .22s ease;
+        }
+
+        .activity-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 30px rgba(255, 122, 0, 0.14);
+            border-color: rgba(255, 152, 0, 0.28);
         }
 
         .activity-title {
-            font-weight: 700;
-            margin-bottom: .3rem;
+            font-weight: 800;
+            margin-bottom: .38rem;
+            color: var(--dark-1);
+            letter-spacing: -0.01em;
         }
 
         .badge-soft {
             display: inline-flex;
             align-items: center;
             gap: .35rem;
-            background: #f8f9fa;
-            color: #495057;
-            border: 1px solid #e9ecef;
+            background: linear-gradient(180deg, #fff3df 0%, #ffe7be 100%);
+            color: #8b4f00;
+            border: 1px solid rgba(255, 152, 0, 0.20);
             border-radius: 999px;
-            padding: .3rem .65rem;
-            font-size: .76rem;
-            font-weight: 600;
-            margin-bottom: .5rem;
+            padding: .38rem .72rem;
+            font-size: .74rem;
+            font-weight: 700;
+            margin-bottom: .6rem;
         }
 
         .meta-grid {
             display: grid;
-            gap: .2rem;
+            gap: .28rem;
         }
 
         .meta-line {
             font-size: .88rem;
-            color: #495057;
-            line-height: 1.45;
+            color: #4b5563;
+            line-height: 1.5;
         }
 
         .meta-line strong {
-            color: #212529;
+            color: #111827;
+            font-weight: 700;
         }
 
         .meta-muted {
             font-size: .84rem;
-            color: var(--muted);
-            line-height: 1.45;
+            color: #6b7280;
+            line-height: 1.5;
         }
 
         .meta-muted i {
             width: 16px;
+            color: var(--orange-2);
         }
 
         .empty-state {
             text-align: center;
-            color: var(--muted);
-            padding: 1.6rem 1rem;
-            border: 1px dashed #d9dee5;
-            border-radius: 14px;
-            background: #fcfcfd;
+            color: var(--text-soft);
+            padding: 1.8rem 1rem;
+            border: 1px dashed rgba(255, 152, 0, 0.28);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #fffaf2 0%, #fff5e8 100%);
         }
 
         .empty-state i {
             display: block;
-            font-size: 1.6rem;
-            margin-bottom: .45rem;
+            font-size: 1.9rem;
+            margin-bottom: .5rem;
+            color: var(--orange-2);
         }
 
         .line-clamp-2 {
@@ -400,13 +522,171 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
             overflow: hidden;
         }
 
+        .section-action {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .btn-toggle-list {
+            border: none;
+            border-radius: 999px;
+            padding: .7rem 1.1rem;
+            font-size: .85rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #111111 0%, #ff8f00 100%);
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(255, 143, 0, 0.18);
+            transition: all .25s ease;
+        }
+
+        .btn-toggle-list:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(255, 143, 0, 0.25);
+        }
+
+        .btn-toggle-list i {
+            margin-right: .45rem;
+        }
+
+        .extra-item.d-none {
+            display: none !important;
+        }
+
+        .badge.rounded-pill {
+            padding: .5rem .8rem;
+            font-size: .75rem;
+            font-weight: 700;
+            letter-spacing: .1px;
+        }
+
+        .badge.rounded-pill.bg-success {
+            background: linear-gradient(135deg, #111111, #2e2e2e) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-danger {
+            background: linear-gradient(135deg, #ff7a00, #ff9f1a) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-primary {
+            background: linear-gradient(135deg, #ff8c00, #ffb000) !important;
+            color: #fff !important;
+            border: none !important;
+        }
+
+        .badge.rounded-pill.bg-secondary {
+            background: #fff7ea !important;
+            color: #6b4a00 !important;
+            border: 1px solid rgba(255, 176, 0, 0.25) !important;
+        }
+
+        .badge.rounded-pill.bg-warning.text-dark {
+            background: linear-gradient(135deg, #ffd166, #ffbf47) !important;
+            color: #5b3a00 !important;
+            border: none !important;
+        }
+
+        .bg-success-subtle,
+        .bg-danger-subtle,
+        .bg-primary-subtle,
+        .bg-warning-subtle,
+        .bg-light {
+            background: rgba(255, 152, 0, 0.10) !important;
+        }
+
+        .summary-card .text-success,
+        .summary-card .text-danger,
+        .summary-card .text-primary,
+        .summary-card .text-warning,
+        .summary-card .text-warning-emphasis,
+        .summary-card .text-dark {
+            color: var(--dark-1) !important;
+        }
+
+        .row.g-3.mb-4>.col-12:nth-child(1) .summary-card::before {
+            background: linear-gradient(90deg, #ff7a00, #ffb000);
+        }
+
+        .row.g-3.mb-4>.col-12:nth-child(2) .summary-card::before {
+            background: linear-gradient(90deg, #ff8a00, #ffd166);
+        }
+
+        .row.g-3.mb-4>.col-12:nth-child(3) .summary-card::before {
+            background: linear-gradient(90deg, #111111, #ff8f00);
+        }
+
+        .row.g-3.mb-4>.col-12:nth-child(4) .summary-card::before {
+            background: linear-gradient(90deg, #ff9d00, #ffcf66);
+        }
+
+        .row.g-3.mb-4>.col-12:nth-child(5) .summary-card::before {
+            background: linear-gradient(90deg, #2a2a2a, #ffb000);
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #ff9800, #ffb000);
+            border-radius: 999px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #fff4e3;
+        }
+
+        @media (max-width: 1399.98px) {
+            .panel-title {
+                font-size: .95rem;
+            }
+        }
+
         @media (max-width: 991.98px) {
             .page-content {
                 padding: 18px;
             }
 
+            .dashboard-hero {
+                padding: 1.35rem 1.2rem;
+            }
+
             .dashboard-hero h1 {
-                font-size: 1.25rem;
+                font-size: 1.4rem;
+            }
+
+            .summary-value {
+                font-size: 1.7rem;
+            }
+
+            .panel-header,
+            .panel-body {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .activity-item {
+                padding: .9rem;
+            }
+
+            .dashboard-hero h1 {
+                font-size: 1.2rem;
+            }
+
+            .dashboard-hero p {
+                font-size: .92rem;
+            }
+
+            .role-badge {
+                width: 100%;
+                text-align: center;
+                justify-content: center;
             }
         }
     </style>
@@ -417,7 +697,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
         <div class="row">
             <?php require_once '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10">
+            <div class="col-md-10 ms-auto">
                 <div class="page-content">
 
                     <div class="dashboard-hero">
@@ -425,8 +705,8 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                             <div>
                                 <h1>Dashboard IT Asset Management</h1>
                                 <p>
-                                    Ringkasan inventaris, aktivitas barang, kondisi perangkat, dan status pengiriman
-                                    dalam tampilan yang lebih sederhana dan mudah dipantau.
+                                    Ringkasan inventaris, kondisi perangkat, status pengiriman, dan aktivitas aset
+                                    dalam tampilan yang lebih modern, lebih mudah dibaca, dan nyaman dipantau.
                                 </p>
                             </div>
 
@@ -445,7 +725,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                         <div class="summary-value"><?= $totalInventaris ?></div>
                                         <div class="summary-note">Seluruh aset yang tercatat</div>
                                     </div>
-                                    <div class="summary-icon bg-light text-dark">
+                                    <div class="summary-icon">
                                         <i class="bi bi-box-seam"></i>
                                     </div>
                                 </div>
@@ -457,10 +737,10 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="summary-label">Barang Masuk</div>
-                                        <div class="summary-value text-success"><?= $totalMasuk ?></div>
+                                        <div class="summary-value"><?= $totalMasuk ?></div>
                                         <div class="summary-note">Masih aktif di inventaris</div>
                                     </div>
-                                    <div class="summary-icon bg-success-subtle text-success">
+                                    <div class="summary-icon">
                                         <i class="bi bi-box-arrow-in-down"></i>
                                     </div>
                                 </div>
@@ -472,10 +752,10 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
-                                        <div class="summary-value text-danger"><?= $totalKeluar ?></div>
+                                        <div class="summary-value"><?= $totalKeluar ?></div>
                                         <div class="summary-note">Sudah dikirim atau keluar</div>
                                     </div>
-                                    <div class="summary-icon bg-danger-subtle text-danger">
+                                    <div class="summary-icon">
                                         <i class="bi bi-box-arrow-up"></i>
                                     </div>
                                 </div>
@@ -487,10 +767,10 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="summary-label">Bermasalah</div>
-                                        <div class="summary-value text-warning"><?= $totalBermasalah ?></div>
+                                        <div class="summary-value"><?= $totalBermasalah ?></div>
                                         <div class="summary-note">Perlu perhatian khusus</div>
                                     </div>
-                                    <div class="summary-icon bg-warning-subtle text-warning-emphasis">
+                                    <div class="summary-icon">
                                         <i class="bi bi-exclamation-triangle"></i>
                                     </div>
                                 </div>
@@ -502,10 +782,10 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="summary-label">Pengiriman</div>
-                                        <div class="summary-value text-primary"><?= $totalSedangDikirim ?></div>
+                                        <div class="summary-value"><?= $totalSedangDikirim ?></div>
                                         <div class="summary-note">Belum diterima tujuan</div>
                                     </div>
-                                    <div class="summary-icon bg-primary-subtle text-primary">
+                                    <div class="summary-icon">
                                         <i class="bi bi-truck"></i>
                                     </div>
                                 </div>
@@ -514,27 +794,22 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                     </div>
 
                     <div class="row g-4">
-                        <div class="col-xl-7">
+                        <div class="col-xl-3 col-md-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-clock-history me-2 text-warning-custom"></i>Aktivitas Terbaru
+                                        <i class="bi bi-box-arrow-in-down me-2 text-warning-custom"></i>Barang Masuk
                                     </div>
                                     <div class="panel-subtitle">
-                                        Ringkasan barang masuk dan barang keluar terbaru
+                                        Tampil ringkas dulu, buka jika ingin lihat semua data
                                     </div>
                                 </div>
 
                                 <div class="panel-body">
-                                    <div class="panel-section-title">
-                                        <i class="bi bi-box-arrow-in-down text-success"></i>
-                                        Barang Masuk Terbaru
-                                    </div>
-
                                     <?php if (!empty($barangMasukTerbaru)): ?>
-                                        <div class="activity-list">
-                                            <?php foreach ($barangMasukTerbaru as $item): ?>
-                                                <div class="activity-item">
+                                        <div class="activity-list" id="barangMasukList">
+                                            <?php foreach ($barangMasukTerbaru as $index => $item): ?>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
                                                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                                         <div class="flex-grow-1">
                                                             <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
@@ -558,6 +833,14 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
+
+                                        <?php if (count($barangMasukTerbaru) > $previewLimit): ?>
+                                            <div class="section-action">
+                                                <button type="button" class="btn-toggle-list" onclick="toggleList('barangMasukList', this)">
+                                                    <i class="bi bi-chevron-down"></i>Lihat selengkapnya
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-inbox"></i>
@@ -565,19 +848,25 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                         </div>
                                     <?php endif; ?>
                                 </div>
+                            </div>
+                        </div>
 
-                                <div class="panel-divider"></div>
+                        <div class="col-xl-3 col-md-6">
+                            <div class="panel-card">
+                                <div class="panel-header">
+                                    <div class="panel-title">
+                                        <i class="bi bi-box-arrow-up me-2 text-warning-custom"></i>Barang Keluar
+                                    </div>
+                                    <div class="panel-subtitle">
+                                        Tampil sebagian dulu supaya tetap rapi dan mudah dibaca
+                                    </div>
+                                </div>
 
                                 <div class="panel-body">
-                                    <div class="panel-section-title">
-                                        <i class="bi bi-box-arrow-up text-danger"></i>
-                                        Barang Keluar Terbaru
-                                    </div>
-
                                     <?php if (!empty($barangKeluarTerbaru)): ?>
-                                        <div class="activity-list">
-                                            <?php foreach ($barangKeluarTerbaru as $item): ?>
-                                                <div class="activity-item">
+                                        <div class="activity-list" id="barangKeluarList">
+                                            <?php foreach ($barangKeluarTerbaru as $index => $item): ?>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
                                                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                                         <div class="flex-grow-1">
                                                             <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
@@ -601,6 +890,14 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
+
+                                        <?php if (count($barangKeluarTerbaru) > $previewLimit): ?>
+                                            <div class="section-action">
+                                                <button type="button" class="btn-toggle-list" onclick="toggleList('barangKeluarList', this)">
+                                                    <i class="bi bi-chevron-down"></i>Lihat selengkapnya
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-inbox"></i>
@@ -611,27 +908,22 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                             </div>
                         </div>
 
-                        <div class="col-xl-5">
+                        <div class="col-xl-3 col-md-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-exclamation-diamond me-2 text-warning-custom"></i>Perlu Perhatian
+                                        <i class="bi bi-exclamation-triangle me-2 text-warning-custom"></i>Barang Bermasalah
                                     </div>
                                     <div class="panel-subtitle">
-                                        Fokus pada barang bermasalah dan pengiriman tertunda
+                                        Fokus pada perangkat yang perlu perhatian khusus
                                     </div>
                                 </div>
 
                                 <div class="panel-body">
-                                    <div class="panel-section-title">
-                                        <i class="bi bi-exclamation-triangle text-danger"></i>
-                                        Barang Bermasalah
-                                    </div>
-
                                     <?php if (!empty($barangBermasalah)): ?>
-                                        <div class="activity-list">
-                                            <?php foreach ($barangBermasalah as $item): ?>
-                                                <div class="activity-item">
+                                        <div class="activity-list" id="barangBermasalahList">
+                                            <?php foreach ($barangBermasalah as $index => $item): ?>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
                                                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                                         <div class="flex-grow-1">
                                                             <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
@@ -654,6 +946,14 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
+
+                                        <?php if (count($barangBermasalah) > $previewLimit): ?>
+                                            <div class="section-action">
+                                                <button type="button" class="btn-toggle-list" onclick="toggleList('barangBermasalahList', this)">
+                                                    <i class="bi bi-chevron-down"></i>Lihat selengkapnya
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-check-circle"></i>
@@ -661,19 +961,25 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                         </div>
                                     <?php endif; ?>
                                 </div>
+                            </div>
+                        </div>
 
-                                <div class="panel-divider"></div>
+                        <div class="col-xl-3 col-md-6">
+                            <div class="panel-card">
+                                <div class="panel-header">
+                                    <div class="panel-title">
+                                        <i class="bi bi-truck me-2 text-warning-custom"></i>Pengiriman Belum Diterima
+                                    </div>
+                                    <div class="panel-subtitle">
+                                        Pantau pengiriman yang masih berjalan atau belum diterima tujuan
+                                    </div>
+                                </div>
 
                                 <div class="panel-body">
-                                    <div class="panel-section-title">
-                                        <i class="bi bi-truck text-primary"></i>
-                                        Pengiriman Belum Diterima
-                                    </div>
-
                                     <?php if (!empty($pengirimanBelumDiterima)): ?>
-                                        <div class="activity-list">
-                                            <?php foreach ($pengirimanBelumDiterima as $item): ?>
-                                                <div class="activity-item">
+                                        <div class="activity-list" id="pengirimanBelumDiterimaList">
+                                            <?php foreach ($pengirimanBelumDiterima as $index => $item): ?>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
                                                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                                                         <div class="flex-grow-1">
                                                             <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
@@ -697,6 +1003,14 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                 </div>
                                             <?php endforeach; ?>
                                         </div>
+
+                                        <?php if (count($pengirimanBelumDiterima) > $previewLimit): ?>
+                                            <div class="section-action">
+                                                <button type="button" class="btn-toggle-list" onclick="toggleList('pengirimanBelumDiterimaList', this)">
+                                                    <i class="bi bi-chevron-down"></i>Lihat selengkapnya
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-check2-all"></i>
@@ -712,6 +1026,30 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
             </div>
         </div>
     </div>
+
+    <script>
+        function toggleList(listId, button) {
+            const list = document.getElementById(listId);
+            const hiddenItems = list.querySelectorAll('.extra-item');
+            const isExpanded = button.getAttribute('data-expanded') === 'true';
+
+            hiddenItems.forEach(item => {
+                if (isExpanded) {
+                    item.classList.add('d-none');
+                } else {
+                    item.classList.remove('d-none');
+                }
+            });
+
+            if (isExpanded) {
+                button.setAttribute('data-expanded', 'false');
+                button.innerHTML = '<i class="bi bi-chevron-down"></i>Lihat selengkapnya';
+            } else {
+                button.setAttribute('data-expanded', 'true');
+                button.innerHTML = '<i class="bi bi-chevron-up"></i>Tampilkan lebih sedikit';
+            }
+        }
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

@@ -10,6 +10,41 @@ $jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
 $branch = mysqli_query($koneksi, "SELECT * FROM tb_branch");
 $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang");
 
+
+function esc($koneksi, $value) {
+    return mysqli_real_escape_string($koneksi, trim((string)$value));
+}
+
+function uploadImage($fieldName, $targetDir = "../assets/images/")
+{
+    if (!isset($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
+        return ["status" => "empty", "filename" => ""];
+    }
+
+    $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
+
+    if (!in_array($ext, $allowed, true)) {
+        return ["status" => "error", "message" => "Format file {$fieldName} tidak diperbolehkan"];
+    }
+
+    if ($_FILES[$fieldName]['size'] > 2000000) {
+        return ["status" => "error", "message" => "Ukuran file {$fieldName} maksimal 2MB"];
+    }
+
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+
+    $filename = uniqid($fieldName . "_", true) . "." . $ext;
+
+    if (!move_uploaded_file($_FILES[$fieldName]['tmp_name'], $targetDir . $filename)) {
+        return ["status" => "error", "message" => "Gagal mengupload file {$fieldName}"];
+    }
+
+    return ["status" => "success", "filename" => $filename];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
 
@@ -36,16 +71,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $no_asset      = mysqli_real_escape_string($koneksi, trim($_POST['no_asset']));
+    $no_asset      = esc($koneksi, $_POST['no_asset']);
     $id_barang     = (int) $_POST['id_barang'];
     $id_merk       = (int) $_POST['id_merk'];
-    $serial_number = mysqli_real_escape_string($koneksi, trim($_POST['serial_number']));
+    $serial_number = esc($koneksi, $_POST['serial_number']);
     $id_tipe       = (int) $_POST['id_tipe'];
     $id_jenis      = (int) $_POST['id_jenis'];
-    $tanggal_masuk = mysqli_real_escape_string($koneksi, trim($_POST['tanggal_masuk']));
-    $bermasalah    = mysqli_real_escape_string($koneksi, trim($_POST['bermasalah']));
+    $tanggal_masuk = esc($koneksi, $_POST['tanggal_masuk']);
+    $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
-    $user          = mysqli_real_escape_string($koneksi, trim($_POST['user']));
+    $user          = esc($koneksi, $_POST['user']);
+    $nomor_resi    = esc($koneksi, $_POST['nomor_resi'] ?? '');
 
     $keterangan_masalah = null;
 
@@ -58,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $keterangan_masalah = mysqli_real_escape_string($koneksi, trim($_POST['keterangan_masalah']));
+        $keterangan_masalah = esc($koneksi, $_POST['keterangan_masalah']);
     }
 
     $cekDuplikat = mysqli_query($koneksi, "
@@ -96,44 +132,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
+    
     $foto = null;
+    $foto_resi = null;
 
-    if (isset($_FILES['foto']) && $_FILES['foto']['error'] === 0) {
-        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
+    $uploadFoto = uploadImage('foto');
+    if ($uploadFoto['status'] === 'error') {
+        echo json_encode([
+            'status' => 'error',
+            'message' => $uploadFoto['message']
+        ]);
+        exit;
+    }
+    if ($uploadFoto['status'] === 'success') {
+        $foto = $uploadFoto['filename'];
+    }
 
-        if (!in_array($ext, $allowed, true)) {
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Format foto harus JPG, JPEG, PNG, GIF, atau WEBP'
-            ]);
-            exit;
-        }
-
-        if ($_FILES['foto']['size'] > 2000000) {
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Ukuran foto maksimal 2MB'
-            ]);
-            exit;
-        }
-
-        if (!is_dir("../assets/images")) {
-            mkdir("../assets/images", 0777, true);
-        }
-
-        $foto_name = uniqid('barang_', true) . "." . $ext;
-        $target = "../assets/images/" . $foto_name;
-
-        if (!move_uploaded_file($_FILES['foto']['tmp_name'], $target)) {
-            echo json_encode([
-                'status' => 'error',
-                'message' => 'Gagal upload foto'
-            ]);
-            exit;
-        }
-
-        $foto = $foto_name;
+    $uploadFotoResi = uploadImage('foto_resi');
+    if ($uploadFotoResi['status'] === 'error') {
+        echo json_encode([
+            'status' => 'error',
+            'message' => $uploadFotoResi['message']
+        ]);
+        exit;
+    }
+    if ($uploadFotoResi['status'] === 'success') {
+        $foto_resi = $uploadFotoResi['filename'];
     }
 
     $query = "
@@ -150,6 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             id_status,
             id_branch,
             foto,
+            nomor_resi,
+            foto_resi,
             `user`
         ) VALUES (
             '$no_asset',
@@ -164,6 +190,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             '$id_status',
             '$id_branch',
             " . ($foto !== null ? "'$foto'" : "NULL") . ",
+            " . ($nomor_resi !== '' ? "'$nomor_resi'" : "NULL") . ",
+            " . ($foto_resi !== null ? "'$foto_resi'" : "NULL") . ",
             '$user'
         )
     ";
@@ -272,6 +300,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
+            <label>Nomer Resi</label>
+            <input type="text" name="nomor_resi" class="form-control" placeholder="Masukan nomer resi">
+        </div>
+
+        <div class="col-md-6">
+            <label>Foto Resi / Bukti Kirim</label>
+            <input type="file" name="foto_resi" class="form-control" id="fotoResiInput" accept=".jpg,.jpeg,.png,.gif,.webp">
+            <img id="previewFotoResi" style="max-width:120px;margin-top:10px;display:none;">
+        </div>
+
+        <div class="col-md-6">
             <label>Foto</label>
             <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
@@ -302,6 +341,16 @@ $('#fotoInput').change(function(){
     let reader = new FileReader();
     reader.onload = function(e){
         $('#previewFoto').attr('src', e.target.result).show();
+    };
+    reader.readAsDataURL(this.files[0]);
+});
+
+$('#fotoResiInput').change(function(){
+    if (!this.files || !this.files[0]) return;
+
+    let reader = new FileReader();
+    reader.onload = function(e){
+        $('#previewFotoResi').attr('src', e.target.result).show();
     };
     reader.readAsDataURL(this.files[0]);
 });

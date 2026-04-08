@@ -375,6 +375,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             color: #fff;
             font-weight: 700;
             padding: 0 1rem;
+            display: flex;
+            align-items: center;
         }
 
         .reset-btn:hover {

@@ -135,17 +135,44 @@ function bulk_field_error(array $errors, int $rowIndex, string $field): string
     return (string) ($errors[$rowIndex][$field] ?? '');
 }
 
+function default_password_for_role(string $role): string
+{
+    $role = normalize_role($role);
+
+    if ($role === 'admin') {
+        return 'Admin@123';
+    }
+
+    if ($role === 'super_admin') {
+        return 'SuperAdmin@123';
+    }
+
+    return 'user@123';
+}
+
+
+function resolve_password_input(string $role, ?string $inputPassword): string
+{
+    $inputPassword = trim((string) $inputPassword);
+
+    if ($inputPassword !== '') {
+        return $inputPassword;
+    }
+
+    return default_password_for_role($role);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create') {
         $username = trim($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $password = (string) ($_POST['password'] ?? '');
         $role = normalize_role($_POST['role'] ?? 'user');
+        $password = resolve_password_input($role, $_POST['password'] ?? '');
 
-        if ($username === '' || $email === '' || $password === '') {
-            set_flash('error', 'Username, email, dan password wajib diisi.');
+        if ($username === '' || $email === '') {
+            set_flash('error', 'Username dan email wajib diisi.');
             redirect_to(base_url('users/index.php'));
         }
 
@@ -165,8 +192,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'ssss', $username, $email, $hash, $role);
+        $mustChangePassword = 1;
+
+        $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password) VALUES (?, ?, ?, ?, ?)");
+
+        mysqli_stmt_bind_param($stmt, 'ssssi', $username, $email, $hash, $role, $mustChangePassword);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
@@ -210,10 +240,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rowErrors[$index]['email'] = 'Email wajib diisi.';
             } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
                 $rowErrors[$index]['email'] = 'Format email tidak valid.';
-            }
-
-            if ($row['password'] === '') {
-                $rowErrors[$index]['password'] = 'Password wajib diisi.';
             }
         }
 
@@ -281,7 +307,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $insertedCount = 0;
 
             foreach ($filledRows as $row) {
-                $hash = password_hash($row['password'], PASSWORD_DEFAULT);
+                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
+                $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
+
                 mysqli_stmt_bind_param($stmt, 'ssss', $row['username'], $row['email'], $hash, $row['role']);
 
                 if (!mysqli_stmt_execute($stmt)) {
@@ -335,10 +363,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rowErrors[$index]['email'] = 'Email wajib diisi.';
             } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
                 $rowErrors[$index]['email'] = 'Format email tidak valid.';
-            }
-
-            if ($row['password'] === '') {
-                $rowErrors[$index]['password'] = 'Password wajib diisi.';
             }
         }
 
@@ -404,7 +428,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $insertedCount = 0;
 
             foreach ($filledRows as $row) {
-                $hash = password_hash($row['password'], PASSWORD_DEFAULT);
+                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
+                $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
 
                 mysqli_stmt_bind_param(
                     $stmt,
@@ -550,7 +575,7 @@ function normalize_create_user_rows(array $rows): array
         $normalized[] = [
             'username' => trim((string) ($row['username'] ?? '')),
             'email' => trim((string) ($row['email'] ?? '')),
-            'password' => '',
+            'password' => (string) ($row['password'] ?? ''),
             'role' => normalize_role((string) ($row['role'] ?? 'user'))
         ];
     }
@@ -589,7 +614,7 @@ function pull_create_user_rows_old(): array
     foreach ($rows as &$row) {
         $row['password'] = '';
     }
-    unset($row);
+    unset($row);  
 
     return $rows;
 }
@@ -1036,7 +1061,7 @@ foreach ($users as $item) {
             overflow: hidden;
         }
 
-        .user-card + .user-card {
+        .user-card+.user-card {
             margin-top: 1rem;
         }
 
@@ -1327,7 +1352,7 @@ foreach ($users as $item) {
 
                                         <div class="mb-3">
                                             <label class="form-label">Password</label>
-                                            <input type="password" name="password" class="form-control" required>
+                                            <input type="password" name="password" class="form-control" placeholder="Kosongkan jika ingin password default">
                                         </div>
 
                                         <div class="mb-3">
@@ -1438,7 +1463,8 @@ foreach ($users as $item) {
                                                                         value=""
                                                                         data-field="password"
                                                                         data-name-template="bulk_users[__INDEX__][password]"
-                                                                        name="bulk_users[<?= $index ?>][password]">
+                                                                        name="bulk_users[<?= $index ?>][password]"
+                                                                        placeholder="Kosongkan jika ingin password default">
                                                                     <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'password')) ?></div>
                                                                 </div>
 
@@ -1512,7 +1538,9 @@ foreach ($users as $item) {
                                                                 value=""
                                                                 data-field="password"
                                                                 data-name-template="bulk_users[__INDEX__][password]"
-                                                                name="">
+                                                                name=""
+                                                                placeholder="Kosongkan jika ingin password default">
+                                                                
                                                             <div class="invalid-feedback"></div>
                                                         </div>
 
@@ -1608,7 +1636,8 @@ foreach ($users as $item) {
                                                                             value=""
                                                                             data-field="password"
                                                                             data-name-template="users[__INDEX__][password]"
-                                                                            name="users[<?= $index ?>][password]">
+                                                                            name="users[<?= $index ?>][password]"
+                                                                            placeholder="Password default">
                                                                         <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
                                                                     </td>
 
@@ -1681,7 +1710,8 @@ foreach ($users as $item) {
                                                             value=""
                                                             data-field="password"
                                                             data-name-template="users[__INDEX__][password]"
-                                                            name="">
+                                                            name=""
+                                                            placeholder="Password default">
                                                         <div class="invalid-feedback"></div>
                                                     </td>
 
@@ -1981,11 +2011,6 @@ foreach ($users as $item) {
                         }
                     }
 
-                    if (data.password === '') {
-                        setBulkFieldError(row, 'password', 'Password wajib diisi.');
-                        isValid = false;
-                    }
-
                     if (data.username !== '') {
                         const usernameKey = data.username.toLowerCase();
                         if (!usernameMap[usernameKey]) usernameMap[usernameKey] = [];
@@ -2225,10 +2250,6 @@ foreach ($users as $item) {
                         }
                     }
 
-                    if (data.password === '') {
-                        setFieldError(row, 'password', 'Password wajib diisi.');
-                        isValid = false;
-                    }
 
                     if (data.username !== '') {
                         const usernameKey = data.username.toLowerCase();

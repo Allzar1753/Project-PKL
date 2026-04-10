@@ -61,6 +61,29 @@ if (!in_array($limit, $allowed_limits, true)) {
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $where = [];
 
+$base_from = "
+FROM barang
+LEFT JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
+LEFT JOIN tb_merk ON barang.id_merk = tb_merk.id_merk
+LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
+LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
+LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
+LEFT JOIN tb_branch AS branch_aktif ON barang.id_branch = branch_aktif.id_branch
+
+LEFT JOIN (
+    SELECT bp1.*
+    FROM barang_pengiriman bp1
+    INNER JOIN (
+        SELECT id_barang, MAX(id_pengiriman) AS id_pengiriman_terakhir
+        FROM barang_pengiriman
+        GROUP BY id_barang
+    ) last_bp ON bp1.id_pengiriman = last_bp.id_pengiriman_terakhir
+) AS pengiriman ON barang.id = pengiriman.id_barang
+
+LEFT JOIN tb_branch AS branch_tujuan ON pengiriman.branch_tujuan = branch_tujuan.id_branch
+LEFT JOIN tb_branch AS branch_asal_pengiriman ON pengiriman.branch_asal = branch_asal_pengiriman.id_branch
+";
+
 if ($search_input !== "") {
     $search = mysqli_real_escape_string($koneksi, $search_input);
 
@@ -70,44 +93,35 @@ if ($search_input !== "") {
         OR barang.serial_number LIKE '%$search%'
         OR tb_merk.nama_merk LIKE '%$search%'
         OR tb_tipe.nama_tipe LIKE '%$search%'
-        OR branch_asal.nama_branch LIKE '%$search%'
-        OR branch_tujuan.nama_branch LIKE '%$search%'
         OR tb_status.nama_status LIKE '%$search%'
         OR tb_jenis.nama_jenis LIKE '%$search%'
         OR barang.keterangan_masalah LIKE '%$search%'
         OR barang.tanggal_masuk LIKE '%$search%'
-        OR barang.tanggal_keluar LIKE '%$search%'
         OR barang.bermasalah LIKE '%$search%'
         OR barang.`user` LIKE '%$search%'
-        OR barang.status_pengiriman LIKE '%$search%'
-        OR barang.nomor_resi LIKE '%$search%'
-        OR barang.estimasi_pengiriman LIKE '%$search%'
-        OR barang.jasa_pengiriman LIKE '%$search%'
-        OR barang.nama_penerima LIKE '%$search%'
+        OR branch_aktif.nama_branch LIKE '%$search%'
+        OR branch_tujuan.nama_branch LIKE '%$search%'
+        OR branch_asal_pengiriman.nama_branch LIKE '%$search%'
+        OR pengiriman.tanggal_keluar LIKE '%$search%'
+        OR pengiriman.status_pengiriman LIKE '%$search%'
+        OR pengiriman.nomor_resi_keluar LIKE '%$search%'
+        OR pengiriman.estimasi_pengiriman LIKE '%$search%'
+        OR pengiriman.jasa_pengiriman LIKE '%$search%'
+        OR pengiriman.nama_penerima LIKE '%$search%'
+        OR pengiriman.nomor_resi_masuk LIKE '%$search%'
     )";
 }
 
 if ($filter === "masuk") {
-    $where[] = "barang.tanggal_keluar IS NULL";
+    $where[] = "(pengiriman.id_pengiriman IS NULL OR pengiriman.status_pengiriman = 'Sudah diterima')";
 } elseif ($filter === "keluar") {
-    $where[] = "barang.tanggal_keluar IS NOT NULL";
+    $where[] = "(pengiriman.id_pengiriman IS NOT NULL AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima')";
 }
 
 $where_sql = "";
 if (count($where) > 0) {
     $where_sql = "WHERE " . implode(" AND ", $where);
 }
-
-$base_from = "
-FROM barang
-LEFT JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
-LEFT JOIN tb_merk ON barang.id_merk = tb_merk.id_merk
-LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
-LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
-LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
-LEFT JOIN tb_branch AS branch_asal ON barang.id_branch = branch_asal.id_branch
-LEFT JOIN tb_branch AS branch_tujuan ON barang.tujuan = branch_tujuan.id_branch
-";
 
 $count_query = mysqli_query($koneksi, "
     SELECT COUNT(DISTINCT barang.id) AS total
@@ -128,31 +142,58 @@ if ($page > $total_pages) {
 
 $offset = ($page - 1) * $limit;
 
-$total = mysqli_fetch_assoc(mysqli_query(
-    $koneksi,
-    "SELECT COUNT(*) AS total FROM barang"
-))['total'];
+$total_query = mysqli_query($koneksi, "SELECT COUNT(*) AS total FROM barang");
+$total = (int) mysqli_fetch_assoc($total_query)['total'];
 
-$masuk = mysqli_fetch_assoc(mysqli_query(
-    $koneksi,
-    "SELECT COUNT(*) AS total FROM barang WHERE tanggal_keluar IS NULL"
-))['total'];
+$masuk_query = mysqli_query($koneksi, "
+    SELECT COUNT(DISTINCT barang.id) AS total
+    $base_from
+    WHERE (pengiriman.id_pengiriman IS NULL OR pengiriman.status_pengiriman = 'Sudah diterima')
+");
+$masuk = (int) mysqli_fetch_assoc($masuk_query)['total'];
 
-$keluar = mysqli_fetch_assoc(mysqli_query(
-    $koneksi,
-    "SELECT COUNT(*) AS total FROM barang WHERE tanggal_keluar IS NOT NULL"
-))['total'];
+$keluar_query = mysqli_query($koneksi, "
+    SELECT COUNT(DISTINCT barang.id) AS total
+    $base_from
+    WHERE (pengiriman.id_pengiriman IS NOT NULL AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima')
+");
+$keluar = (int) mysqli_fetch_assoc($keluar_query)['total'];
 
 $query = mysqli_query($koneksi, "
-    SELECT 
-        barang.*, 
-        tb_barang.nama_barang, 
-        tb_merk.nama_merk, 
+    SELECT
+        barang.id,
+        barang.no_asset,
+        barang.serial_number,
+        barang.tanggal_masuk,
+        barang.bermasalah,
+        barang.keterangan_masalah,
+        barang.foto,
+        barang.`user`,
+        barang.id_status,
+
+        tb_barang.nama_barang,
+        tb_merk.nama_merk,
         tb_tipe.nama_tipe,
-        branch_asal.nama_branch AS branch_asal,
-        branch_tujuan.nama_branch AS branch_tujuan,
-        tb_status.nama_status, 
-        tb_jenis.nama_jenis
+        tb_status.nama_status,
+        tb_jenis.nama_jenis,
+
+        branch_aktif.nama_branch AS nama_branch_aktif,
+        branch_tujuan.nama_branch AS nama_branch_tujuan,
+        branch_asal_pengiriman.nama_branch AS nama_branch_asal_pengiriman,
+
+        pengiriman.id_pengiriman,
+        pengiriman.tanggal_keluar,
+        pengiriman.jasa_pengiriman,
+        pengiriman.nomor_resi_keluar,
+        pengiriman.foto_resi_keluar,
+        pengiriman.estimasi_pengiriman,
+        pengiriman.status_pengiriman,
+        pengiriman.tanggal_diterima,
+        pengiriman.nama_penerima,
+        pengiriman.nomor_resi_masuk,
+        pengiriman.foto_resi_masuk,
+        pengiriman.catatan_pengiriman_keluar,
+        pengiriman.catatan_penerimaan
     $base_from
     $where_sql
     ORDER BY barang.id DESC
@@ -999,7 +1040,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                             <i class="bi bi-box-arrow-in-down me-1"></i>Masuk
                                                         </span>
                                                         <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
-                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-muted"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
                                                     </td>
 
@@ -1049,10 +1090,10 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                             <i class="bi bi-box-arrow-up me-1"></i>Keluar
                                                         </span>
                                                         <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_keluar']) ? h($data['tanggal_keluar']) : '-' ?></span>
-                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_tujuan']) ? h($data['branch_tujuan']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_tujuan']) ? h($data['nama_branch_tujuan']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-truck"></i> <?= !empty($data['jasa_pengiriman']) ? h($data['jasa_pengiriman']) : '-' ?></span>
-                                                        <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi']) ? h($data['nomor_resi']) : '-' ?></span>
-                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['estimasi_pengiriman']) ? h($data['estimasi_pengiriman']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi_keluar']) ? h($data['nomor_resi_keluar']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['catatan_pengiriman']) ? h($data['catatan_pengiriman']) : '-' ?></span>
                                                     </td>
 
                                                     <td>
@@ -1066,16 +1107,16 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                             <span class="meta-line"><i class="bi bi-person-check"></i> <?= h($data['nama_penerima']) ?></span>
                                                         <?php endif; ?>
 
-                                                        <?php if (!empty($data['catatan_pengiriman'])): ?>
-                                                            <span class="meta-muted"><?= h($data['catatan_pengiriman']) ?></span>
+                                                        <?php if (!empty($data['catatan_pengiriman_keluar'])): ?>
+                                                            <span class="meta-muted"><?= h($data['catatan_pengiriman_keluar']) ?></span>
                                                         <?php endif; ?>
                                                     </td>
 
                                                     <td>
-                                                        <?php if (!empty($data['foto_resi'])): ?>
-                                                            <img src="../assets/images/<?= h($data['foto_resi']) ?>"
+                                                        <?php if (!empty($data['foto_resi_keluar'])): ?>
+                                                            <img src="../assets/images/<?= h($data['foto_resi_keluar']) ?>"
                                                                 class="thumb-img previewFoto"
-                                                                data-foto="../assets/images/<?= h($data['foto_resi']) ?>">
+                                                                data-foto="../assets/images/<?= h($data['foto_resi_keluar']) ?>">
                                                         <?php else: ?>
                                                             <span class="thumb-placeholder"><i class="bi bi-receipt"></i></span>
                                                         <?php endif; ?>
@@ -1099,7 +1140,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                 <?php else: ?>
                                                     <td>
-                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_asal']) ? h($data['branch_asal']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
                                                         <span class="meta-muted"><i class="bi bi-calendar"></i> Masuk: <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
                                                     </td>
@@ -1114,7 +1155,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                         <?php if ($isKeluar): ?>
                                                             <span class="meta-line"><i class="bi bi-calendar"></i> <?= h($data['tanggal_keluar']) ?></span>
-                                                            <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['branch_tujuan']) ? h($data['branch_tujuan']) : '-' ?></span>
+                                                            <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_tujuan']) ? h($data['nama_branch_tujuan']) : '-' ?></span>
                                                         <?php else: ?>
                                                             <span class="meta-muted">Belum ada proses pengiriman</span>
                                                         <?php endif; ?>

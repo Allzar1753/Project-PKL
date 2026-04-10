@@ -10,8 +10,10 @@ $jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
 $branch = mysqli_query($koneksi, "SELECT * FROM tb_branch");
 $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang");
 
+$branch_inti_id = 40; // ID branch inti / pusat
 
-function esc($koneksi, $value) {
+function esc($koneksi, $value)
+{
     return mysqli_real_escape_string($koneksi, trim((string)$value));
 }
 
@@ -79,14 +81,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_jenis      = (int) $_POST['id_jenis'];
     $tanggal_masuk = esc($koneksi, $_POST['tanggal_masuk']);
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
-    $id_branch     = (int) $_POST['id_branch'];
+    $id_branch     = (int) $_POST['id_branch']; // branch asal
     $user          = esc($koneksi, $_POST['user']);
     $nomor_resi    = esc($koneksi, $_POST['nomor_resi'] ?? '');
 
     $keterangan_masalah = null;
 
     if ($bermasalah === 'Iya') {
-        if (empty($_POST['keterangan_masalah']) || trim($_POST['keterangan_masalah']) === '') {
+        if (empty($_POST['keterangan_masalah']) || trim((string)$_POST['keterangan_masalah']) === '') {
             echo json_encode([
                 'status' => 'error',
                 'message' => 'Keterangan masalah wajib diisi jika barang bermasalah'
@@ -131,8 +133,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $id_status = ($bermasalah === 'Iya') ? 5 : 4;
-    
     $foto = null;
     $foto_resi = null;
 
@@ -160,7 +160,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $foto_resi = $uploadFotoResi['filename'];
     }
 
-    $query = "
+    // Pengiriman awal hanya dibuat jika branch asal BUKAN branch inti
+    // dan user memang mengisi nomor resi / foto resi.
+    $buat_pengiriman_awal = (
+        $id_branch !== $branch_inti_id &&
+        ($nomor_resi !== '' || $foto_resi !== null)
+    );
+
+    if ($bermasalah === 'Iya' && $buat_pengiriman_awal) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Barang bermasalah tidak boleh langsung dibuat pengiriman awal.'
+        ]);
+        exit;
+    }
+
+    // Status barang:
+    // 5 = bermasalah
+    // 3 = sedang dikirim / keluar
+    // 4 = aktif / masuk
+    if ($bermasalah === 'Iya') {
+        $id_status = 5;
+    } elseif ($buat_pengiriman_awal) {
+        $id_status = 3;
+    } else {
+        $id_status = 4;
+    }
+
+    $queryBarang = "
         INSERT INTO barang (
             no_asset,
             id_barang,
@@ -174,8 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             id_status,
             id_branch,
             foto,
-            nomor_resi,
-            foto_resi,
             `user`
         ) VALUES (
             '$no_asset',
@@ -190,21 +215,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             '$id_status',
             '$id_branch',
             " . ($foto !== null ? "'$foto'" : "NULL") . ",
-            " . ($nomor_resi !== '' ? "'$nomor_resi'" : "NULL") . ",
-            " . ($foto_resi !== null ? "'$foto_resi'" : "NULL") . ",
             '$user'
         )
     ";
 
-    if (mysqli_query($koneksi, $query)) {
+    mysqli_begin_transaction($koneksi);
+
+    try {
+        if (!mysqli_query($koneksi, $queryBarang)) {
+            throw new Exception('Gagal simpan data barang: ' . mysqli_error($koneksi));
+        }
+
+        $id_barang_baru = mysqli_insert_id($koneksi);
+
+        if ($buat_pengiriman_awal) {
+            $tanggal_keluar_awal = $tanggal_masuk;
+            $status_pengiriman_awal = 'Sedang perjalanan';
+
+            $queryPengiriman = "
+                INSERT INTO barang_pengiriman (
+                    id_barang,
+                    branch_asal,
+                    branch_tujuan,
+                    tanggal_keluar,
+                    jasa_pengiriman,
+                    nomor_resi_keluar,
+                    foto_resi_keluar,
+                    estimasi_pengiriman,
+                    catatan_pengiriman_keluar,
+                    status_pengiriman,
+                    dibuat_oleh
+                ) VALUES (
+                    '$id_barang_baru',
+                    '$id_branch',
+                    '$branch_inti_id',
+                    " . ($tanggal_keluar_awal !== '' ? "'$tanggal_keluar_awal'" : "NULL") . ",
+                    NULL,
+                    " . ($nomor_resi !== '' ? "'$nomor_resi'" : "NULL") . ",
+                    " . ($foto_resi !== null ? "'$foto_resi'" : "NULL") . ",
+                    NULL,
+                    NULL,
+                    '$status_pengiriman_awal',
+                    NULL
+                )
+            ";
+
+            if (!mysqli_query($koneksi, $queryPengiriman)) {
+                throw new Exception('Gagal simpan pengiriman awal: ' . mysqli_error($koneksi));
+            }
+        }
+
+        mysqli_commit($koneksi);
+
         echo json_encode([
             'status' => 'success',
-            'message' => 'Data barang berhasil ditambahkan'
+            'message' => $buat_pengiriman_awal
+                ? 'Data barang berhasil ditambahkan dan pengiriman awal ke branch inti berhasil dibuat.'
+                : 'Data barang berhasil ditambahkan.'
         ]);
-    } else {
+    } catch (Exception $e) {
+        mysqli_rollback($koneksi);
+
         echo json_encode([
             'status' => 'error',
-            'message' => mysqli_error($koneksi)
+            'message' => $e->getMessage()
         ]);
     }
 
@@ -214,6 +288,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <form id="formCreate" enctype="multipart/form-data">
     <div class="row g-3">
+
+        <div class="col-12">
+            <div class="alert alert-info mb-0">
+                <b>Catatan:</b> Isi <b>Nomor Resi</b> atau <b>Foto Resi</b> hanya jika barang dari branch asal memang langsung dikirim ke branch inti.
+                Jika dikosongkan, sistem hanya menyimpan data barang tanpa membuat transaksi pengiriman awal.
+            </div>
+        </div>
 
         <div class="col-md-6">
             <label>No Asset</label>
@@ -271,7 +352,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Branch</label>
+            <label>Branch Asal</label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
                 <?php while ($row = mysqli_fetch_assoc($branch)): ?>
@@ -300,8 +381,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Nomer Resi</label>
-            <input type="text" name="nomor_resi" class="form-control" placeholder="Masukan nomer resi">
+            <label>Nomor Resi Pengiriman Awal</label>
+            <input type="text" name="nomor_resi" class="form-control" placeholder="Isi jika barang langsung dikirim ke branch inti">
         </div>
 
         <div class="col-md-6">
@@ -311,7 +392,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Foto</label>
+            <label>Foto Barang</label>
             <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
         </div>
@@ -323,35 +404,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </form>
 
 <script>
-$(document).ready(function(){
-    $('#bermasalahSelect').on('change', function(){
-        if($(this).val() === 'Iya'){
-            $('#keteranganMasalahDiv').slideDown();
-            $('textarea[name="keterangan_masalah"]').attr('required', true);
-        } else {
-            $('#keteranganMasalahDiv').slideUp();
-            $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-        }
+    $(document).ready(function() {
+        $('#bermasalahSelect').on('change', function() {
+            if ($(this).val() === 'Iya') {
+                $('#keteranganMasalahDiv').slideDown();
+                $('textarea[name="keterangan_masalah"]').attr('required', true);
+            } else {
+                $('#keteranganMasalahDiv').slideUp();
+                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+            }
+        });
     });
-});
 
-$('#fotoInput').change(function(){
-    if (!this.files || !this.files[0]) return;
+    $('#fotoInput').change(function() {
+        if (!this.files || !this.files[0]) return;
 
-    let reader = new FileReader();
-    reader.onload = function(e){
-        $('#previewFoto').attr('src', e.target.result).show();
-    };
-    reader.readAsDataURL(this.files[0]);
-});
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            $('#previewFoto').attr('src', e.target.result).show();
+        };
+        reader.readAsDataURL(this.files[0]);
+    });
 
-$('#fotoResiInput').change(function(){
-    if (!this.files || !this.files[0]) return;
+    $('#fotoResiInput').change(function() {
+        if (!this.files || !this.files[0]) return;
 
-    let reader = new FileReader();
-    reader.onload = function(e){
-        $('#previewFotoResi').attr('src', e.target.result).show();
-    };
-    reader.readAsDataURL(this.files[0]);
-});
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            $('#previewFotoResi').attr('src', e.target.result).show();
+        };
+        reader.readAsDataURL(this.files[0]);
+    });
 </script>

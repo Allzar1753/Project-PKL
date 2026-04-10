@@ -53,6 +53,29 @@ function fetchAllAssoc($query)
 
 $previewLimit = 3;
 
+$baseJoin = "
+FROM barang
+LEFT JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
+LEFT JOIN tb_merk ON barang.id_merk = tb_merk.id_merk
+LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
+LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
+LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
+LEFT JOIN tb_branch AS branch_aktif ON barang.id_branch = branch_aktif.id_branch
+
+LEFT JOIN (
+    SELECT bp1.*
+    FROM barang_pengiriman bp1
+    INNER JOIN (
+        SELECT id_barang, MAX(id_pengiriman) AS id_pengiriman_terakhir
+        FROM barang_pengiriman
+        GROUP BY id_barang
+    ) last_bp ON bp1.id_pengiriman = last_bp.id_pengiriman_terakhir
+) AS pengiriman ON barang.id = pengiriman.id_barang
+
+LEFT JOIN tb_branch AS branch_tujuan ON pengiriman.branch_tujuan = branch_tujuan.id_branch
+LEFT JOIN tb_branch AS branch_asal_pengiriman ON pengiriman.branch_asal = branch_asal_pengiriman.id_branch
+";
+
 $totalInventaris = (int) mysqli_fetch_assoc(mysqli_query(
     $koneksi,
     "SELECT COUNT(*) AS total FROM barang"
@@ -60,12 +83,22 @@ $totalInventaris = (int) mysqli_fetch_assoc(mysqli_query(
 
 $totalMasuk = (int) mysqli_fetch_assoc(mysqli_query(
     $koneksi,
-    "SELECT COUNT(*) AS total FROM barang WHERE tanggal_keluar IS NULL"
+    "
+    SELECT COUNT(DISTINCT barang.id) AS total
+    $baseJoin
+    WHERE pengiriman.id_pengiriman IS NULL
+       OR pengiriman.status_pengiriman = 'Sudah diterima'
+    "
 ))['total'];
 
 $totalKeluar = (int) mysqli_fetch_assoc(mysqli_query(
     $koneksi,
-    "SELECT COUNT(*) AS total FROM barang WHERE tanggal_keluar IS NOT NULL"
+    "
+    SELECT COUNT(DISTINCT barang.id) AS total
+    $baseJoin
+    WHERE pengiriman.id_pengiriman IS NOT NULL
+      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
+    "
 ))['total'];
 
 $totalBermasalah = (int) mysqli_fetch_assoc(mysqli_query(
@@ -75,29 +108,15 @@ $totalBermasalah = (int) mysqli_fetch_assoc(mysqli_query(
 
 $totalSedangDikirim = (int) mysqli_fetch_assoc(mysqli_query(
     $koneksi,
-    "SELECT COUNT(*) AS total
-     FROM barang
-     WHERE tanggal_keluar IS NOT NULL
-       AND (
-            status_pengiriman IS NULL
-            OR status_pengiriman = ''
-            OR status_pengiriman != 'Sudah diterima'
-       )"
+    "
+    SELECT COUNT(DISTINCT barang.id) AS total
+    $baseJoin
+    WHERE pengiriman.status_pengiriman IN ('Sedang dikemas', 'Sedang perjalanan')
+    "
 ))['total'];
 
-$baseJoin = "
-FROM barang
-LEFT JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
-LEFT JOIN tb_merk ON barang.id_merk = tb_merk.id_merk
-LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
-LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
-LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
-LEFT JOIN tb_branch AS branch_asal ON barang.id_branch = branch_asal.id_branch
-LEFT JOIN tb_branch AS branch_tujuan ON barang.tujuan = branch_tujuan.id_branch
-";
-
 $qBarangMasukTerbaru = mysqli_query($koneksi, "
-    SELECT 
+    SELECT
         barang.id,
         barang.no_asset,
         barang.serial_number,
@@ -105,32 +124,34 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
         barang.`user`,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_asal.nama_branch AS branch_asal
+        branch_aktif.nama_branch AS nama_branch_aktif
     $baseJoin
-    WHERE barang.tanggal_keluar IS NULL
+    WHERE pengiriman.id_pengiriman IS NULL
+       OR pengiriman.status_pengiriman = 'Sudah diterima'
     ORDER BY barang.id DESC
 ");
 $barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
 
 $qBarangKeluarTerbaru = mysqli_query($koneksi, "
-    SELECT 
+    SELECT
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_keluar,
-        barang.status_pengiriman,
-        barang.nomor_resi,
+        pengiriman.tanggal_keluar,
+        pengiriman.status_pengiriman,
+        pengiriman.nomor_resi_keluar,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_tujuan.nama_branch AS branch_tujuan
+        branch_tujuan.nama_branch AS nama_branch_tujuan
     $baseJoin
-    WHERE barang.tanggal_keluar IS NOT NULL
+    WHERE pengiriman.id_pengiriman IS NOT NULL
+      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
     ORDER BY barang.id DESC
 ");
 $barangKeluarTerbaru = fetchAllAssoc($qBarangKeluarTerbaru);
 
 $qBarangBermasalah = mysqli_query($koneksi, "
-    SELECT 
+    SELECT
         barang.id,
         barang.no_asset,
         barang.serial_number,
@@ -138,7 +159,7 @@ $qBarangBermasalah = mysqli_query($koneksi, "
         barang.`user`,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_asal.nama_branch AS branch_asal
+        branch_aktif.nama_branch AS nama_branch_aktif
     $baseJoin
     WHERE barang.bermasalah = 'Iya'
     ORDER BY barang.id DESC
@@ -146,24 +167,20 @@ $qBarangBermasalah = mysqli_query($koneksi, "
 $barangBermasalah = fetchAllAssoc($qBarangBermasalah);
 
 $qPengirimanBelumDiterima = mysqli_query($koneksi, "
-    SELECT 
+    SELECT
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_keluar,
-        barang.status_pengiriman,
-        barang.nomor_resi,
-        barang.estimasi_pengiriman,
+        pengiriman.tanggal_keluar,
+        pengiriman.status_pengiriman,
+        pengiriman.nomor_resi_keluar,
+        pengiriman.estimasi_pengiriman,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_tujuan.nama_branch AS branch_tujuan
+        branch_tujuan.nama_branch AS nama_branch_tujuan
     $baseJoin
-    WHERE barang.tanggal_keluar IS NOT NULL
-      AND (
-            barang.status_pengiriman IS NULL
-            OR barang.status_pengiriman = ''
-            OR barang.status_pengiriman != 'Sudah diterima'
-      )
+    WHERE pengiriman.id_pengiriman IS NOT NULL
+      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
     ORDER BY barang.id DESC
 ");
 $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
@@ -818,7 +835,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
                                                                 <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['branch_asal'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_aktif'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-person me-1"></i><?= h($item['user'] ?? '-') ?></div>
                                                             </div>
                                                         </div>
@@ -875,8 +892,8 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
                                                                 <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['branch_tujuan'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
                                                             </div>
                                                         </div>
 
@@ -931,7 +948,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['branch_asal'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_aktif'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-person me-1"></i><?= h($item['user'] ?? '-') ?></div>
                                                                 <div class="meta-line text-danger line-clamp-2">
                                                                     <strong>Masalah:</strong> <?= h($item['keterangan_masalah'] ?? '-') ?>
@@ -987,8 +1004,8 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['branch_tujuan'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-hourglass-split me-1"></i>Estimasi: <?= h($item['estimasi_pengiriman'] ?? '-') ?></div>
                                                             </div>
                                                         </div>

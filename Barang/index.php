@@ -10,7 +10,7 @@ function h($value)
 
 function resolveShippingStatus($row)
 {
-    if (empty($row['tanggal_keluar'])) {
+    if (empty($row['id_pengiriman'])) {
         return 'Belum dikirim';
     }
 
@@ -43,6 +43,20 @@ function barangBadge($bermasalah)
     }
 
     return '<span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
+}
+
+function isBarangKeluar(array $row): bool
+{
+    return !empty($row['id_pengiriman']);
+}
+
+function isBarangLocked(array $row): bool
+{
+    return !empty($row['id_pengiriman']) &&
+        (
+            ($row['status_pengiriman'] ?? '') === 'Sudah diterima' ||
+            !empty($row['tanggal_diterima'])
+        );
 }
 
 $search_input = isset($_GET['cari']) ? trim($_GET['cari']) : "";
@@ -112,10 +126,15 @@ if ($search_input !== "") {
     )";
 }
 
+/*
+    LOGIKA FINAL:
+    - MASUK  = belum pernah ada record pengiriman
+    - KELUAR = sudah pernah ada record pengiriman
+*/
 if ($filter === "masuk") {
-    $where[] = "(pengiriman.id_pengiriman IS NULL OR pengiriman.status_pengiriman = 'Sudah diterima')";
+    $where[] = "pengiriman.id_pengiriman IS NULL";
 } elseif ($filter === "keluar") {
-    $where[] = "(pengiriman.id_pengiriman IS NOT NULL AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima')";
+    $where[] = "pengiriman.id_pengiriman IS NOT NULL";
 }
 
 $where_sql = "";
@@ -148,14 +167,14 @@ $total = (int) mysqli_fetch_assoc($total_query)['total'];
 $masuk_query = mysqli_query($koneksi, "
     SELECT COUNT(DISTINCT barang.id) AS total
     $base_from
-    WHERE (pengiriman.id_pengiriman IS NULL OR pengiriman.status_pengiriman = 'Sudah diterima')
+    WHERE pengiriman.id_pengiriman IS NULL
 ");
 $masuk = (int) mysqli_fetch_assoc($masuk_query)['total'];
 
 $keluar_query = mysqli_query($koneksi, "
     SELECT COUNT(DISTINCT barang.id) AS total
     $base_from
-    WHERE (pengiriman.id_pengiriman IS NOT NULL AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima')
+    WHERE pengiriman.id_pengiriman IS NOT NULL
 ");
 $keluar = (int) mysqli_fetch_assoc($keluar_query)['total'];
 
@@ -170,6 +189,7 @@ $query = mysqli_query($koneksi, "
         barang.foto,
         barang.`user`,
         barang.id_status,
+        barang.id_branch,
 
         tb_barang.nama_barang,
         tb_merk.nama_merk,
@@ -182,6 +202,8 @@ $query = mysqli_query($koneksi, "
         branch_asal_pengiriman.nama_branch AS nama_branch_asal_pengiriman,
 
         pengiriman.id_pengiriman,
+        pengiriman.branch_asal,
+        pengiriman.branch_tujuan,
         pengiriman.tanggal_keluar,
         pengiriman.jasa_pengiriman,
         pengiriman.nomor_resi_keluar,
@@ -727,6 +749,12 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             color: #fff;
         }
 
+        .btn-dark {
+            background: linear-gradient(135deg, #444, #111);
+            border: none;
+            color: #fff;
+        }
+
         .btn-info:hover,
         .btn-dark:hover,
         .btn-danger:hover {
@@ -924,7 +952,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                     <div>
                                         <div class="summary-label">Barang Masuk</div>
                                         <div class="summary-value" id="barangMasuk"><?= $masuk ?></div>
-                                        <div class="summary-note">Item yang masih aktif di inventaris</div>
+                                        <div class="summary-note">Item yang belum pernah dikirim</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-in-down"></i>
@@ -939,7 +967,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
                                         <div class="summary-value" id="barangKeluar"><?= $keluar ?></div>
-                                        <div class="summary-note">Item yang sudah keluar atau dikirim</div>
+                                        <div class="summary-note">Item yang sudah pernah dikirim / keluar</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-up"></i>
@@ -1014,9 +1042,10 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                         <?php while ($data = mysqli_fetch_assoc($query)): ?>
                                             <?php
                                             $shippingStatus = resolveShippingStatus($data);
-                                            $isKeluar = !empty($data['tanggal_keluar']);
+                                            $isKeluar = isBarangKeluar($data);
+                                            $isLocked = isBarangLocked($data);
                                             ?>
-                                            <tr>
+                                            <tr data-keluar="<?= $isKeluar ? '1' : '0' ?>" data-locked="<?= $isLocked ? '1' : '0' ?>">
                                                 <td><?= $no++ ?></td>
 
                                                 <td>
@@ -1074,6 +1103,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                                     <i class="bi bi-pencil"></i>
                                                                 </button>
                                                             <?php endif; ?>
+
                                                             <?php if (can('barang.delete')): ?>
                                                                 <button class="btn btn-sm btn-danger btnDelete"
                                                                     data-id="<?= $data['id'] ?>"
@@ -1093,7 +1123,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_tujuan']) ? h($data['nama_branch_tujuan']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-truck"></i> <?= !empty($data['jasa_pengiriman']) ? h($data['jasa_pengiriman']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi_keluar']) ? h($data['nomor_resi_keluar']) : '-' ?></span>
-                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['catatan_pengiriman']) ? h($data['catatan_pengiriman']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['estimasi_pengiriman']) ? h($data['estimasi_pengiriman']) : '-' ?></span>
                                                     </td>
 
                                                     <td>
@@ -1107,8 +1137,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                             <span class="meta-line"><i class="bi bi-person-check"></i> <?= h($data['nama_penerima']) ?></span>
                                                         <?php endif; ?>
 
-                                                        <?php if (!empty($data['catatan_pengiriman_keluar'])): ?>
-                                                            <span class="meta-muted"><?= h($data['catatan_pengiriman_keluar']) ?></span>
+                                                        <?php if ($isLocked): ?>
+                                                            <span class="meta-muted text-danger">Barang sudah diterima branch tujuan dan dikunci.</span>
                                                         <?php endif; ?>
                                                     </td>
 
@@ -1124,7 +1154,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                     <td class="text-center">
                                                         <div class="action-group">
-                                                            <?php if (can('barang.kirim')): ?>
+                                                            <?php if (!$isLocked && can('barang.kirim')): ?>
                                                                 <button class="btn btn-sm btn-info btnEdit"
                                                                     data-id="<?= $data['id'] ?>"
                                                                     title="Update logistik / pengiriman">
@@ -1132,7 +1162,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                                 </button>
                                                             <?php endif; ?>
 
-                                                            <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
+                                                            <button class="btn btn-sm btn-dark" disabled title="<?= $isLocked ? 'Barang sudah dikunci' : 'Barang keluar' ?>">
                                                                 <i class="bi bi-lock-fill"></i>
                                                             </button>
                                                         </div>
@@ -1154,8 +1184,12 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                         <div class="mb-2"><?= shippingBadge($shippingStatus) ?></div>
 
                                                         <?php if ($isKeluar): ?>
-                                                            <span class="meta-line"><i class="bi bi-calendar"></i> <?= h($data['tanggal_keluar']) ?></span>
+                                                            <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_keluar']) ? h($data['tanggal_keluar']) : '-' ?></span>
                                                             <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_tujuan']) ? h($data['nama_branch_tujuan']) : '-' ?></span>
+
+                                                            <?php if ($isLocked): ?>
+                                                                <span class="meta-muted text-danger">Sudah diterima branch lain dan dikunci</span>
+                                                            <?php endif; ?>
                                                         <?php else: ?>
                                                             <span class="meta-muted">Belum ada proses pengiriman</span>
                                                         <?php endif; ?>
@@ -1174,7 +1208,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     <td class="text-center">
                                                         <div class="action-group">
                                                             <?php if ($isKeluar): ?>
-                                                                <?php if (can('barang.kirim')): ?>
+                                                                <?php if (!$isLocked && can('barang.kirim')): ?>
                                                                     <button class="btn btn-sm btn-info btnEdit"
                                                                         data-id="<?= $data['id'] ?>"
                                                                         title="Update logistik / pengiriman">
@@ -1182,7 +1216,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                                     </button>
                                                                 <?php endif; ?>
 
-                                                                <button class="btn btn-sm btn-dark" disabled title="Data barang terkunci, logistik masih bisa diupdate">
+                                                                <button class="btn btn-sm btn-dark" disabled title="<?= $isLocked ? 'Barang sudah dikunci' : 'Barang keluar' ?>">
                                                                     <i class="bi bi-lock-fill"></i>
                                                                 </button>
                                                             <?php else: ?>
@@ -1282,18 +1316,63 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
+        function destroySelect2InContainer(containerSelector) {
+            const $container = $(containerSelector);
+            $container.find('select').each(function() {
+                if ($(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2('destroy');
+                }
+            });
+        }
+
+        function initSelect2InContainer(containerSelector, modalSelector, placeholderText = 'Pilih...') {
+            const $container = $(containerSelector);
+            const $modal = $(modalSelector);
+
+            $container.find('select').each(function() {
+                if ($(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2('destroy');
+                }
+
+                $(this).select2({
+                    dropdownParent: $modal,
+                    width: '100%',
+                    placeholder: placeholderText,
+                    allowClear: true
+                });
+            });
+        }
+
+        function initSelect2WhenModalReady(containerSelector, modalSelector, placeholderText = 'Pilih...') {
+            const $modal = $(modalSelector);
+
+            const runInit = function() {
+                requestAnimationFrame(function() {
+                    initSelect2InContainer(containerSelector, modalSelector, placeholderText);
+                });
+            };
+
+            if ($modal.hasClass('show')) {
+                runInit();
+            } else {
+                $modal.one('shown.bs.modal', runInit);
+            }
+        }
+
         $('#modalCreate').on('show.bs.modal', function() {
+            $('#contentCreate').html('<p class="text-center text-muted">Loading form...</p>');
+
             $.get('create.php', function(html) {
                 $('#contentCreate').html(html);
-
-                $('#contentCreate select').select2({
-                    dropdownParent: $('#modalCreate'),
-                    width: '100%',
-                    placeholder: 'Pilih...'
-                });
+                initSelect2WhenModalReady('#contentCreate', '#modalCreate', 'Pilih...');
             }).fail(function() {
                 $('#contentCreate').html('<p class="text-danger">Gagal memuat form.</p>');
             });
+        });
+
+        $('#modalCreate').on('hidden.bs.modal', function() {
+            destroySelect2InContainer('#contentCreate');
+            $('#contentCreate').html('<p class="text-center text-muted">Loading form...</p>');
         });
 
         $(document).on('submit', '#formCreate', function(e) {
@@ -1309,94 +1388,102 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 processData: false,
                 dataType: 'json',
                 success: function(response) {
-                    if (response.success || response.status === "success") {
+                    if (response.success || response.status === 'success') {
                         Swal.fire({
-                            icon: "success",
-                            title: "Berhasil",
-                            text: response.message || "Data berhasil ditambahkan"
+                            icon: 'success',
+                            title: 'Berhasil',
+                            text: response.message || 'Data berhasil ditambahkan'
                         }).then(() => {
                             location.reload();
                         });
                     } else {
                         Swal.fire({
-                            icon: "error",
-                            title: "Gagal",
-                            text: response.error || response.message || "Terjadi kesalahan"
+                            icon: 'error',
+                            title: 'Gagal',
+                            text: response.error || response.message || 'Terjadi kesalahan'
                         });
                     }
                 },
                 error: function(xhr) {
                     console.log(xhr.responseText);
                     Swal.fire({
-                        icon: "error",
-                        title: "Error",
-                        text: "Terjadi kesalahan server"
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Terjadi kesalahan server'
                     });
                 }
             });
         });
 
-        $(document).on("click", ".btnEdit", function() {
-            let id = $(this).data("id");
+        $(document).on('click', '.btnEdit', function() {
+            let id = $(this).data('id');
+            const modalEl = document.getElementById('modalUpdate');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
-            fetch("update.php?id=" + id)
+            destroySelect2InContainer('#contentUpdate');
+            $('#contentUpdate').html('<p class="text-center text-muted">Loading form...</p>');
+            modal.show();
+
+            fetch('update.php?id=' + id)
                 .then(res => res.text())
                 .then(html => {
-                    $("#contentUpdate").html(html);
-
-                    let modal = new bootstrap.Modal(document.getElementById("modalUpdate"));
-                    modal.show();
-
-                    $('#contentUpdate select').select2({
-                        dropdownParent: $('#modalUpdate'),
-                        width: '100%'
-                    });
+                    $('#contentUpdate').html(html);
+                    initSelect2WhenModalReady('#contentUpdate', '#modalUpdate', 'Pilih...');
+                })
+                .catch(() => {
+                    $('#contentUpdate').html('<p class="text-danger">Gagal memuat data update.</p>');
                 });
         });
 
-        $(document).on("click", ".btnDelete", function() {
+        $('#modalUpdate').on('hidden.bs.modal', function() {
+            destroySelect2InContainer('#contentUpdate');
+            $('#contentUpdate').html('Loading...');
+        });
+
+        $(document).on('click', '.btnDelete', function() {
             let id = this.dataset.id;
             let row = this.closest('tr');
 
             Swal.fire({
-                title: "Yakin hapus data?",
-                text: "Data tidak bisa dikembalikan",
-                icon: "warning",
+                title: 'Yakin hapus data?',
+                text: 'Data tidak bisa dikembalikan',
+                icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: "#d33",
-                confirmButtonText: "Ya hapus"
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Ya hapus'
             }).then(result => {
                 if (result.isConfirmed) {
                     $.getJSON('delete.php', {
                         id: id
                     }, function(response) {
-                        if (response.status === "success") {
+                        if (response.status === 'success') {
                             row.remove();
 
-                            let total = document.getElementById("totalInventaris");
-                            let masuk = document.getElementById("barangMasuk");
-                            let keluar = document.getElementById("barangKeluar");
+                            let total = document.getElementById('totalInventaris');
+                            let masuk = document.getElementById('barangMasuk');
+                            let keluar = document.getElementById('barangKeluar');
 
                             total.innerText = parseInt(total.innerText) - 1;
 
-                            let keluarBadge = row.querySelector(".bg-danger");
-                            if (keluarBadge) {
+                            let isKeluar = row.dataset.keluar === '1';
+
+                            if (isKeluar) {
                                 keluar.innerText = parseInt(keluar.innerText) - 1;
                             } else {
                                 masuk.innerText = parseInt(masuk.innerText) - 1;
                             }
 
                             Swal.fire({
-                                icon: "success",
-                                title: "Terhapus!",
+                                icon: 'success',
+                                title: 'Terhapus!',
                                 text: response.message
                             }).then(() => {
                                 location.reload();
                             });
                         } else {
                             Swal.fire({
-                                icon: "error",
-                                title: "Gagal!",
+                                icon: 'error',
+                                title: 'Gagal!',
                                 text: response.message
                             });
                         }
@@ -1405,51 +1492,51 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             });
         });
 
-        $(document).on("submit", "#formUpdate", function(e) {
+        $(document).on('submit', '#formUpdate', function(e) {
             e.preventDefault();
 
             let formData = new FormData(this);
 
             $.ajax({
-                url: "update.php",
-                type: "POST",
+                url: 'update.php',
+                type: 'POST',
                 data: formData,
                 contentType: false,
                 processData: false,
-                dataType: "json",
+                dataType: 'json',
                 success: function(response) {
-                    if (response.status === "success") {
+                    if (response.status === 'success') {
                         Swal.fire({
-                            icon: "success",
-                            title: "Berhasil",
+                            icon: 'success',
+                            title: 'Berhasil',
                             text: response.message
                         }).then(() => {
                             location.reload();
                         });
                     } else {
                         Swal.fire({
-                            icon: "error",
-                            title: "Gagal",
-                            text: response.message || "Update gagal"
+                            icon: 'error',
+                            title: 'Gagal',
+                            text: response.message || 'Update gagal'
                         });
                     }
                 },
                 error: function(xhr) {
                     console.log(xhr.responseText);
                     Swal.fire({
-                        icon: "error",
-                        title: "Error",
-                        text: "Terjadi error di update.php. Cek console browser."
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Terjadi error di update.php. Cek console browser.'
                     });
                 }
             });
         });
 
-        $(document).on("click", ".previewFoto", function() {
-            let foto = $(this).data("foto");
-            $("#fotoPreview").attr("src", foto);
+        $(document).on('click', '.previewFoto', function() {
+            let foto = $(this).data('foto');
+            $('#fotoPreview').attr('src', foto);
 
-            let modal = new bootstrap.Modal(document.getElementById("modalFoto"));
+            let modal = new bootstrap.Modal(document.getElementById('modalFoto'));
             modal.show();
         });
     </script>

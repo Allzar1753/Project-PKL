@@ -83,6 +83,13 @@ if (!function_exists('current_user')) {
     }
 }
 
+if (!function_exists('current_user_branch_id')) {
+    function current_user_branch_id(): ?int
+    {
+        return isset($_SESSION['user']['id_branch']) ? (int) $_SESSION['user']['id_branch'] : null;
+    }
+}
+
 if (!function_exists('current_user_id')) {
     function current_user_id(): ?int
     {
@@ -140,7 +147,7 @@ if (!function_exists('find_user_by_login')) {
     function find_user_by_login(mysqli $koneksi, string $login): ?array
     {
         $sql = "
-            SELECT id, username, email, password, role
+            SELECT id, username, email, password, role, id_branch, must_change_password
             FROM users
             WHERE username = ? OR email = ?
             LIMIT 1
@@ -290,10 +297,67 @@ if (!function_exists('login_user')) {
             'username' => $user['username'],
             'email' => $user['email'],
             'role' => $user['role'],
+            'id_branch' => isset($user['id_branch']) ? (int) $user['id_branch'] : null,
             'permissions' => []
         ];
 
         refresh_permissions($koneksi);
+    }
+}
+
+if (!function_exists('needs_password_change')) {
+    function needs_password_change(array $user): bool
+    {
+        return !empty($user['must_change_password']);
+    }
+}
+
+if (!function_exists('create_password_reset_token')) {
+    function create_password_reset_token(mysqli $koneksi, int $userId): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $expiresAt = date('Y-m-d H:i:s', time() + 3600);
+
+        $stmtDelete = mysqli_prepare($koneksi, "DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL");
+        mysqli_stmt_bind_param($stmtDelete, 'i', $userId);
+        mysqli_stmt_execute($stmtDelete);
+        mysqli_stmt_close($stmtDelete);
+
+        $stmt = mysqli_prepare($koneksi, "INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, 'iss', $userId, $token, $expiresAt);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+
+        return $token;
+    }
+}
+
+if (!function_exists('find_valid_password_reset')) {
+    function find_valid_password_reset(mysqli $koneksi, string $token): ?array
+    {
+        $stmt = mysqli_prepare(
+            $koneksi,
+            "SELECT pr.id, pr.user_id, pr.expires_at, u.username, u.email
+             FROM password_resets pr
+             INNER JOIN users u ON u.id = pr.user_id
+             WHERE pr.reset_token = ? AND pr.used_at IS NULL
+             LIMIT 1"
+        );
+        mysqli_stmt_bind_param($stmt, 's', $token);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $row = mysqli_fetch_assoc($result) ?: null;
+        mysqli_stmt_close($stmt);
+
+        if (!$row) {
+            return null;
+        }
+
+        if (strtotime((string) $row['expires_at']) < time()) {
+            return null;
+        }
+
+        return $row;
     }
 }
 

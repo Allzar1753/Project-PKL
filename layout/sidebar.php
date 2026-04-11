@@ -19,14 +19,41 @@ if (!function_exists('isMenuActive')) {
 $user = current_user();
 $role = current_role();
 $currentPath = $_SERVER['PHP_SELF'] ?? '';
+$branchName = '-';
+if (!empty($user['id_branch'])) {
+    $branchId = (int) $user['id_branch'];
+    if ($branchId > 0 && isset($koneksi)) {
+        $stmtBranch = mysqli_prepare($koneksi, "SELECT nama_branch FROM tb_branch WHERE id_branch = ? LIMIT 1");
+        if ($stmtBranch) {
+            mysqli_stmt_bind_param($stmtBranch, 'i', $branchId);
+            mysqli_stmt_execute($stmtBranch);
+            $branchResult = mysqli_stmt_get_result($stmtBranch);
+            $branchRow = mysqli_fetch_assoc($branchResult);
+            mysqli_stmt_close($stmtBranch);
+            if (!empty($branchRow['nama_branch'])) {
+                $branchName = $branchRow['nama_branch'];
+            }
+        }
+    }
+}
 
 $mainMenuActive = isMenuActive('/dashboard/')
     || isMenuActive('/Barang/')
     || isMenuActive('/Riwayat/')
     || isMenuActive('/laporan/');
 
-$adminMenuActive = isMenuActive('/users/')
-    || strpos($currentPath, 'role_permissions.php') !== false;
+$currentPath = $_SERVER['PHP_SELF'] ?? '';
+
+$isUsersPage =
+    strpos($currentPath, '/users/index.php') !== false
+    || strpos($currentPath, '/users/create.php') !== false
+    || strpos($currentPath, '/users/edit.php') !== false;
+
+$isAccessPage =
+    strpos($currentPath, '/users/role_permissions.php') !== false
+    || strpos($currentPath, '/users/user_permissions.php') !== false;
+
+$adminMenuActive = $isUsersPage || $isAccessPage;
 ?>
 
 <style>
@@ -412,6 +439,9 @@ $adminMenuActive = isMenuActive('/users/')
                 <div class="sidebar-user-email">
                     <?= h($user['email'] ?? '-') ?>
                 </div>
+                <div class="sidebar-user-email">
+                    <i class="bi bi-geo-alt me-1"></i><?= h($branchName) ?>
+                </div>
                 <div class="sidebar-user-role">
                     <i class="bi bi-shield-lock"></i>
                     <span><?= h($role ?? '-') ?></span>
@@ -490,7 +520,7 @@ $adminMenuActive = isMenuActive('/users/')
                     <ul class="sidebar-menu">
                         <?php if (can('users.view')): ?>
                             <li>
-                                <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= isMenuActive('/users/') ? 'active' : '' ?>">
+                                <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= $isUsersPage ? 'active' : '' ?>">
                                     <span class="sidebar-icon"><i class="bi bi-people"></i></span>
                                     <span>Kelola User</span>
                                 </a>
@@ -499,7 +529,7 @@ $adminMenuActive = isMenuActive('/users/')
 
                         <?php if (can('role_permissions.manage')): ?>
                             <li>
-                                <a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= strpos($currentPath, 'role_permissions.php') !== false ? 'active' : '' ?>">
+                                <a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= $isAccessPage ? 'active' : '' ?>">
                                     <span class="sidebar-icon"><i class="bi bi-key"></i></span>
                                     <span>Hak Akses</span>
                                 </a>

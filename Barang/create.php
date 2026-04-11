@@ -10,8 +10,6 @@ $jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
 $branch = mysqli_query($koneksi, "SELECT * FROM tb_branch");
 $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang");
 
-$branch_inti_id = 40; // ID branch inti / pusat
-
 function esc($koneksi, $value)
 {
     return mysqli_real_escape_string($koneksi, trim((string)$value));
@@ -81,9 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_jenis      = (int) $_POST['id_jenis'];
     $tanggal_masuk = esc($koneksi, $_POST['tanggal_masuk']);
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
-    $id_branch     = (int) $_POST['id_branch']; // branch asal
+    $id_branch     = (int) $_POST['id_branch'];
     $user          = esc($koneksi, $_POST['user']);
-    $nomor_resi    = esc($koneksi, $_POST['nomor_resi'] ?? '');
 
     $keterangan_masalah = null;
 
@@ -134,7 +131,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $foto = null;
-    $foto_resi = null;
 
     $uploadFoto = uploadImage('foto');
     if ($uploadFoto['status'] === 'error') {
@@ -148,41 +144,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $foto = $uploadFoto['filename'];
     }
 
-    $uploadFotoResi = uploadImage('foto_resi');
-    if ($uploadFotoResi['status'] === 'error') {
-        echo json_encode([
-            'status' => 'error',
-            'message' => $uploadFotoResi['message']
-        ]);
-        exit;
-    }
-    if ($uploadFotoResi['status'] === 'success') {
-        $foto_resi = $uploadFotoResi['filename'];
-    }
-
-    // Pengiriman awal hanya dibuat jika branch asal BUKAN branch inti
-    // dan user memang mengisi nomor resi / foto resi.
-    $buat_pengiriman_awal = (
-        $id_branch !== $branch_inti_id &&
-        ($nomor_resi !== '' || $foto_resi !== null)
-    );
-
-    if ($bermasalah === 'Iya' && $buat_pengiriman_awal) {
-        echo json_encode([
-            'status' => 'error',
-            'message' => 'Barang bermasalah tidak boleh langsung dibuat pengiriman awal.'
-        ]);
-        exit;
-    }
-
-    // Status barang:
-    // 5 = bermasalah
-    // 3 = sedang dikirim / keluar
-    // 4 = aktif / masuk
+    /*
+        Status barang:
+        5 = bermasalah
+        4 = aktif / masuk
+    */
     if ($bermasalah === 'Iya') {
         $id_status = 5;
-    } elseif ($buat_pengiriman_awal) {
-        $id_status = 3;
     } else {
         $id_status = 4;
     }
@@ -226,52 +194,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Gagal simpan data barang: ' . mysqli_error($koneksi));
         }
 
-        $id_barang_baru = mysqli_insert_id($koneksi);
-
-        if ($buat_pengiriman_awal) {
-            $tanggal_keluar_awal = $tanggal_masuk;
-            $status_pengiriman_awal = 'Sedang perjalanan';
-
-            $queryPengiriman = "
-                INSERT INTO barang_pengiriman (
-                    id_barang,
-                    branch_asal,
-                    branch_tujuan,
-                    tanggal_keluar,
-                    jasa_pengiriman,
-                    nomor_resi_keluar,
-                    foto_resi_keluar,
-                    estimasi_pengiriman,
-                    catatan_pengiriman_keluar,
-                    status_pengiriman,
-                    dibuat_oleh
-                ) VALUES (
-                    '$id_barang_baru',
-                    '$id_branch',
-                    '$branch_inti_id',
-                    " . ($tanggal_keluar_awal !== '' ? "'$tanggal_keluar_awal'" : "NULL") . ",
-                    NULL,
-                    " . ($nomor_resi !== '' ? "'$nomor_resi'" : "NULL") . ",
-                    " . ($foto_resi !== null ? "'$foto_resi'" : "NULL") . ",
-                    NULL,
-                    NULL,
-                    '$status_pengiriman_awal',
-                    NULL
-                )
-            ";
-
-            if (!mysqli_query($koneksi, $queryPengiriman)) {
-                throw new Exception('Gagal simpan pengiriman awal: ' . mysqli_error($koneksi));
-            }
-        }
-
         mysqli_commit($koneksi);
 
         echo json_encode([
             'status' => 'success',
-            'message' => $buat_pengiriman_awal
-                ? 'Data barang berhasil ditambahkan dan pengiriman awal ke branch inti berhasil dibuat.'
-                : 'Data barang berhasil ditambahkan.'
+            'message' => 'Data barang berhasil ditambahkan.'
         ]);
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
@@ -291,8 +218,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-12">
             <div class="alert alert-info mb-0">
-                <b>Catatan:</b> Isi <b>Nomor Resi</b> atau <b>Foto Resi</b> hanya jika barang dari branch asal memang langsung dikirim ke branch inti.
-                Jika dikosongkan, sistem hanya menyimpan data barang tanpa membuat transaksi pengiriman awal.
+                <b>Catatan:</b> Form create hanya untuk simpan data barang masuk.
+                Proses pengiriman / barang keluar dibuat dari menu pengiriman, bukan dari form create.
             </div>
         </div>
 
@@ -352,7 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Branch Asal</label>
+            <label>Branch</label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
                 <?php while ($row = mysqli_fetch_assoc($branch)): ?>
@@ -378,17 +305,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="col-md-12" id="keteranganMasalahDiv" style="display:none;">
             <label>Keterangan Masalah</label>
             <textarea name="keterangan_masalah" class="form-control" placeholder="Isi jika bermasalah"></textarea>
-        </div>
-
-        <div class="col-md-6">
-            <label>Nomor Resi Pengiriman Awal</label>
-            <input type="text" name="nomor_resi" class="form-control" placeholder="Isi jika barang langsung dikirim ke branch inti">
-        </div>
-
-        <div class="col-md-6">
-            <label>Foto Resi / Bukti Kirim</label>
-            <input type="file" name="foto_resi" class="form-control" id="fotoResiInput" accept=".jpg,.jpeg,.png,.gif,.webp">
-            <img id="previewFotoResi" style="max-width:120px;margin-top:10px;display:none;">
         </div>
 
         <div class="col-md-6">
@@ -422,16 +338,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         let reader = new FileReader();
         reader.onload = function(e) {
             $('#previewFoto').attr('src', e.target.result).show();
-        };
-        reader.readAsDataURL(this.files[0]);
-    });
-
-    $('#fotoResiInput').change(function() {
-        if (!this.files || !this.files[0]) return;
-
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            $('#previewFotoResi').attr('src', e.target.result).show();
         };
         reader.readAsDataURL(this.files[0]);
     });

@@ -24,7 +24,7 @@ function count_super_admins(mysqli $koneksi): int
 
 function find_user_by_id(mysqli $koneksi, int $id): ?array
 {
-    $stmt = mysqli_prepare($koneksi, "SELECT id, username, email, password, role FROM users WHERE id = ? LIMIT 1");
+    $stmt = mysqli_prepare($koneksi, "SELECT id, username, email, password, role, id_branch FROM users WHERE id = ? LIMIT 1");
     mysqli_stmt_bind_param($stmt, 'i', $id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
@@ -80,6 +80,7 @@ function normalize_bulk_users(array $rows): array
             'email'    => trim((string) ($row['email'] ?? '')),
             'password' => (string) ($row['password'] ?? ''),
             'role'     => normalize_role((string) ($row['role'] ?? 'user')),
+            'id_branch' => (int) ($row['id_branch'] ?? 0),
         ];
     }
 
@@ -88,7 +89,7 @@ function normalize_bulk_users(array $rows): array
 
 function bulk_row_has_input(array $row): bool
 {
-    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '';
+    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '' || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
 function set_bulk_form_state(array $rows, array $errors): void
@@ -116,6 +117,7 @@ function pull_bulk_form_old(): array
         $row['email'] = trim((string) ($row['email'] ?? ''));
         $row['password'] = '';
         $row['role'] = normalize_role((string) ($row['role'] ?? 'user'));
+        $row['id_branch'] = (int) ($row['id_branch'] ?? 0);
     }
     unset($row);
 
@@ -150,7 +152,6 @@ function default_password_for_role(string $role): string
     return 'user@123';
 }
 
-
 function resolve_password_input(string $role, ?string $inputPassword): string
 {
     $inputPassword = trim((string) $inputPassword);
@@ -170,9 +171,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $role = normalize_role($_POST['role'] ?? 'user');
         $password = resolve_password_input($role, $_POST['password'] ?? '');
+        $idBranch = (int) ($_POST['id_branch'] ?? 0);
+        if ($idBranch <= 0) {
+            $idBranch = null;
+        }
 
         if ($username === '' || $email === '') {
             set_flash('error', 'Username dan email wajib diisi.');
+            redirect_to(base_url('users/index.php'));
+        }
+
+        if ($idBranch === null) {
+            set_flash('error', 'Cabang wajib dipilih.');
             redirect_to(base_url('users/index.php'));
         }
 
@@ -194,9 +204,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hash = password_hash($password, PASSWORD_DEFAULT);
         $mustChangePassword = 1;
 
-        $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password) VALUES (?, ?, ?, ?, ?)");
-
-        mysqli_stmt_bind_param($stmt, 'ssssi', $username, $email, $hash, $role, $mustChangePassword);
+        $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, 'ssssii', $username, $email, $hash, $role, $mustChangePassword, $idBranch);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
@@ -240,6 +249,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rowErrors[$index]['email'] = 'Email wajib diisi.';
             } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
                 $rowErrors[$index]['email'] = 'Format email tidak valid.';
+            }
+
+            if ((int) ($row['id_branch'] ?? 0) <= 0) {
+                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
             }
         }
 
@@ -301,7 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $stmt = mysqli_prepare(
                 $koneksi,
-                "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)"
+                "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)"
             );
 
             $insertedCount = 0;
@@ -309,8 +322,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($filledRows as $row) {
                 $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
                 $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
+                $mustChangePassword = 1;
+                $idBranch = (int) ($row['id_branch'] ?? 0);
 
-                mysqli_stmt_bind_param($stmt, 'ssss', $row['username'], $row['email'], $hash, $row['role']);
+                mysqli_stmt_bind_param($stmt, 'ssssii', $row['username'], $row['email'], $hash, $row['role'], $mustChangePassword, $idBranch);
 
                 if (!mysqli_stmt_execute($stmt)) {
                     throw new Exception(mysqli_stmt_error($stmt));
@@ -363,6 +378,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rowErrors[$index]['email'] = 'Email wajib diisi.';
             } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
                 $rowErrors[$index]['email'] = 'Format email tidak valid.';
+            }
+
+            if ((int) ($row['id_branch'] ?? 0) <= 0) {
+                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
             }
         }
 
@@ -423,21 +442,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_begin_transaction($koneksi);
 
         try {
-            $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)");
-
+            $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)");
             $insertedCount = 0;
 
             foreach ($filledRows as $row) {
                 $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
                 $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
+                $mustChangePassword = 1;
+                $idBranch = (int) ($row['id_branch'] ?? 0);
 
                 mysqli_stmt_bind_param(
                     $stmt,
-                    'ssss',
+                    'ssssii',
                     $row['username'],
                     $row['email'],
                     $hash,
-                    $row['role']
+                    $row['role'],
+                    $mustChangePassword,
+                    $idBranch
                 );
 
                 if (!mysqli_stmt_execute($stmt)) {
@@ -467,6 +489,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = trim($_POST['email'] ?? '');
         $newPassword = (string) ($_POST['new_password'] ?? '');
         $role = normalize_role($_POST['role'] ?? 'user');
+        $idBranch = (int) ($_POST['id_branch'] ?? 0);
+
+        if ($idBranch <= 0) {
+            $idBranch = null;
+        }
 
         $targetUser = find_user_by_id($koneksi, $id);
         if (!$targetUser) {
@@ -510,11 +537,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($newPassword !== '') {
             $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ?, password = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'ssssi', $username, $email, $role, $hash, $id);
+            $mustChangePassword = 0;
+            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ?, id_branch = ?, password = ?, must_change_password = ? WHERE id = ?");
+            mysqli_stmt_bind_param($stmt, 'sssissi', $username, $email, $role, $idBranch, $hash, $mustChangePassword, $id);
         } else {
-            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'sssi', $username, $email, $role, $id);
+            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ?, id_branch = ? WHERE id = ?");
+            mysqli_stmt_bind_param($stmt, 'sssii', $username, $email, $role, $idBranch, $id);
         }
 
         mysqli_stmt_execute($stmt);
@@ -524,6 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user']['username'] = $username;
             $_SESSION['user']['email'] = $email;
             $_SESSION['user']['role'] = $role;
+            $_SESSION['user']['id_branch'] = $idBranch;
             refresh_permissions($koneksi);
         }
 
@@ -563,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function default_create_user_rows(): array
 {
     return [
-        ['username' => '', 'email' => '', 'password' => '', 'role' => 'user']
+        ['username' => '', 'email' => '', 'password' => '', 'role' => 'user', 'id_branch' => 0]
     ];
 }
 
@@ -576,7 +605,8 @@ function normalize_create_user_rows(array $rows): array
             'username' => trim((string) ($row['username'] ?? '')),
             'email' => trim((string) ($row['email'] ?? '')),
             'password' => (string) ($row['password'] ?? ''),
-            'role' => normalize_role((string) ($row['role'] ?? 'user'))
+            'role' => normalize_role((string) ($row['role'] ?? 'user')),
+            'id_branch' => (int) ($row['id_branch'] ?? 0)
         ];
     }
 
@@ -585,7 +615,7 @@ function normalize_create_user_rows(array $rows): array
 
 function create_user_row_has_value(array $row): bool
 {
-    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '';
+    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '' || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
 function set_create_user_form_state(array $rows, array $errors = [], string $generalError = ''): void
@@ -614,7 +644,7 @@ function pull_create_user_rows_old(): array
     foreach ($rows as &$row) {
         $row['password'] = '';
     }
-    unset($row);  
+    unset($row);
 
     return $rows;
 }
@@ -650,20 +680,63 @@ $createUserGeneralError = pull_create_user_general_error();
 
 if (empty($bulkOldRows)) {
     $bulkOldRows = [
-        ['username' => '', 'email' => '', 'password' => '', 'role' => 'user']
+        ['username' => '', 'email' => '', 'password' => '', 'role' => 'user', 'id_branch' => 0]
     ];
 }
 
+$allowed_limits = [5, 25, 50, 100];
+$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
+if (!in_array($limit, $allowed_limits, true)) {
+    $limit = 25;
+}
+
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+
+$summaryQuery = mysqli_query(
+    $koneksi,
+    "SELECT 
+        COUNT(*) AS total_users,
+        SUM(CASE WHEN role = 'super_admin' THEN 1 ELSE 0 END) AS total_super_admin,
+        SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS total_admin,
+        SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS total_user
+     FROM users"
+);
+$summaryData = mysqli_fetch_assoc($summaryQuery) ?: [];
+
+$totalUsers = (int) ($summaryData['total_users'] ?? 0);
+$superAdminTotal = (int) ($summaryData['total_super_admin'] ?? 0);
+$adminTotal = (int) ($summaryData['total_admin'] ?? 0);
+$userTotal = (int) ($summaryData['total_user'] ?? 0);
+
+$totalPages = max(1, (int) ceil($totalUsers / $limit));
+if ($page > $totalPages) {
+    $page = $totalPages;
+}
+
+$offset = ($page - 1) * $limit;
+$displayFrom = $totalUsers > 0 ? $offset + 1 : 0;
+$displayTo = min($offset + $limit, $totalUsers);
+
 $usersResult = mysqli_query(
     $koneksi,
-    "SELECT id, username, email, role
+    "SELECT users.id, users.username, users.email, users.role, users.id_branch, tb_branch.nama_branch
      FROM users
-     ORDER BY FIELD(role, 'super_admin', 'admin', 'user'), username ASC"
+     LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
+     ORDER BY FIELD(role, 'super_admin', 'admin', 'user'), username ASC
+     LIMIT $offset, $limit"
 );
 
 $users = [];
 while ($row = mysqli_fetch_assoc($usersResult)) {
     $users[] = $row;
+}
+
+$branches = [];
+$branchesResult = mysqli_query($koneksi, "SELECT id_branch, nama_branch FROM tb_branch ORDER BY nama_branch ASC");
+if ($branchesResult) {
+    while ($branchRow = mysqli_fetch_assoc($branchesResult)) {
+        $branches[] = $branchRow;
+    }
 }
 
 function role_badge_class(string $role): string
@@ -704,21 +777,6 @@ function role_icon(string $role): string
 
     return 'bi-person';
 }
-
-$totalUsers = count($users);
-$superAdminTotal = 0;
-$adminTotal = 0;
-$userTotal = 0;
-
-foreach ($users as $item) {
-    if ($item['role'] === 'super_admin') {
-        $superAdminTotal++;
-    } elseif ($item['role'] === 'admin') {
-        $adminTotal++;
-    } else {
-        $userTotal++;
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -730,6 +788,7 @@ foreach ($users as $item) {
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1201,6 +1260,102 @@ foreach ($users as $item) {
             color: var(--orange-2);
         }
 
+        .limit-box {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 999px;
+            padding: .45rem .55rem .45rem .85rem;
+        }
+
+        .limit-box .form-select {
+            min-width: 86px;
+            border-radius: 999px;
+            border: none;
+            box-shadow: none;
+            font-weight: 700;
+        }
+
+        .limit-box .section-label {
+            color: rgba(255, 255, 255, 0.88);
+            font-size: .82rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .pagination {
+            gap: .35rem;
+        }
+
+        .pagination .page-link {
+            border-radius: 12px;
+            color: #2a2a2a;
+            border: 1px solid #ead9bf;
+            padding: .6rem .85rem;
+            font-weight: 700;
+            box-shadow: none;
+        }
+
+        .pagination .page-link:hover {
+            background: #fff4de;
+            color: #111;
+        }
+
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #111111, #ff8f00);
+            border-color: transparent;
+            color: #fff;
+        }
+
+        .select2-container {
+            width: 100% !important;
+        }
+
+        .select2-container--default .select2-selection--single {
+            min-height: 46px;
+            border: 1px solid #e9dcc8 !important;
+            border-radius: 14px !important;
+            padding: .45rem .75rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 1.6 !important;
+            padding-left: 0 !important;
+            color: #1e1e1e;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 100% !important;
+            right: 10px !important;
+        }
+
+        .select2-dropdown {
+            border: 1px solid #e9dcc8 !important;
+            border-radius: 14px !important;
+            overflow: hidden;
+        }
+
+        .select2-container--default.select2-container--focus .select2-selection--single {
+            border-color: #f0c63d !important;
+            box-shadow: 0 0 0 .2rem rgba(255, 193, 7, 0.14) !important;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__placeholder {
+            color: #6b7280 !important;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__clear {
+            margin-right: 10px;
+        }
+
+        .form-select.is-invalid+.select2 .select2-selection {
+            border-color: #dc3545 !important;
+        }
+
         @media (max-width: 991.98px) {
             .page-wrap {
                 padding: 18px;
@@ -1246,6 +1401,42 @@ foreach ($users as $item) {
                 width: 100%;
                 text-align: center;
             }
+        }
+
+        .password-group {
+            position: relative;
+        }
+
+        .password-group .form-control {
+            padding-right: 48px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all .2s ease;
+        }
+
+        .password-toggle:hover {
+            background: #fff3e0;
+            color: #111;
+        }
+
+        .password-toggle:focus {
+            outline: none;
+            box-shadow: 0 0 0 .2rem rgba(255, 193, 7, 0.14);
         }
     </style>
 </head>
@@ -1349,10 +1540,14 @@ foreach ($users as $item) {
                                             <label class="form-label">Email</label>
                                             <input type="email" name="email" class="form-control" required>
                                         </div>
-
                                         <div class="mb-3">
                                             <label class="form-label">Password</label>
-                                            <input type="password" name="password" class="form-control" placeholder="Kosongkan jika ingin password default">
+                                            <div class="password-group">
+                                                <input type="password" name="password" class="form-control password-field" placeholder="Kosongkan jika ingin password default">
+                                                <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div class="mb-3">
@@ -1361,6 +1556,16 @@ foreach ($users as $item) {
                                                 <option value="user">User</option>
                                                 <option value="admin">Admin</option>
                                                 <option value="super_admin">Super Admin</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">Cabang</label>
+                                            <select name="id_branch" class="form-select branch-select" required>
+                                                <option value=""></option>
+                                                <?php foreach ($branches as $branch): ?>
+                                                    <option value="<?= (int) $branch['id_branch'] ?>"><?= e($branch['nama_branch']) ?></option>
+                                                <?php endforeach; ?>
                                             </select>
                                         </div>
 
@@ -1457,14 +1662,19 @@ foreach ($users as $item) {
 
                                                                 <div class="col-lg-6">
                                                                     <label class="form-label">Password</label>
-                                                                    <input
-                                                                        type="password"
-                                                                        class="form-control <?= bulk_field_error($bulkErrors, $index, 'password') ? 'is-invalid' : '' ?>"
-                                                                        value=""
-                                                                        data-field="password"
-                                                                        data-name-template="bulk_users[__INDEX__][password]"
-                                                                        name="bulk_users[<?= $index ?>][password]"
-                                                                        placeholder="Kosongkan jika ingin password default">
+                                                                    <div class="password-group">
+                                                                        <input
+                                                                            type="password"
+                                                                            class="form-control password-field <?= bulk_field_error($bulkErrors, $index, 'password') ? 'is-invalid' : '' ?>"
+                                                                            value=""
+                                                                            data-field="password"
+                                                                            data-name-template="bulk_users[__INDEX__][password]"
+                                                                            name="bulk_users[<?= $index ?>][password]"
+                                                                            placeholder="Kosongkan jika ingin password default">
+                                                                        <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                                            <i class="bi bi-eye"></i>
+                                                                        </button>
+                                                                    </div>
                                                                     <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'password')) ?></div>
                                                                 </div>
 
@@ -1480,6 +1690,23 @@ foreach ($users as $item) {
                                                                         <option value="super_admin" <?= $bulkRow['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                                     </select>
                                                                     <div class="invalid-feedback"></div>
+                                                                </div>
+
+                                                                <div class="col-lg-6">
+                                                                    <label class="form-label">Cabang</label>
+                                                                    <select
+                                                                        class="form-select branch-select <?= bulk_field_error($bulkErrors, $index, 'id_branch') ? 'is-invalid' : '' ?>"
+                                                                        data-field="id_branch"
+                                                                        data-name-template="bulk_users[__INDEX__][id_branch]"
+                                                                        name="bulk_users[<?= $index ?>][id_branch]">
+                                                                        <option value=""></option>
+                                                                        <?php foreach ($branches as $branch): ?>
+                                                                            <option value="<?= (int) $branch['id_branch'] ?>" <?= (int) ($bulkRow['id_branch'] ?? 0) === (int) $branch['id_branch'] ? 'selected' : '' ?>>
+                                                                                <?= e($branch['nama_branch']) ?>
+                                                                            </option>
+                                                                        <?php endforeach; ?>
+                                                                    </select>
+                                                                    <div class="invalid-feedback"><?= e(bulk_field_error($bulkErrors, $index, 'id_branch')) ?></div>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1532,15 +1759,19 @@ foreach ($users as $item) {
 
                                                         <div class="col-lg-6">
                                                             <label class="form-label">Password</label>
-                                                            <input
-                                                                type="password"
-                                                                class="form-control"
-                                                                value=""
-                                                                data-field="password"
-                                                                data-name-template="bulk_users[__INDEX__][password]"
-                                                                name=""
-                                                                placeholder="Kosongkan jika ingin password default">
-                                                                
+                                                            <div class="password-group">
+                                                                <input
+                                                                    type="password"
+                                                                    class="form-control password-field"
+                                                                    value=""
+                                                                    data-field="password"
+                                                                    data-name-template="bulk_users[__INDEX__][password]"
+                                                                    name=""
+                                                                    placeholder="Kosongkan jika ingin password default">
+                                                                <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                                    <i class="bi bi-eye"></i>
+                                                                </button>
+                                                            </div>
                                                             <div class="invalid-feedback"></div>
                                                         </div>
 
@@ -1554,6 +1785,21 @@ foreach ($users as $item) {
                                                                 <option value="user" selected>User</option>
                                                                 <option value="admin">Admin</option>
                                                                 <option value="super_admin">Super Admin</option>
+                                                            </select>
+                                                            <div class="invalid-feedback"></div>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
+                                                            <label class="form-label">Cabang</label>
+                                                            <select
+                                                                class="form-select branch-select"
+                                                                data-field="id_branch"
+                                                                data-name-template="bulk_users[__INDEX__][id_branch]"
+                                                                name="">
+                                                                <option value=""></option>
+                                                                <?php foreach ($branches as $branch): ?>
+                                                                    <option value="<?= (int) $branch['id_branch'] ?>"><?= e($branch['nama_branch']) ?></option>
+                                                                <?php endforeach; ?>
                                                             </select>
                                                             <div class="invalid-feedback"></div>
                                                         </div>
@@ -1597,6 +1843,7 @@ foreach ($users as $item) {
                                                                 <th>Email</th>
                                                                 <th>Password</th>
                                                                 <th style="width:180px;">Role</th>
+                                                                <th style="width:220px;">Cabang</th>
                                                                 <th style="width:140px;">Aksi</th>
                                                             </tr>
                                                         </thead>
@@ -1630,14 +1877,19 @@ foreach ($users as $item) {
                                                                     </td>
 
                                                                     <td>
-                                                                        <input
-                                                                            type="password"
-                                                                            class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>"
-                                                                            value=""
-                                                                            data-field="password"
-                                                                            data-name-template="users[__INDEX__][password]"
-                                                                            name="users[<?= $index ?>][password]"
-                                                                            placeholder="Password default">
+                                                                        <div class="password-group">
+                                                                            <input
+                                                                                type="password"
+                                                                                class="form-control password-field <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>"
+                                                                                value=""
+                                                                                data-field="password"
+                                                                                data-name-template="users[__INDEX__][password]"
+                                                                                name="users[<?= $index ?>][password]"
+                                                                                placeholder="Password default">
+                                                                            <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                                                <i class="bi bi-eye"></i>
+                                                                            </button>
+                                                                        </div>
                                                                         <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
                                                                     </td>
 
@@ -1652,6 +1904,22 @@ foreach ($users as $item) {
                                                                             <option value="super_admin" <?= $row['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                                         </select>
                                                                         <div class="invalid-feedback"></div>
+                                                                    </td>
+
+                                                                    <td>
+                                                                        <select
+                                                                            class="form-select branch-select <?= create_user_field_error($createUserRowsErrors, $index, 'id_branch') ? 'is-invalid' : '' ?>"
+                                                                            data-field="id_branch"
+                                                                            data-name-template="users[__INDEX__][id_branch]"
+                                                                            name="users[<?= $index ?>][id_branch]">
+                                                                            <option value=""></option>
+                                                                            <?php foreach ($branches as $branch): ?>
+                                                                                <option value="<?= (int) $branch['id_branch'] ?>" <?= (int) ($row['id_branch'] ?? 0) === (int) $branch['id_branch'] ? 'selected' : '' ?>>
+                                                                                    <?= e($branch['nama_branch']) ?>
+                                                                                </option>
+                                                                            <?php endforeach; ?>
+                                                                        </select>
+                                                                        <div class="invalid-feedback"><?= e(create_user_field_error($createUserRowsErrors, $index, 'id_branch')) ?></div>
                                                                     </td>
 
                                                                     <td>
@@ -1704,14 +1972,19 @@ foreach ($users as $item) {
                                                     </td>
 
                                                     <td>
-                                                        <input
-                                                            type="password"
-                                                            class="form-control"
-                                                            value=""
-                                                            data-field="password"
-                                                            data-name-template="users[__INDEX__][password]"
-                                                            name=""
-                                                            placeholder="Password default">
+                                                        <div class="password-group">
+                                                            <input
+                                                                type="password"
+                                                                class="form-control password-field"
+                                                                value=""
+                                                                data-field="password"
+                                                                data-name-template="users[__INDEX__][password]"
+                                                                name=""
+                                                                placeholder="Password default">
+                                                            <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                                <i class="bi bi-eye"></i>
+                                                            </button>
+                                                        </div>
                                                         <div class="invalid-feedback"></div>
                                                     </td>
 
@@ -1724,6 +1997,20 @@ foreach ($users as $item) {
                                                             <option value="user" selected>User</option>
                                                             <option value="admin">Admin</option>
                                                             <option value="super_admin">Super Admin</option>
+                                                        </select>
+                                                        <div class="invalid-feedback"></div>
+                                                    </td>
+
+                                                    <td>
+                                                        <select
+                                                            class="form-select branch-select"
+                                                            data-field="id_branch"
+                                                            data-name-template="users[__INDEX__][id_branch]"
+                                                            name="">
+                                                            <option value=""></option>
+                                                            <?php foreach ($branches as $branch): ?>
+                                                                <option value="<?= (int) $branch['id_branch'] ?>"><?= e($branch['nama_branch']) ?></option>
+                                                            <?php endforeach; ?>
                                                         </select>
                                                         <div class="invalid-feedback"></div>
                                                     </td>
@@ -1744,13 +2031,31 @@ foreach ($users as $item) {
 
                     <div class="list-shell">
                         <div class="shell-header">
-                            <div class="shell-title">Daftar User Sistem</div>
-                            <div class="shell-subtitle">Tampilan user dibuat lebih rapi per kartu agar mudah dibaca dan dikelola.</div>
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <div>
+                                    <div class="shell-title">Daftar User Sistem</div>
+                                    <div class="shell-subtitle">
+                                        Menampilkan <?= $displayFrom ?> - <?= $displayTo ?> dari <?= $totalUsers ?> user
+                                    </div>
+                                </div>
+
+                                <form method="GET" class="mb-0">
+                                    <div class="limit-box">
+                                        <span class="section-label">Tampilkan</span>
+                                        <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm">
+                                            <option value="5" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
+                                            <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
+                                            <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
+                                            <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
+                                        </select>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
 
                         <div class="shell-body">
                             <?php if (!empty($users)): ?>
-                                <?php foreach ($users as $index => $user): ?>
+                                <?php foreach ($users as $user): ?>
                                     <?php $collapseId = 'editUserCollapse' . (int) $user['id']; ?>
                                     <div class="user-card">
                                         <div class="user-top">
@@ -1763,6 +2068,9 @@ foreach ($users as $item) {
                                                     <div>
                                                         <div class="user-name"><?= e($user['username']) ?></div>
                                                         <div class="user-email"><?= e($user['email']) ?></div>
+                                                        <div class="user-email mt-1">
+                                                            <i class="bi bi-geo-alt me-1"></i><?= e($user['nama_branch'] ?? 'Belum ditentukan') ?>
+                                                        </div>
                                                         <div class="mt-2">
                                                             <span class="<?= role_badge_class($user['role']) ?>">
                                                                 <i class="bi <?= role_icon($user['role']) ?>"></i>
@@ -1821,8 +2129,25 @@ foreach ($users as $item) {
                                                         </div>
 
                                                         <div class="col-lg-6">
+                                                            <label class="form-label">Cabang</label>
+                                                            <select name="id_branch" class="form-select branch-select" required>
+                                                                <option value=""></option>
+                                                                <?php foreach ($branches as $branch): ?>
+                                                                    <option value="<?= (int) $branch['id_branch'] ?>" <?= (int) ($user['id_branch'] ?? 0) === (int) $branch['id_branch'] ? 'selected' : '' ?>>
+                                                                        <?= e($branch['nama_branch']) ?>
+                                                                    </option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="col-lg-6">
                                                             <label class="form-label">Password Baru</label>
-                                                            <input type="password" name="new_password" class="form-control" placeholder="Kosongkan jika tidak ingin mengganti password">
+                                                            <div class="password-group">
+                                                                <input type="password" name="new_password" class="form-control password-field" placeholder="Kosongkan jika tidak ingin mengganti password">
+                                                                <button type="button" class="password-toggle toggle-password" aria-label="Lihat password">
+                                                                    <i class="bi bi-eye"></i>
+                                                                </button>
+                                                            </div>
                                                         </div>
 
                                                         <div class="col-lg-6 d-flex align-items-end">
@@ -1846,6 +2171,22 @@ foreach ($users as $item) {
                                     Belum ada data user.
                                 </div>
                             <?php endif; ?>
+
+                            <?php if ($totalPages > 1): ?>
+                                <div class="mt-4">
+                                    <nav>
+                                        <ul class="pagination mb-0 flex-wrap">
+                                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                                <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
+                                                    <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>">
+                                                        <?= $i ?>
+                                                    </a>
+                                                </li>
+                                            <?php endfor; ?>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -1855,9 +2196,50 @@ foreach ($users as $item) {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            function initBranchSelect(scope = document) {
+                const selects = scope.querySelectorAll('select.branch-select');
+
+                selects.forEach(function(select) {
+                    if ($(select).hasClass('select2-hidden-accessible')) {
+                        return;
+                    }
+
+                    $(select).select2({
+                        width: '100%',
+                        placeholder: 'Cari cabang...',
+                        allowClear: true
+                    });
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                const toggleButton = e.target.closest('.toggle-password');
+                if (!toggleButton) return;
+
+                const wrapper = toggleButton.closest('.password-group');
+                if (!wrapper) return;
+
+                const input = wrapper.querySelector('input');
+                const icon = toggleButton.querySelector('i');
+
+                if (!input) return;
+
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+
+                if (icon) {
+                    icon.classList.toggle('bi-eye', !isPassword);
+                    icon.classList.toggle('bi-eye-slash', isPassword);
+                }
+            });
+
+            initBranchSelect();
+
             document.querySelectorAll('.btnUpdateUser').forEach(function(button) {
                 button.addEventListener('click', function() {
                     const formId = this.dataset.formId;
@@ -1910,6 +2292,8 @@ foreach ($users as $item) {
             const bulkMaxRows = 10;
 
             function updateBulkRows() {
+                if (!bulkContainer) return;
+
                 const rows = bulkContainer.querySelectorAll('.bulk-user-row');
 
                 rows.forEach(function(row, index) {
@@ -1930,8 +2314,13 @@ foreach ($users as $item) {
                     }
                 });
 
-                bulkCounter.textContent = rows.length;
-                bulkAddButton.disabled = rows.length >= bulkMaxRows;
+                if (bulkCounter) {
+                    bulkCounter.textContent = rows.length;
+                }
+
+                if (bulkAddButton) {
+                    bulkAddButton.disabled = rows.length >= bulkMaxRows;
+                }
             }
 
             function clearBulkRowErrors(row) {
@@ -1949,6 +2338,7 @@ foreach ($users as $item) {
                 if (!field) return;
 
                 field.classList.add('is-invalid');
+
                 const feedback = field.parentElement.querySelector('.invalid-feedback');
                 if (feedback) {
                     feedback.textContent = message;
@@ -1960,11 +2350,14 @@ foreach ($users as $item) {
                     username: row.querySelector('[data-field="username"]').value.trim(),
                     email: row.querySelector('[data-field="email"]').value.trim(),
                     password: row.querySelector('[data-field="password"]').value,
-                    role: row.querySelector('[data-field="role"]').value
+                    role: row.querySelector('[data-field="role"]').value,
+                    id_branch: row.querySelector('[data-field="id_branch"]').value
                 };
             }
 
             function addBulkRow(data = {}) {
+                if (!bulkContainer || !bulkTemplate) return;
+
                 const currentRows = bulkContainer.querySelectorAll('.bulk-user-row').length;
                 if (currentRows >= bulkMaxRows) return;
 
@@ -1975,14 +2368,24 @@ foreach ($users as $item) {
                 row.querySelector('[data-field="email"]').value = data.email || '';
                 row.querySelector('[data-field="password"]').value = '';
                 row.querySelector('[data-field="role"]').value = data.role || 'user';
+                row.querySelector('[data-field="id_branch"]').value = data.id_branch || '';
 
                 bulkContainer.appendChild(row);
                 updateBulkRows();
+                initBranchSelect(row);
             }
 
             function validateBulkForm() {
                 let isValid = true;
                 let filledCount = 0;
+
+                if (!bulkContainer) {
+                    return {
+                        isValid: false,
+                        filledCount: 0
+                    };
+                }
+
                 const rows = Array.from(bulkContainer.querySelectorAll('.bulk-user-row'));
                 const usernameMap = {};
                 const emailMap = {};
@@ -2009,6 +2412,11 @@ foreach ($users as $item) {
                             setBulkFieldError(row, 'email', 'Format email tidak valid.');
                             isValid = false;
                         }
+                    }
+
+                    if (!data.id_branch) {
+                        setBulkFieldError(row, 'id_branch', 'Cabang wajib dipilih.');
+                        isValid = false;
                     }
 
                     if (data.username !== '') {
@@ -2126,6 +2534,8 @@ foreach ($users as $item) {
             const maxRows = 10;
 
             function updateRows() {
+                if (!rowContainer) return;
+
                 const rows = rowContainer.querySelectorAll('.user-create-row');
 
                 rows.forEach(function(row, index) {
@@ -2146,11 +2556,18 @@ foreach ($users as $item) {
                     }
                 });
 
-                rowCounter.textContent = rows.length;
-                addRowButton.disabled = rows.length >= maxRows;
+                if (rowCounter) {
+                    rowCounter.textContent = rows.length;
+                }
+
+                if (addRowButton) {
+                    addRowButton.disabled = rows.length >= maxRows;
+                }
             }
 
             function clearGeneralError() {
+                if (!form) return;
+
                 const generalError = form.parentElement.querySelector('.alert.alert-danger');
                 if (generalError && generalError.textContent.includes('Isi minimal 1 baris user.')) {
                     generalError.remove();
@@ -2180,6 +2597,8 @@ foreach ($users as $item) {
             }
 
             function setGeneralError(message) {
+                if (!form) return;
+
                 clearGeneralError();
 
                 const alert = document.createElement('div');
@@ -2194,11 +2613,14 @@ foreach ($users as $item) {
                     username: row.querySelector('[data-field="username"]').value.trim(),
                     email: row.querySelector('[data-field="email"]').value.trim(),
                     password: row.querySelector('[data-field="password"]').value,
-                    role: row.querySelector('[data-field="role"]').value
+                    role: row.querySelector('[data-field="role"]').value,
+                    id_branch: row.querySelector('[data-field="id_branch"]').value
                 };
             }
 
             function addRow(data = {}) {
+                if (!rowContainer || !rowTemplate) return;
+
                 const currentRows = rowContainer.querySelectorAll('.user-create-row').length;
                 if (currentRows >= maxRows) return;
 
@@ -2209,9 +2631,11 @@ foreach ($users as $item) {
                 row.querySelector('[data-field="email"]').value = data.email || '';
                 row.querySelector('[data-field="password"]').value = '';
                 row.querySelector('[data-field="role"]').value = data.role || 'user';
+                row.querySelector('[data-field="id_branch"]').value = data.id_branch || '';
 
                 rowContainer.appendChild(row);
                 updateRows();
+                initBranchSelect(row);
             }
 
             function validateForm() {
@@ -2219,6 +2643,13 @@ foreach ($users as $item) {
                 let filledCount = 0;
 
                 clearGeneralError();
+
+                if (!rowContainer) {
+                    return {
+                        isValid: false,
+                        filledCount: 0
+                    };
+                }
 
                 const rows = Array.from(rowContainer.querySelectorAll('.user-create-row'));
                 const usernameMap = {};
@@ -2250,6 +2681,10 @@ foreach ($users as $item) {
                         }
                     }
 
+                    if (!data.id_branch) {
+                        setFieldError(row, 'id_branch', 'Cabang wajib dipilih.');
+                        isValid = false;
+                    }
 
                     if (data.username !== '') {
                         const usernameKey = data.username.toLowerCase();

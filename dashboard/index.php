@@ -6,7 +6,7 @@ require_permission($koneksi, 'dashboard.view');
 
 function h($value)
 {
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
 function shippingBadge($status)
@@ -76,44 +76,63 @@ LEFT JOIN tb_branch AS branch_tujuan ON pengiriman.branch_tujuan = branch_tujuan
 LEFT JOIN tb_branch AS branch_asal_pengiriman ON pengiriman.branch_asal = branch_asal_pengiriman.id_branch
 ";
 
-$totalInventaris = (int) mysqli_fetch_assoc(mysqli_query(
+$totalInventarisQuery = mysqli_query(
     $koneksi,
     "SELECT COUNT(*) AS total FROM barang"
-))['total'];
+);
+$totalInventarisData = $totalInventarisQuery ? mysqli_fetch_assoc($totalInventarisQuery) : [];
+$totalInventaris = (int) ($totalInventarisData['total'] ?? 0);
 
-$totalMasuk = (int) mysqli_fetch_assoc(mysqli_query(
+/*
+|--------------------------------------------------------------------------
+| LOGIKA FINAL DASHBOARD
+|--------------------------------------------------------------------------
+| Barang Masuk   = belum pernah dikirim sama sekali
+| Barang Keluar  = sudah pernah dikirim minimal 1x (permanen keluar)
+| Belum diterima = status pengiriman masih aktif dan belum Sudah diterima
+|--------------------------------------------------------------------------
+*/
+
+$totalMasukQuery = mysqli_query(
     $koneksi,
     "
     SELECT COUNT(DISTINCT barang.id) AS total
     $baseJoin
     WHERE pengiriman.id_pengiriman IS NULL
-       OR pengiriman.status_pengiriman = 'Sudah diterima'
     "
-))['total'];
+);
+$totalMasukData = $totalMasukQuery ? mysqli_fetch_assoc($totalMasukQuery) : [];
+$totalMasuk = (int) ($totalMasukData['total'] ?? 0);
 
-$totalKeluar = (int) mysqli_fetch_assoc(mysqli_query(
+$totalKeluarQuery = mysqli_query(
     $koneksi,
     "
     SELECT COUNT(DISTINCT barang.id) AS total
     $baseJoin
     WHERE pengiriman.id_pengiriman IS NOT NULL
-      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
     "
-))['total'];
+);
+$totalKeluarData = $totalKeluarQuery ? mysqli_fetch_assoc($totalKeluarQuery) : [];
+$totalKeluar = (int) ($totalKeluarData['total'] ?? 0);
 
-$totalBermasalah = (int) mysqli_fetch_assoc(mysqli_query(
+$totalBermasalahQuery = mysqli_query(
     $koneksi,
     "SELECT COUNT(*) AS total FROM barang WHERE bermasalah = 'Iya'"
-))['total'];
+);
+$totalBermasalahData = $totalBermasalahQuery ? mysqli_fetch_assoc($totalBermasalahQuery) : [];
+$totalBermasalah = (int) ($totalBermasalahData['total'] ?? 0);
 
-$totalSedangDikirim = (int) mysqli_fetch_assoc(mysqli_query(
+$totalSedangDikirimQuery = mysqli_query(
     $koneksi,
     "
     SELECT COUNT(DISTINCT barang.id) AS total
     $baseJoin
-    WHERE pengiriman.status_pengiriman IN ('Sedang dikemas', 'Sedang perjalanan')
+    WHERE pengiriman.id_pengiriman IS NOT NULL
+      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') IN ('Sedang dikemas', 'Sedang perjalanan')
     "
-))['total'];
+);
+$totalSedangDikirimData = $totalSedangDikirimQuery ? mysqli_fetch_assoc($totalSedangDikirimQuery) : [];
+$totalSedangDikirim = (int) ($totalSedangDikirimData['total'] ?? 0);
 
 $qBarangMasukTerbaru = mysqli_query($koneksi, "
     SELECT
@@ -127,7 +146,6 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
         branch_aktif.nama_branch AS nama_branch_aktif
     $baseJoin
     WHERE pengiriman.id_pengiriman IS NULL
-       OR pengiriman.status_pengiriman = 'Sudah diterima'
     ORDER BY barang.id DESC
 ");
 $barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
@@ -145,8 +163,7 @@ $qBarangKeluarTerbaru = mysqli_query($koneksi, "
         branch_tujuan.nama_branch AS nama_branch_tujuan
     $baseJoin
     WHERE pengiriman.id_pengiriman IS NOT NULL
-      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
-    ORDER BY barang.id DESC
+    ORDER BY pengiriman.id_pengiriman DESC
 ");
 $barangKeluarTerbaru = fetchAllAssoc($qBarangKeluarTerbaru);
 
@@ -181,7 +198,7 @@ $qPengirimanBelumDiterima = mysqli_query($koneksi, "
     $baseJoin
     WHERE pengiriman.id_pengiriman IS NOT NULL
       AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
-    ORDER BY barang.id DESC
+    ORDER BY pengiriman.id_pengiriman DESC
 ");
 $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 ?>
@@ -755,7 +772,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <div>
                                         <div class="summary-label">Barang Masuk</div>
                                         <div class="summary-value"><?= $totalMasuk ?></div>
-                                        <div class="summary-note">Masih aktif di inventaris</div>
+                                        <div class="summary-note">Belum pernah dikirim sama sekali</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-in-down"></i>
@@ -770,7 +787,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
                                         <div class="summary-value"><?= $totalKeluar ?></div>
-                                        <div class="summary-note">Sudah dikirim atau keluar</div>
+                                        <div class="summary-note">Sudah pernah dikirim, permanen keluar</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-up"></i>
@@ -798,9 +815,9 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Pengiriman</div>
+                                        <div class="summary-label">Belum Diterima</div>
                                         <div class="summary-value"><?= $totalSedangDikirim ?></div>
-                                        <div class="summary-note">Belum diterima tujuan</div>
+                                        <div class="summary-note">Pengiriman aktif yang masih berjalan</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-truck"></i>
@@ -818,7 +835,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                         <i class="bi bi-box-arrow-in-down me-2 text-warning-custom"></i>Barang Masuk
                                     </div>
                                     <div class="panel-subtitle">
-                                        Tampil ringkas dulu, buka jika ingin lihat semua data
+                                        Hanya barang yang belum pernah dikirim
                                     </div>
                                 </div>
 
@@ -861,7 +878,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-inbox"></i>
-                                            Belum ada data barang masuk terbaru.
+                                            Belum ada data barang masuk.
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -875,7 +892,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                         <i class="bi bi-box-arrow-up me-2 text-warning-custom"></i>Barang Keluar
                                     </div>
                                     <div class="panel-subtitle">
-                                        Tampil sebagian dulu supaya tetap rapi dan mudah dibaca
+                                        Semua barang yang sudah pernah dikirim
                                     </div>
                                 </div>
 
@@ -918,7 +935,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-inbox"></i>
-                                            Belum ada data barang keluar terbaru.
+                                            Belum ada data barang keluar.
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -985,10 +1002,10 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-truck me-2 text-warning-custom"></i>Pengiriman Belum Diterima
+                                        <i class="bi bi-truck me-2 text-warning-custom"></i>Belum Diterima
                                     </div>
                                     <div class="panel-subtitle">
-                                        Pantau pengiriman yang masih berjalan atau belum diterima tujuan
+                                        Pengiriman aktif yang statusnya belum selesai
                                     </div>
                                 </div>
 
@@ -1031,7 +1048,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <?php else: ?>
                                         <div class="empty-state">
                                             <i class="bi bi-check2-all"></i>
-                                            Tidak ada pengiriman tertunda saat ini.
+                                            Tidak ada pengiriman aktif saat ini.
                                         </div>
                                     <?php endif; ?>
                                 </div>

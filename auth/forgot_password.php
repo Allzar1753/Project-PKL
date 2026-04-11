@@ -1,4 +1,5 @@
 <?php
+include '../config/koneksi.php';
 require_once '../config/auth.php';
 
 if (is_logged_in()) {
@@ -7,6 +8,68 @@ if (is_logged_in()) {
 
 $error = get_flash('error');
 $success = get_flash('success');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim((string) ($_POST['username'] ?? ''));
+    $email = trim((string) ($_POST['email'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
+    $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+
+    if ($username === '' || $email === '' || $password === '' || $confirmPassword === '') {
+        set_flash('error', 'Semua field wajib diisi.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        set_flash('error', 'Format email tidak valid.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    if (strlen($password) < 8) {
+        set_flash('error', 'Password baru minimal 8 karakter.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    if ($password !== $confirmPassword) {
+        set_flash('error', 'Konfirmasi password tidak sama.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    $stmt = mysqli_prepare($koneksi, "SELECT id FROM users WHERE username = ? AND email = ? LIMIT 1");
+    if (!$stmt) {
+        set_flash('error', 'Terjadi kesalahan pada sistem.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $username, $email);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $user = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+
+    if (!$user) {
+        set_flash('error', 'Data akun tidak cocok. Pastikan username dan email benar.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $userId = (int) $user['id'];
+    $mustChangePassword = 0;
+
+    $stmtUpdate = mysqli_prepare($koneksi, "UPDATE users SET password = ?, must_change_password = ? WHERE id = ?");
+    if (!$stmtUpdate) {
+        set_flash('error', 'Terjadi kesalahan saat memperbarui password.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    mysqli_stmt_bind_param($stmtUpdate, 'sii', $hash, $mustChangePassword, $userId);
+    mysqli_stmt_execute($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+
+    // Setelah berhasil reset password, langsung arahkan ke halaman login
+    set_flash('success', 'Password berhasil direset. Silakan login dengan password baru Anda.');
+    redirect_to(base_url('auth/login.php'));
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -14,11 +77,10 @@ $success = get_flash('success');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - IT Asset Management</title>
+    <title>Reset Password - IT Asset Management</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -358,6 +420,16 @@ $success = get_flash('success');
             color: #9a640b;
         }
 
+        .back-link {
+            color: #c27e12;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            color: #a96708;
+        }
+
         @media (max-width: 991.98px) {
             .login-left {
                 padding: 34px 28px;
@@ -452,36 +524,36 @@ $success = get_flash('success');
                         </div>
 
                         <div class="login-title">
-                            Selamat Datang di Sistem Inventaris Perusahaan
+                            Reset Password Akun Sistem Inventaris
                         </div>
 
                         <div class="login-desc">
-                            Kelola data aset, pantau aktivitas inventaris, dan atur kontrol akses pengguna
-                            dalam satu sistem yang lebih terpusat, modern, dan efisien untuk operasional harian.
+                            Verifikasi akun Anda menggunakan username dan email yang terdaftar,
+                            lalu buat password baru untuk kembali mengakses sistem dengan aman.
                         </div>
 
                         <div class="login-feature">
                             <div class="feature-item">
                                 <div class="feature-icon">✓</div>
                                 <div>
-                                    <div class="feature-title">Kontrol Akses Terpusat</div>
-                                    <div class="feature-text">Hak akses pengguna dikelola berdasarkan role dan permission yang sudah ditentukan.</div>
+                                    <div class="feature-title">Verifikasi Akun</div>
+                                    <div class="feature-text">Pastikan username dan email yang dimasukkan sesuai dengan data akun yang terdaftar di sistem.</div>
                                 </div>
                             </div>
 
                             <div class="feature-item">
                                 <div class="feature-icon">✓</div>
                                 <div>
-                                    <div class="feature-title">Monitoring Inventaris</div>
-                                    <div class="feature-text">Pantau barang masuk, barang keluar, kondisi aset, serta proses pengiriman secara lebih rapi.</div>
+                                    <div class="feature-title">Password Baru Lebih Aman</div>
+                                    <div class="feature-text">Gunakan password minimal 8 karakter agar keamanan akses akun lebih terjaga.</div>
                                 </div>
                             </div>
 
                             <div class="feature-item">
                                 <div class="feature-icon">✓</div>
                                 <div>
-                                    <div class="feature-title">Siap untuk Operasional</div>
-                                    <div class="feature-text">Dirancang untuk membantu proses inventaris perusahaan agar lebih tertib, cepat, dan terstruktur.</div>
+                                    <div class="feature-title">Akses Kembali ke Dashboard</div>
+                                    <div class="feature-text">Setelah password berhasil diperbarui, Anda akan langsung diarahkan ke halaman login.</div>
                                 </div>
                             </div>
                         </div>
@@ -497,12 +569,12 @@ $success = get_flash('success');
             <div class="col-lg-6">
                 <div class="login-right">
                     <div class="form-badge">
-                        <span>Secure Access</span>
+                        <span>Password Recovery</span>
                     </div>
 
-                    <div class="form-title">Masuk ke Akun</div>
+                    <div class="form-title">Buat Password Baru</div>
                     <div class="form-subtitle">
-                        Gunakan username atau email yang telah terdaftar untuk mengakses dashboard dan fitur sistem.
+                        Masukkan username, email, dan password baru Anda untuk melakukan reset password akun.
                     </div>
 
                     <?php if ($error): ?>
@@ -513,50 +585,77 @@ $success = get_flash('success');
                         <div class="alert alert-success rounded-4"><?= e($success) ?></div>
                     <?php endif; ?>
 
-                    <form action="<?= h(base_url('auth/proses_login.php')) ?>" method="POST">
+                    <form method="POST" action="">
                         <div class="mb-3">
-                            <label class="form-label">Username atau Email</label>
+                            <label class="form-label">Username</label>
                             <div class="input-shell">
                                 <span class="input-icon">@</span>
-                                <input type="text" name="login" class="form-control" required autofocus placeholder="Masukkan username atau email">
+                                <input type="text" name="username" class="form-control" required placeholder="Masukkan username">
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">Password</label>
+                            <label class="form-label">Email</label>
+                            <div class="input-shell">
+                                <span class="input-icon">@</span>
+                                <input type="email" name="email" class="form-control" required placeholder="Masukkan email">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Password Baru</label>
                             <div class="input-shell password-shell">
                                 <span class="input-icon">•</span>
                                 <input
                                     type="password"
                                     name="password"
+                                    id="newPassword"
                                     class="form-control"
-                                    id="loginPassword"
                                     required
-                                    placeholder="Masukkan password">
-                                <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Lihat password">
+                                    minlength="8"
+                                    placeholder="Masukkan password baru">
+                                <button type="button" class="password-toggle" data-target="newPassword" aria-label="Lihat password baru">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Konfirmasi Password Baru</label>
+                            <div class="input-shell password-shell">
+                                <span class="input-icon">•</span>
+                                <input
+                                    type="password"
+                                    name="confirm_password"
+                                    id="confirmPassword"
+                                    class="form-control"
+                                    required
+                                    minlength="8"
+                                    placeholder="Ulangi password baru">
+                                <button type="button" class="password-toggle" data-target="confirmPassword" aria-label="Lihat konfirmasi password">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
                         </div>
 
                         <button type="submit" class="btn btn-login w-100">
-                            Masuk ke Dashboard
+                            Reset Password
                         </button>
                     </form>
 
                     <div class="text-center mt-3">
-                        <a href="<?= h(base_url('auth/forgot_password.php')) ?>" class="text-decoration-none fw-semibold" style="color:#c27e12;">
-                            Lupa password? Buat password baru sendiri
+                        <a href="<?= h(base_url('auth/login.php')) ?>" class="back-link">
+                            Kembali ke Login
                         </a>
                     </div>
 
                     <div class="system-note">
-                        Akun pengguna dibuat dan hak akses sistem dikelola oleh <b>Super Admin</b>.
-                        Pastikan Anda menggunakan akun yang sudah terdaftar.
+                        Reset password hanya dapat dilakukan jika <b>username</b> dan <b>email</b> sesuai
+                        dengan data akun yang sudah terdaftar di sistem.
                     </div>
 
                     <div class="note-text">
-                        <span>IT Asset Management</span> — Internal System Access
+                        <span>IT Asset Management</span> — Secure Password Reset
                     </div>
                 </div>
             </div>
@@ -566,21 +665,22 @@ $success = get_flash('success');
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const toggleButton = document.getElementById('toggleLoginPassword');
-            const passwordInput = document.getElementById('loginPassword');
+            document.querySelectorAll('.password-toggle').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const targetId = this.getAttribute('data-target');
+                    const input = document.getElementById(targetId);
+                    const icon = this.querySelector('i');
 
-            if (!toggleButton || !passwordInput) return;
+                    if (!input) return;
 
-            toggleButton.addEventListener('click', function() {
-                const icon = this.querySelector('i');
-                const isPassword = passwordInput.type === 'password';
+                    const isPassword = input.type === 'password';
+                    input.type = isPassword ? 'text' : 'password';
 
-                passwordInput.type = isPassword ? 'text' : 'password';
-
-                if (icon) {
-                    icon.classList.toggle('bi-eye', !isPassword);
-                    icon.classList.toggle('bi-eye-slash', isPassword);
-                }
+                    if (icon) {
+                        icon.classList.toggle('bi-eye', !isPassword);
+                        icon.classList.toggle('bi-eye-slash', isPassword);
+                    }
+                });
             });
         });
     </script>

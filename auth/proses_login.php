@@ -29,5 +29,10 @@ if (!verify_password_and_upgrade($koneksi, $user, $password)) {
 login_user($koneksi, $user);
 session_regenerate_id(true);
 
+if (needs_password_change($user)) {
+    set_flash('success', 'Silakan buat password baru Anda terlebih dahulu.');
+    redirect_to(base_url('auth/force_change_password.php'));
+}
+
 set_flash('success', 'Login berhasil. Selamat datang, ' . $user['username'] . '.');
 redirect_to(base_url('dashboard/index.php'));

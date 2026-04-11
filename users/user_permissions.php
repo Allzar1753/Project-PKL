@@ -12,7 +12,7 @@ if ($userId <= 0) {
     redirect_to(base_url('users/index.php'));
 }
 
-$stmt = mysqli_prepare($koneksi, "SELECT id, username, email, role FROM users WHERE id = ? LIMIT 1");
+$stmt = mysqli_prepare($koneksi, "SELECT users.id, users.username, users.email, users.role, tb_branch.nama_branch FROM users LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch WHERE users.id = ? LIMIT 1");
 mysqli_stmt_bind_param($stmt, 'i', $userId);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -376,6 +376,7 @@ function role_color_class_user(string $role): string
                         <div class="col-lg-8">
                             <h5 class="fw-bold mb-2">Informasi User</h5>
                             <p class="text-muted mb-1"><b>Email:</b> <?= e($targetUser['email']) ?></p>
+                            <p class="text-muted mb-1"><b>Cabang:</b> <?= e($targetUser['nama_branch'] ?? '-') ?></p>
                             <p class="text-muted mb-0">
                                 Permission final user dihitung dari <b>role default</b>, ditambah <b>custom allow</b>,
                                 lalu dikurangi <b>custom deny</b>.

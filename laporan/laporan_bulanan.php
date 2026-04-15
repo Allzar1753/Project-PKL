@@ -807,38 +807,42 @@ $bulanOptions = [
         }
 
         @media print {
+            html, 
             body {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 background: #fff !important;
                 font-size: 12px;
                 color: #000 !important;
             }
 
+            .laporan-layout > :not(.laporan-main) {
+                display: none !important;
+            }
+
+            .laporan-main,
+            .laporan-main .page-wrap,
+            .laporan-main .page-container {
+                width: 100% !important;
+                max-width: 100 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                flex: 0 0 100% !important;
+            }
+
             .no-print,
-            aside,
-            nav,
-            .sidebar,
-            .hero-card,
-            .panel-card,
-            .summary-card,
-            .card-head-subtitle,
-            .page-subtitle {
+            .no-print * {
                 display: none !important;
             }
 
             .print-header {
-                display: none !important;
+                display: block !important;
+                margin-bottom: 12px !important;
             }
 
-            .container-fluid,
-            .row,
-            .col-md-10,
-            .page-wrap,
-            .page-container {
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                flex: 0 0 100% !important;
+            .print-only {
+                display: block !important;
             }
 
             .report-card,
@@ -849,10 +853,10 @@ $bulanOptions = [
             .log-note-card {
                 box-shadow: none !important;
                 border: 1px solid #ddd !important;
-                background: #fff !important;
+                background: #fff in !important;
             }
 
-            .asset-card,
+            .asset-card, 
             .timeline-item {
                 page-break-inside: avoid;
                 break-inside: avoid;
@@ -861,7 +865,8 @@ $bulanOptions = [
             .asset-top,
             .asset-body,
             .timeline-head,
-            .timeline-body {
+            .timeline-body,
+            .card-body-custom {
                 background: #fff !important;
             }
 
@@ -871,7 +876,7 @@ $bulanOptions = [
 
             .timeline-dot {
                 background: #666 !important;
-                box-shadow: none !important;
+                box-shadow: none Im !important;
             }
 
             .status-badge {
@@ -886,11 +891,12 @@ $bulanOptions = [
             }
 
             @page {
+                size: A4 portrait;
                 margin: 12mm;
             }
 
             body::after {
-                content: "PT HEXINDO ADIPERKASA TBK";
+                content: "PT HEXINDO ADIPEKARSA TBK";
                 position: fixed;
                 bottom: 5mm;
                 left: 0;
@@ -907,16 +913,17 @@ $bulanOptions = [
             body.print-single-asset .asset-card.print-target {
                 display: block !important;
             }
+ 
         }
     </style>
 </head>
 
 <body>
     <div class="container-fluid">
-        <div class="row">
+        <div class="row laporan-layout">
             <?php require_once '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10">
+            <div class="col-md-10 laporan-main">
                 <div class="page-wrap">
                     <div class="page-container">
 

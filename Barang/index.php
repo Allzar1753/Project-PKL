@@ -859,6 +859,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 justify-content: space-between;
             }
         }
+
+        #btnSimpanBarang[disabled] {
+            opacity: 0.8;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 
@@ -1375,8 +1380,57 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             $('#contentCreate').html('<p class="text-center text-muted">Loading form...</p>');
         });
 
+        // $(document).on('submit', '#formCreate', function(e) {
+        //     e.preventDefault();
+
+        //     let formData = new FormData(this);
+
+        //     $.ajax({
+        //         url: 'create.php',
+        //         type: 'POST',
+        //         data: formData,
+        //         contentType: false,
+        //         processData: false,
+        //         dataType: 'json',
+        //         success: function(response) {
+        //             if (response.success || response.status === 'success') {
+        //                 Swal.fire({
+        //                     icon: 'success',
+        //                     title: 'Berhasil',
+        //                     text: response.message || 'Data berhasil ditambahkan'
+        //                 }).then(() => {
+        //                     location.reload();
+        //                 });
+        //             } else {
+        //                 Swal.fire({
+        //                     icon: 'error',
+        //                     title: 'Gagal',
+        //                     text: response.error || response.message || 'Terjadi kesalahan'
+        //                 });
+        //             }
+        //         },
+        //         error: function(xhr) {
+        //             console.log(xhr.responseText);
+        //             Swal.fire({
+        //                 icon: 'error',
+        //                 title: 'Error',
+        //                 text: 'Terjadi kesalahan server'
+        //             });
+        //         }
+        //     });
+        // });
+
+        let isSubmittingCreate = false;
+
         $(document).on('submit', '#formCreate', function(e) {
             e.preventDefault();
+
+            if (isSubmittingCreate) {
+                return;
+            }
+
+            const $form = $(this);
+            const $btn = $form.find('#btnSimpanBarang');
 
             let formData = new FormData(this);
 
@@ -1387,6 +1441,25 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 contentType: false,
                 processData: false,
                 dataType: 'json',
+                beforeSend: function() {
+                    isSubmittingCreate = true;
+
+                    $btn.prop('disabled', true);
+                    $btn.addClass('disabled');
+                    $btn.find('.btn-text').addClass('d-none');
+                    $btn.find('.btn-loading').removeClass('d-none');
+
+                    Swal.fire({
+                        title: 'Menyimpan data...',
+                        text: 'Mohon tunggu, data barang sedang diproses.',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                },
                 success: function(response) {
                     if (response.success || response.status === 'success') {
                         Swal.fire({
@@ -1411,9 +1484,19 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                         title: 'Error',
                         text: 'Terjadi kesalahan server'
                     });
+                },
+                complete: function() {
+                    isSubmittingCreate = false;
+
+                    $btn.prop('disabled', false);
+                    $btn.removeClass('disabled');
+                    $btn.find('.btn-text').removeClass('d-none');
+                    $btn.find('.btn-loading').addClass('d-none');
                 }
             });
         });
+
+        // Sampai Sini 
 
         $(document).on('click', '.btnEdit', function() {
             let id = $(this).data('id');

@@ -1,6 +1,7 @@
 <?php
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/mail.php';
 
 require_permission($koneksi, 'barang.create');
 
@@ -43,6 +44,42 @@ function uploadImage($fieldName, $targetDir = "../assets/images/")
     }
 
     return ["status" => "success", "filename" => $filename];
+}
+
+function ambilDetailBarangUntukEmail($koneksi, $idBarangBaru)
+{
+    $idBarangBaru = (int) $idBarangBaru;
+
+    $query = mysqli_query($koneksi, "
+        SELECT
+            b.id,
+            b.no_asset,
+            b.serial_number,
+            b.tanggal_masuk,
+            b.bermasalah,
+            b.keterangan_masalah,
+            b.foto,
+            b.`user`,
+            tb.nama_barang,
+            m.nama_merk,
+            t.nama_tipe,
+            j.nama_jenis,
+            br.nama_branch
+        FROM barang b
+        LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
+        LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
+        LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+        LEFT JOIN tb_jenis j ON b.id_jenis = j.id_jenis
+        LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
+        WHERE b.id = $idBarangBaru
+        LIMIT 1
+    ");
+
+    if (!$query || mysqli_num_rows($query) === 0) {
+        return null;
+    }
+
+    return mysqli_fetch_assoc($query);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -140,14 +177,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit;
     }
+
     if ($uploadFoto['status'] === 'success') {
         $foto = $uploadFoto['filename'];
     }
 
     /*
-        Status barang:
-        5 = bermasalah
-        4 = aktif / masuk
+    Status barang:
+    5 = bermasalah
+    4 = aktif / masuk
     */
     if ($bermasalah === 'Iya') {
         $id_status = 5;
@@ -194,21 +232,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Gagal simpan data barang: ' . mysqli_error($koneksi));
         }
 
+        $idBarangBaru = mysqli_insert_id($koneksi);
+
         mysqli_commit($koneksi);
 
+        $detailBarang = ambilDetailBarangUntukEmail($koneksi, $idBarangBaru);
+
+        $mailResult = [
+            'status'  => false,
+            'message' => 'Detail barang untuk email tidak ditemukan.'
+        ];
+
+        if ($detailBarang) {
+            $fotoPath = null;
+
+            if (!empty($detailBarang['foto'])) {
+                $calonPath = __DIR__ . '/../assets/images/' . $detailBarang['foto'];
+                if (is_file($calonPath)) {
+                    $fotoPath = $calonPath;
+                }
+            }
+
+            $mailResult = kirimEmailKeBranchInti([
+                'branch'        => $detailBarang['nama_branch'] ?? '-',
+                'no_asset'      => $detailBarang['no_asset'] ?? '-',
+                'serial_number' => $detailBarang['serial_number'] ?? '-',
+                'nama_barang'   => $detailBarang['nama_barang'] ?? '-',
+                'merk'          => $detailBarang['nama_merk'] ?? '-',
+                'tipe'          => $detailBarang['nama_tipe'] ?? '-',
+                'jenis'         => $detailBarang['nama_jenis'] ?? '-',
+                'tanggal_masuk' => $detailBarang['tanggal_masuk'] ?? '-',
+                'user'          => $detailBarang['user'] ?? '-',
+                'bermasalah'    => $detailBarang['bermasalah'] ?? '-',
+                'foto_path'     => $fotoPath
+            ]);
+        }
+
+        $message = 'Data barang berhasil ditambahkan.';
+        if ($mailResult['status']) {
+            $message .= ' Email notifikasi berhasil dikirim ke Mailtrap.';
+        } else {
+            $message .= ' Namun email notifikasi gagal dikirim: ' . $mailResult['message'];
+        }
+
         echo json_encode([
-            'status' => 'success',
-            'message' => 'Data barang berhasil ditambahkan.'
+            'status'  => 'success',
+            'message' => $message
         ]);
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
 
         echo json_encode([
-            'status' => 'error',
+            'status'  => 'error',
             'message' => $e->getMessage()
         ]);
     }
-
     exit;
 }
 ?>
@@ -313,11 +391,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
         </div>
 
-        <div class="col-md-12 text-end">
+        <!-- <div class="col-md-12 text-end">
             <button type="submit" class="btn btn-warning-custom">Simpan</button>
         </div>
     </div>
-</form>
+</form> -->
+<div class="col-md-12 text-end">
+    <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
+        <span class="btn-text">Simpan</span>
+        <span class="btn-loading d-none">
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Menyimpan...
+        </span>
+    </button>
+</div>
 
 <script>
     $(document).ready(function() {

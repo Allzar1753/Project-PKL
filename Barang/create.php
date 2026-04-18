@@ -3,53 +3,51 @@ include '../config/koneksi.php';
 require_once '../config/auth.php';
 require_once '../config/mail.php';
 
-require_permission($koneksi, 'barang.create');
+require_admin();
 
-$merk   = mysqli_query($koneksi, "SELECT * FROM tb_merk");
-$tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe");
-$jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis");
-$branch = mysqli_query($koneksi, "SELECT * FROM tb_branch");
-$barang = mysqli_query($koneksi, "SELECT * FROM tb_barang");
+$merk   = mysqli_query($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
+$tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
+$jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis ORDER BY nama_jenis ASC");
+$branch = mysqli_query($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
+$barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang ASC");
 
-function esc($koneksi, $value)
+function esc(mysqli $koneksi, $value): string
 {
-    return mysqli_real_escape_string($koneksi, trim((string)$value));
+    return mysqli_real_escape_string($koneksi, trim((string) $value));
 }
 
-function uploadImage($fieldName, $targetDir = "../assets/images/")
+function uploadImage(string $fieldName, string $targetDir = "../assets/images/"): array
 {
     if (!isset($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
-        return ["status" => "empty", "filename" => ""];
+        return ['status' => 'empty', 'filename' => ''];
     }
 
     $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
 
     if (!in_array($ext, $allowed, true)) {
-        return ["status" => "error", "message" => "Format file {$fieldName} tidak diperbolehkan"];
+        return ['status' => 'error', 'message' => "Format file {$fieldName} tidak diperbolehkan"];
     }
 
     if ($_FILES[$fieldName]['size'] > 2000000) {
-        return ["status" => "error", "message" => "Ukuran file {$fieldName} maksimal 2MB"];
+        return ['status' => 'error', 'message' => "Ukuran file {$fieldName} maksimal 2MB"];
     }
 
     if (!is_dir($targetDir)) {
         mkdir($targetDir, 0777, true);
     }
 
-    $filename = uniqid($fieldName . "_", true) . "." . $ext;
+    $filename = uniqid($fieldName . '_', true) . '.' . $ext;
 
     if (!move_uploaded_file($_FILES[$fieldName]['tmp_name'], $targetDir . $filename)) {
-        return ["status" => "error", "message" => "Gagal mengupload file {$fieldName}"];
+        return ['status' => 'error', 'message' => "Gagal mengupload file {$fieldName}"];
     }
 
-    return ["status" => "success", "filename" => $filename];
+    return ['status' => 'success', 'filename' => $filename];
 }
 
-function ambilDetailBarangUntukEmail($koneksi, $idBarangBaru)
+function ambilDetailBarangUntukEmail(mysqli $koneksi, int $idBarangBaru): ?array
 {
-    $idBarangBaru = (int) $idBarangBaru;
-
     $query = mysqli_query($koneksi, "
         SELECT
             b.id,
@@ -71,7 +69,7 @@ function ambilDetailBarangUntukEmail($koneksi, $idBarangBaru)
         LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
         LEFT JOIN tb_jenis j ON b.id_jenis = j.id_jenis
         LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
-        WHERE b.id = $idBarangBaru
+        WHERE b.id = {$idBarangBaru}
         LIMIT 1
     ");
 
@@ -98,11 +96,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'user'
     ];
 
-    foreach ($required as $f) {
-        if (!isset($_POST[$f]) || trim((string)$_POST[$f]) === '') {
+    foreach ($required as $field) {
+        if (!isset($_POST[$field]) || trim((string) $_POST[$field]) === '') {
             echo json_encode([
                 'status' => 'error',
-                'message' => "Field $f wajib diisi"
+                'message' => "Field {$field} wajib diisi"
             ]);
             exit;
         }
@@ -122,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $keterangan_masalah = null;
 
     if ($bermasalah === 'Iya') {
-        if (empty($_POST['keterangan_masalah']) || trim((string)$_POST['keterangan_masalah']) === '') {
+        if (empty($_POST['keterangan_masalah']) || trim((string) $_POST['keterangan_masalah']) === '') {
             echo json_encode([
                 'status' => 'error',
                 'message' => 'Keterangan masalah wajib diisi jika barang bermasalah'
@@ -136,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $cekDuplikat = mysqli_query($koneksi, "
         SELECT id, no_asset, serial_number
         FROM barang
-        WHERE no_asset = '$no_asset' OR serial_number = '$serial_number'
+        WHERE no_asset = '{$no_asset}' OR serial_number = '{$serial_number}'
         LIMIT 1
     ");
 
@@ -152,11 +150,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $duplikat = mysqli_fetch_assoc($cekDuplikat);
 
         $pesan = 'Data sudah digunakan.';
-        if ($duplikat['no_asset'] === $no_asset && $duplikat['serial_number'] === $serial_number) {
+        if (($duplikat['no_asset'] ?? '') === $no_asset && ($duplikat['serial_number'] ?? '') === $serial_number) {
             $pesan = 'No Asset dan Serial Number sudah terdaftar';
-        } elseif ($duplikat['no_asset'] === $no_asset) {
+        } elseif (($duplikat['no_asset'] ?? '') === $no_asset) {
             $pesan = 'No Asset sudah terdaftar';
-        } elseif ($duplikat['serial_number'] === $serial_number) {
+        } elseif (($duplikat['serial_number'] ?? '') === $serial_number) {
             $pesan = 'Serial Number sudah terdaftar';
         }
 
@@ -167,8 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $foto = null;
-
     $uploadFoto = uploadImage('foto');
     if ($uploadFoto['status'] === 'error') {
         echo json_encode([
@@ -178,20 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if ($uploadFoto['status'] === 'success') {
-        $foto = $uploadFoto['filename'];
-    }
-
-    /*
-    Status barang:
-    5 = bermasalah
-    4 = aktif / masuk
-    */
-    if ($bermasalah === 'Iya') {
-        $id_status = 5;
-    } else {
-        $id_status = 4;
-    }
+    $foto = $uploadFoto['status'] === 'success' ? $uploadFoto['filename'] : null;
+    $id_status = $bermasalah === 'Iya' ? 5 : 4;
 
     $queryBarang = "
         INSERT INTO barang (
@@ -209,19 +193,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foto,
             `user`
         ) VALUES (
-            '$no_asset',
-            '$id_barang',
-            '$id_merk',
-            '$serial_number',
-            '$id_tipe',
-            '$id_jenis',
-            '$tanggal_masuk',
-            '$bermasalah',
-            " . ($keterangan_masalah !== null ? "'$keterangan_masalah'" : "NULL") . ",
-            '$id_status',
-            '$id_branch',
-            " . ($foto !== null ? "'$foto'" : "NULL") . ",
-            '$user'
+            '{$no_asset}',
+            '{$id_barang}',
+            '{$id_merk}',
+            '{$serial_number}',
+            '{$id_tipe}',
+            '{$id_jenis}',
+            '{$tanggal_masuk}',
+            '{$bermasalah}',
+            " . ($keterangan_masalah !== null ? "'{$keterangan_masalah}'" : "NULL") . ",
+            '{$id_status}',
+            '{$id_branch}',
+            " . ($foto !== null ? "'{$foto}'" : "NULL") . ",
+            '{$user}'
         )
     ";
 
@@ -232,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Gagal simpan data barang: ' . mysqli_error($koneksi));
         }
 
-        $idBarangBaru = mysqli_insert_id($koneksi);
+        $idBarangBaru = (int) mysqli_insert_id($koneksi);
 
         mysqli_commit($koneksi);
 
@@ -276,14 +260,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         echo json_encode([
-            'status'  => 'success',
+            'status' => 'success',
             'message' => $message
         ]);
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         mysqli_rollback($koneksi);
 
         echo json_encode([
-            'status'  => 'error',
+            'status' => 'error',
             'message' => $e->getMessage()
         ]);
     }
@@ -293,7 +277,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <form id="formCreate" enctype="multipart/form-data">
     <div class="row g-3">
-
         <div class="col-12">
             <div class="alert alert-info mb-0">
                 <b>Catatan:</b> Form create hanya untuk simpan data barang masuk.
@@ -316,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <select name="id_barang" class="form-control select2" required>
                 <option value="">Pilih Barang...</option>
                 <?php while ($row = mysqli_fetch_assoc($barang)): ?>
-                    <option value="<?= $row['id_barang'] ?>"><?= htmlspecialchars($row['nama_barang']) ?></option>
+                    <option value="<?= (int) $row['id_barang'] ?>"><?= h($row['nama_barang']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -326,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <select name="id_merk" class="form-control select2" required>
                 <option value="">Pilih Merk...</option>
                 <?php while ($row = mysqli_fetch_assoc($merk)): ?>
-                    <option value="<?= $row['id_merk'] ?>"><?= htmlspecialchars($row['nama_merk']) ?></option>
+                    <option value="<?= (int) $row['id_merk'] ?>"><?= h($row['nama_merk']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -336,7 +319,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <select name="id_tipe" class="form-control select2" required>
                 <option value="">Pilih Tipe...</option>
                 <?php while ($row = mysqli_fetch_assoc($tipe)): ?>
-                    <option value="<?= $row['id_tipe'] ?>"><?= htmlspecialchars($row['nama_tipe']) ?></option>
+                    <option value="<?= (int) $row['id_tipe'] ?>"><?= h($row['nama_tipe']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -346,7 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <select name="id_jenis" class="form-control select2" required>
                 <option value="">Pilih Jenis...</option>
                 <?php while ($row = mysqli_fetch_assoc($jenis)): ?>
-                    <option value="<?= $row['id_jenis'] ?>"><?= htmlspecialchars($row['nama_jenis']) ?></option>
+                    <option value="<?= (int) $row['id_jenis'] ?>"><?= h($row['nama_jenis']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -361,7 +344,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
                 <?php while ($row = mysqli_fetch_assoc($branch)): ?>
-                    <option value="<?= $row['id_branch'] ?>"><?= htmlspecialchars($row['nama_branch']) ?></option>
+                    <option value="<?= (int) $row['id_branch'] ?>"><?= h($row['nama_branch']) ?></option>
                 <?php endwhile; ?>
             </select>
         </div>
@@ -391,20 +374,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
         </div>
 
-        <!-- <div class="col-md-12 text-end">
-            <button type="submit" class="btn btn-warning-custom">Simpan</button>
+        <div class="col-md-12 text-end">
+            <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
+                <span class="btn-text">Simpan</span>
+                <span class="btn-loading d-none">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Menyimpan...
+                </span>
+            </button>
         </div>
     </div>
-</form> -->
-<div class="col-md-12 text-end">
-    <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
-        <span class="btn-text">Simpan</span>
-        <span class="btn-loading d-none">
-            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-            Menyimpan...
-        </span>
-    </button>
-</div>
+</form>
 
 <script>
     $(document).ready(function() {

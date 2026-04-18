@@ -4,26 +4,39 @@ require_once '../config/auth.php';
 
 require_permission($koneksi, 'dashboard.view');
 
-function h($value)
+$isAdmin = is_admin();
+$myBranchId = current_user_branch_id();
+
+if (!$isAdmin && (!$myBranchId || $myBranchId <= 0)) {
+    http_response_code(403);
+    exit('Branch user belum ditentukan.');
+}
+
+const STATUS_BELUM_DIKIRIM = 'Belum dikirim';
+const STATUS_SEDANG_DIKEMAS = 'Sedang dikemas';
+const STATUS_SEDANG_PERJALANAN = 'Sedang perjalanan';
+const STATUS_SUDAH_DITERIMA = 'Sudah diterima';
+
+function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function shippingBadge($status)
+function shippingBadge(string $status): string
 {
     $class = 'bg-secondary';
     $icon  = 'bi-dash-circle';
 
-    if ($status === 'Sedang dikemas') {
+    if ($status === STATUS_SEDANG_DIKEMAS) {
         $class = 'bg-warning text-dark';
         $icon  = 'bi-box-seam';
-    } elseif ($status === 'Sedang perjalanan') {
+    } elseif ($status === STATUS_SEDANG_PERJALANAN) {
         $class = 'bg-primary';
         $icon  = 'bi-truck';
-    } elseif ($status === 'Sudah diterima') {
+    } elseif ($status === STATUS_SUDAH_DITERIMA) {
         $class = 'bg-success';
         $icon  = 'bi-check-circle';
-    } elseif ($status === 'Belum dikirim') {
+    } elseif ($status === STATUS_BELUM_DIKIRIM) {
         $class = 'bg-secondary';
         $icon  = 'bi-clock-history';
     }
@@ -31,7 +44,7 @@ function shippingBadge($status)
     return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
 }
 
-function barangBadge($bermasalah)
+function barangBadge(string $bermasalah): string
 {
     if ($bermasalah === 'Iya') {
         return '<span class="badge rounded-pill bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
@@ -40,15 +53,81 @@ function barangBadge($bermasalah)
     return '<span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
 }
 
-function fetchAllAssoc($query)
+function fetchAllAssoc($query): array
 {
     $rows = [];
+
     if ($query) {
         while ($row = mysqli_fetch_assoc($query)) {
             $rows[] = $row;
         }
     }
+
     return $rows;
+}
+
+function fetchSingleValue(mysqli $koneksi, string $sql, string $field = 'total'): int
+{
+    $query = mysqli_query($koneksi, $sql);
+    if (!$query) {
+        return 0;
+    }
+
+    $row = mysqli_fetch_assoc($query) ?: [];
+    return (int) ($row[$field] ?? 0);
+}
+
+function fetchBranchName(mysqli $koneksi, ?int $branchId): string
+{
+    $branchId = (int) $branchId;
+    if ($branchId <= 0) {
+        return '-';
+    }
+
+    $stmt = mysqli_prepare($koneksi, "SELECT nama_branch FROM tb_branch WHERE id_branch = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 'i', $branchId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($result) ?: null;
+    mysqli_stmt_close($stmt);
+
+    return $row['nama_branch'] ?? '-';
+}
+
+function getOwnedScopeWhere(bool $isAdmin, ?int $myBranchId): string
+{
+    if ($isAdmin) {
+        return '1=1';
+    }
+
+    return 'barang.id_branch = ' . (int) $myBranchId;
+}
+
+function getOutgoingScopeWhere(bool $isAdmin, ?int $myBranchId): string
+{
+    if ($isAdmin) {
+        return 'pengiriman.id_pengiriman IS NOT NULL';
+    }
+
+    return 'pengiriman.id_pengiriman IS NOT NULL AND pengiriman.branch_asal = ' . (int) $myBranchId;
+}
+
+function getActiveShipmentScopeWhere(bool $isAdmin, ?int $myBranchId): string
+{
+    $activeStatus = "COALESCE(pengiriman.status_pengiriman, '" . STATUS_BELUM_DIKIRIM . "') IN ('" . STATUS_SEDANG_DIKEMAS . "', '" . STATUS_SEDANG_PERJALANAN . "')";
+
+    if ($isAdmin) {
+        return "pengiriman.id_pengiriman IS NOT NULL AND {$activeStatus}";
+    }
+
+    $branchId = (int) $myBranchId;
+
+    return "pengiriman.id_pengiriman IS NOT NULL
+            AND {$activeStatus}
+            AND (
+                pengiriman.branch_asal = {$branchId}
+                OR pengiriman.branch_tujuan = {$branchId}
+            )";
 }
 
 $previewLimit = 3;
@@ -61,7 +140,6 @@ LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
 LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
 LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
 LEFT JOIN tb_branch AS branch_aktif ON barang.id_branch = branch_aktif.id_branch
-
 LEFT JOIN (
     SELECT bp1.*
     FROM barang_pengiriman bp1
@@ -71,68 +149,50 @@ LEFT JOIN (
         GROUP BY id_barang
     ) last_bp ON bp1.id_pengiriman = last_bp.id_pengiriman_terakhir
 ) AS pengiriman ON barang.id = pengiriman.id_barang
-
 LEFT JOIN tb_branch AS branch_tujuan ON pengiriman.branch_tujuan = branch_tujuan.id_branch
 LEFT JOIN tb_branch AS branch_asal_pengiriman ON pengiriman.branch_asal = branch_asal_pengiriman.id_branch
 ";
 
-$totalInventarisQuery = mysqli_query(
-    $koneksi,
-    "SELECT COUNT(*) AS total FROM barang"
-);
-$totalInventarisData = $totalInventarisQuery ? mysqli_fetch_assoc($totalInventarisQuery) : [];
-$totalInventaris = (int) ($totalInventarisData['total'] ?? 0);
+$ownedScopeWhere = getOwnedScopeWhere($isAdmin, $myBranchId);
+$outgoingScopeWhere = getOutgoingScopeWhere($isAdmin, $myBranchId);
+$activeShipmentScopeWhere = getActiveShipmentScopeWhere($isAdmin, $myBranchId);
 
-/*
-|--------------------------------------------------------------------------
-| LOGIKA FINAL DASHBOARD
-|--------------------------------------------------------------------------
-| Barang Masuk   = belum pernah dikirim sama sekali
-| Barang Keluar  = sudah pernah dikirim minimal 1x (permanen keluar)
-| Belum diterima = status pengiriman masih aktif dan belum Sudah diterima
-|--------------------------------------------------------------------------
-*/
-
-$totalMasukQuery = mysqli_query(
+$totalInventaris = fetchSingleValue(
     $koneksi,
-    "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NULL
-    "
+    "SELECT COUNT(DISTINCT barang.id) AS total
+     {$baseJoin}
+     WHERE {$ownedScopeWhere}"
 );
-$totalMasukData = $totalMasukQuery ? mysqli_fetch_assoc($totalMasukQuery) : [];
-$totalMasuk = (int) ($totalMasukData['total'] ?? 0);
 
-$totalKeluarQuery = mysqli_query(
+$totalMasuk = fetchSingleValue(
     $koneksi,
-    "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NOT NULL
-    "
+    "SELECT COUNT(DISTINCT barang.id) AS total
+     {$baseJoin}
+     WHERE {$ownedScopeWhere}
+       AND pengiriman.id_pengiriman IS NULL"
 );
-$totalKeluarData = $totalKeluarQuery ? mysqli_fetch_assoc($totalKeluarQuery) : [];
-$totalKeluar = (int) ($totalKeluarData['total'] ?? 0);
 
-$totalBermasalahQuery = mysqli_query(
+$totalKeluar = fetchSingleValue(
     $koneksi,
-    "SELECT COUNT(*) AS total FROM barang WHERE bermasalah = 'Iya'"
+    "SELECT COUNT(DISTINCT barang.id) AS total
+     {$baseJoin}
+     WHERE {$outgoingScopeWhere}"
 );
-$totalBermasalahData = $totalBermasalahQuery ? mysqli_fetch_assoc($totalBermasalahQuery) : [];
-$totalBermasalah = (int) ($totalBermasalahData['total'] ?? 0);
 
-$totalSedangDikirimQuery = mysqli_query(
+$totalBermasalah = fetchSingleValue(
     $koneksi,
-    "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NOT NULL
-      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') IN ('Sedang dikemas', 'Sedang perjalanan')
-    "
+    "SELECT COUNT(DISTINCT barang.id) AS total
+     {$baseJoin}
+     WHERE {$ownedScopeWhere}
+       AND barang.bermasalah = 'Iya'"
 );
-$totalSedangDikirimData = $totalSedangDikirimQuery ? mysqli_fetch_assoc($totalSedangDikirimQuery) : [];
-$totalSedangDikirim = (int) ($totalSedangDikirimData['total'] ?? 0);
+
+$totalSedangDikirim = fetchSingleValue(
+    $koneksi,
+    "SELECT COUNT(DISTINCT barang.id) AS total
+     {$baseJoin}
+     WHERE {$activeShipmentScopeWhere}"
+);
 
 $qBarangMasukTerbaru = mysqli_query($koneksi, "
     SELECT
@@ -144,8 +204,9 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
         tb_barang.nama_barang,
         tb_merk.nama_merk,
         branch_aktif.nama_branch AS nama_branch_aktif
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NULL
+    {$baseJoin}
+    WHERE {$ownedScopeWhere}
+      AND pengiriman.id_pengiriman IS NULL
     ORDER BY barang.id DESC
 ");
 $barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
@@ -160,9 +221,10 @@ $qBarangKeluarTerbaru = mysqli_query($koneksi, "
         pengiriman.nomor_resi_keluar,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_tujuan.nama_branch AS nama_branch_tujuan
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NOT NULL
+        branch_tujuan.nama_branch AS nama_branch_tujuan,
+        branch_asal_pengiriman.nama_branch AS nama_branch_asal
+    {$baseJoin}
+    WHERE {$outgoingScopeWhere}
     ORDER BY pengiriman.id_pengiriman DESC
 ");
 $barangKeluarTerbaru = fetchAllAssoc($qBarangKeluarTerbaru);
@@ -177,8 +239,9 @@ $qBarangBermasalah = mysqli_query($koneksi, "
         tb_barang.nama_barang,
         tb_merk.nama_merk,
         branch_aktif.nama_branch AS nama_branch_aktif
-    $baseJoin
-    WHERE barang.bermasalah = 'Iya'
+    {$baseJoin}
+    WHERE {$ownedScopeWhere}
+      AND barang.bermasalah = 'Iya'
     ORDER BY barang.id DESC
 ");
 $barangBermasalah = fetchAllAssoc($qBarangBermasalah);
@@ -194,13 +257,16 @@ $qPengirimanBelumDiterima = mysqli_query($koneksi, "
         pengiriman.estimasi_pengiriman,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
-        branch_tujuan.nama_branch AS nama_branch_tujuan
-    $baseJoin
-    WHERE pengiriman.id_pengiriman IS NOT NULL
-      AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') <> 'Sudah diterima'
+        branch_tujuan.nama_branch AS nama_branch_tujuan,
+        branch_asal_pengiriman.nama_branch AS nama_branch_asal
+    {$baseJoin}
+    WHERE {$activeShipmentScopeWhere}
     ORDER BY pengiriman.id_pengiriman DESC
 ");
 $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
+
+$roleLabel = is_admin() ? 'Administrator' : 'User';
+$branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -745,7 +811,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                             </div>
 
                             <div class="role-badge">
-                                <i class="bi bi-person-badge me-1"></i><?= h(current_role() ?? '-') ?>
+                                <i class="bi bi-person-badge me-1"></i><?= h($roleLabel) ?> · <?= h($branchLabel) ?>
                             </div>
                         </div>
                     </div>
@@ -757,7 +823,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <div>
                                         <div class="summary-label">Total Inventaris</div>
                                         <div class="summary-value"><?= $totalInventaris ?></div>
-                                        <div class="summary-note">Seluruh aset yang tercatat</div>
+                                        <div class="summary-note">Seluruh aset aktif cabang yang tercatat</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-seam"></i>
@@ -787,7 +853,7 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
                                         <div class="summary-value"><?= $totalKeluar ?></div>
-                                        <div class="summary-note">Sudah pernah dikirim, permanen keluar</div>
+                                        <div class="summary-note">Sudah pernah dikirim dari scope branch ini</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-up"></i>
@@ -909,13 +975,13 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
                                                                 <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
                                                             </div>
                                                         </div>
 
                                                         <div class="text-end">
-                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? 'Belum dikirim') ?></div>
+                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? STATUS_BELUM_DIKIRIM) ?></div>
                                                             <div class="meta-muted mt-2">
                                                                 <?= !empty($item['tanggal_keluar']) ? h($item['tanggal_keluar']) : '-' ?>
                                                             </div>
@@ -1021,14 +1087,15 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 
                                                             <div class="meta-grid">
                                                                 <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_asal'] ?? '-') ?></div>
+                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
                                                                 <div class="meta-muted"><i class="bi bi-hourglass-split me-1"></i>Estimasi: <?= h($item['estimasi_pengiriman'] ?? '-') ?></div>
                                                             </div>
                                                         </div>
 
                                                         <div class="text-end">
-                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? 'Belum dikirim') ?></div>
+                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? STATUS_BELUM_DIKIRIM) ?></div>
                                                             <div class="meta-muted mt-2">
                                                                 <?= !empty($item['tanggal_keluar']) ? h($item['tanggal_keluar']) : '-' ?>
                                                             </div>

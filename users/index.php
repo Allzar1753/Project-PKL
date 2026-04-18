@@ -2,29 +2,40 @@
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
-require_super_admin();
+require_admin();
 refresh_permissions($koneksi);
 
 if (!function_exists('normalize_role')) {
     function normalize_role(string $role): string
     {
         $role = strtolower(trim($role));
-        $allowedRoles = ['super_admin', 'admin', 'user'];
+        $allowedRoles = ['admin', 'user'];
 
         return in_array($role, $allowedRoles, true) ? $role : 'user';
     }
 }
 
-function count_super_admins(mysqli $koneksi): int
-{
-    $result = mysqli_query($koneksi, "SELECT COUNT(*) AS total FROM users WHERE role = 'super_admin'");
-    $row = mysqli_fetch_assoc($result);
-    return (int) ($row['total'] ?? 0);
+if (!function_exists('redirect_users_index')) {
+    function redirect_users_index(): void
+    {
+        redirect_to(base_url('users/index.php'));
+    }
 }
 
 function find_user_by_id(mysqli $koneksi, int $id): ?array
 {
-    $stmt = mysqli_prepare($koneksi, "SELECT id, username, email, password, role, id_branch FROM users WHERE id = ? LIMIT 1");
+    $stmt = mysqli_prepare(
+        $koneksi,
+        "SELECT id, username, email, password, role, id_branch
+         FROM users
+         WHERE id = ?
+         LIMIT 1"
+    );
+
+    if (!$stmt) {
+        return null;
+    }
+
     mysqli_stmt_bind_param($stmt, 'i', $id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
@@ -36,11 +47,17 @@ function find_user_by_id(mysqli $koneksi, int $id): ?array
 
 function username_exists(mysqli $koneksi, string $username, ?int $ignoreId = null): bool
 {
-    if ($ignoreId) {
+    if ($ignoreId !== null) {
         $stmt = mysqli_prepare($koneksi, "SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
         mysqli_stmt_bind_param($stmt, 'si', $username, $ignoreId);
     } else {
         $stmt = mysqli_prepare($koneksi, "SELECT id FROM users WHERE username = ? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
         mysqli_stmt_bind_param($stmt, 's', $username);
     }
 
@@ -54,11 +71,17 @@ function username_exists(mysqli $koneksi, string $username, ?int $ignoreId = nul
 
 function email_exists(mysqli $koneksi, string $email, ?int $ignoreId = null): bool
 {
-    if ($ignoreId) {
+    if ($ignoreId !== null) {
         $stmt = mysqli_prepare($koneksi, "SELECT id FROM users WHERE email = ? AND id != ? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
         mysqli_stmt_bind_param($stmt, 'si', $email, $ignoreId);
     } else {
         $stmt = mysqli_prepare($koneksi, "SELECT id FROM users WHERE email = ? LIMIT 1");
+        if (!$stmt) {
+            return false;
+        }
         mysqli_stmt_bind_param($stmt, 's', $email);
     }
 
@@ -70,16 +93,90 @@ function email_exists(mysqli $koneksi, string $email, ?int $ignoreId = null): bo
     return $exists;
 }
 
+function default_password_for_role(string $role): string
+{
+    return normalize_role($role) === 'admin' ? 'Admin@123' : 'user@123';
+}
+
+function resolve_password_input(string $role, ?string $inputPassword): string
+{
+    $inputPassword = trim((string) $inputPassword);
+
+    if ($inputPassword !== '') {
+        return $inputPassword;
+    }
+
+    return default_password_for_role($role);
+}
+
+function validate_single_user_input(
+    mysqli $koneksi,
+    string $username,
+    string $email,
+    ?int $idBranch,
+    ?int $ignoreId = null
+): ?string {
+    if ($username === '' || $email === '') {
+        return 'Username dan email wajib diisi.';
+    }
+
+    if ($idBranch === null || $idBranch <= 0) {
+        return 'Cabang wajib dipilih.';
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return 'Format email tidak valid.';
+    }
+
+    if (username_exists($koneksi, $username, $ignoreId)) {
+        return $ignoreId !== null ? 'Username sudah digunakan user lain.' : 'Username sudah digunakan.';
+    }
+
+    if (email_exists($koneksi, $email, $ignoreId)) {
+        return $ignoreId !== null ? 'Email sudah digunakan user lain.' : 'Email sudah digunakan.';
+    }
+
+    return null;
+}
+
+function insert_user(
+    mysqli $koneksi,
+    string $username,
+    string $email,
+    string $role,
+    string $plainPassword,
+    int $idBranch
+): bool {
+    $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
+    $mustChangePassword = 1;
+
+    $stmt = mysqli_prepare(
+        $koneksi,
+        "INSERT INTO users (username, email, password, role, must_change_password, id_branch)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ssssii', $username, $email, $hash, $role, $mustChangePassword, $idBranch);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
 function normalize_bulk_users(array $rows): array
 {
     $normalized = [];
 
     foreach (array_values($rows) as $row) {
         $normalized[] = [
-            'username' => trim((string) ($row['username'] ?? '')),
-            'email'    => trim((string) ($row['email'] ?? '')),
-            'password' => (string) ($row['password'] ?? ''),
-            'role'     => normalize_role((string) ($row['role'] ?? 'user')),
+            'username'  => trim((string) ($row['username'] ?? '')),
+            'email'     => trim((string) ($row['email'] ?? '')),
+            'password'  => (string) ($row['password'] ?? ''),
+            'role'      => normalize_role((string) ($row['role'] ?? 'user')),
             'id_branch' => (int) ($row['id_branch'] ?? 0),
         ];
     }
@@ -89,7 +186,10 @@ function normalize_bulk_users(array $rows): array
 
 function bulk_row_has_input(array $row): bool
 {
-    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '' || (int) ($row['id_branch'] ?? 0) > 0;
+    return $row['username'] !== ''
+        || $row['email'] !== ''
+        || $row['password'] !== ''
+        || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
 function set_bulk_form_state(array $rows, array $errors): void
@@ -137,458 +237,6 @@ function bulk_field_error(array $errors, int $rowIndex, string $field): string
     return (string) ($errors[$rowIndex][$field] ?? '');
 }
 
-function default_password_for_role(string $role): string
-{
-    $role = normalize_role($role);
-
-    if ($role === 'admin') {
-        return 'Admin@123';
-    }
-
-    if ($role === 'super_admin') {
-        return 'SuperAdmin@123';
-    }
-
-    return 'user@123';
-}
-
-function resolve_password_input(string $role, ?string $inputPassword): string
-{
-    $inputPassword = trim((string) $inputPassword);
-
-    if ($inputPassword !== '') {
-        return $inputPassword;
-    }
-
-    return default_password_for_role($role);
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-
-    if ($action === 'create') {
-        $username = trim($_POST['username'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $role = normalize_role($_POST['role'] ?? 'user');
-        $password = resolve_password_input($role, $_POST['password'] ?? '');
-        $idBranch = (int) ($_POST['id_branch'] ?? 0);
-        if ($idBranch <= 0) {
-            $idBranch = null;
-        }
-
-        if ($username === '' || $email === '') {
-            set_flash('error', 'Username dan email wajib diisi.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if ($idBranch === null) {
-            set_flash('error', 'Cabang wajib dipilih.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            set_flash('error', 'Format email tidak valid.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (username_exists($koneksi, $username)) {
-            set_flash('error', 'Username sudah digunakan.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (email_exists($koneksi, $email)) {
-            set_flash('error', 'Email sudah digunakan.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-        $mustChangePassword = 1;
-
-        $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'ssssii', $username, $email, $hash, $role, $mustChangePassword, $idBranch);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-
-        set_flash('success', 'User berhasil dibuat.');
-        redirect_to(base_url('users/index.php'));
-    }
-
-    if ($action === 'save_users') {
-        $rawRows = $_POST['users'] ?? [];
-
-        if (!is_array($rawRows)) {
-            $rawRows = [];
-        }
-
-        if (count($rawRows) > 10) {
-            set_create_user_form_state(
-                normalize_create_user_rows(array_slice($rawRows, 0, 10)),
-                [],
-                'Maksimal 10 baris user dalam satu proses.'
-            );
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $rows = normalize_create_user_rows($rawRows);
-        $rowErrors = [];
-        $filledRows = [];
-        $generalError = '';
-
-        foreach ($rows as $index => $row) {
-            if (!create_user_row_has_value($row)) {
-                continue;
-            }
-
-            $filledRows[$index] = $row;
-
-            if ($row['username'] === '') {
-                $rowErrors[$index]['username'] = 'Username wajib diisi.';
-            }
-
-            if ($row['email'] === '') {
-                $rowErrors[$index]['email'] = 'Email wajib diisi.';
-            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
-                $rowErrors[$index]['email'] = 'Format email tidak valid.';
-            }
-
-            if ((int) ($row['id_branch'] ?? 0) <= 0) {
-                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
-            }
-        }
-
-        if (empty($filledRows)) {
-            $generalError = 'Isi minimal 1 baris user.';
-            set_create_user_form_state($rows, $rowErrors, $generalError);
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $usernameGroups = [];
-        $emailGroups = [];
-
-        foreach ($filledRows as $index => $row) {
-            $usernameKey = strtolower($row['username']);
-            $emailKey = strtolower($row['email']);
-
-            if ($row['username'] !== '') {
-                $usernameGroups[$usernameKey][] = $index;
-            }
-
-            if ($row['email'] !== '') {
-                $emailGroups[$emailKey][] = $index;
-            }
-        }
-
-        foreach ($usernameGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['username'] = 'Username duplikat.';
-                }
-            }
-        }
-
-        foreach ($emailGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['email'] = 'Email duplikat.';
-                }
-            }
-        }
-
-        foreach ($filledRows as $index => $row) {
-            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
-                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
-            }
-
-            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
-                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
-            }
-        }
-
-        if (!empty($rowErrors) || $generalError !== '') {
-            set_create_user_form_state($rows, $rowErrors, $generalError);
-            redirect_to(base_url('users/index.php'));
-        }
-
-        mysqli_begin_transaction($koneksi);
-
-        try {
-            $stmt = mysqli_prepare(
-                $koneksi,
-                "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)"
-            );
-
-            $insertedCount = 0;
-
-            foreach ($filledRows as $row) {
-                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
-                $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
-                $mustChangePassword = 1;
-                $idBranch = (int) ($row['id_branch'] ?? 0);
-
-                mysqli_stmt_bind_param($stmt, 'ssssii', $row['username'], $row['email'], $hash, $row['role'], $mustChangePassword, $idBranch);
-
-                if (!mysqli_stmt_execute($stmt)) {
-                    throw new Exception(mysqli_stmt_error($stmt));
-                }
-
-                $insertedCount++;
-            }
-
-            mysqli_stmt_close($stmt);
-            mysqli_commit($koneksi);
-
-            clear_create_user_form_state();
-            set_flash('success', $insertedCount . ' user berhasil dibuat.');
-        } catch (Throwable $e) {
-            mysqli_rollback($koneksi);
-            set_create_user_form_state($rows, [], 'Terjadi kesalahan saat menyimpan data user.');
-        }
-
-        redirect_to(base_url('users/index.php'));
-    }
-
-    if ($action === 'bulk_create') {
-        $rawRows = $_POST['bulk_users'] ?? [];
-
-        if (!is_array($rawRows)) {
-            $rawRows = [];
-        }
-
-        if (count($rawRows) > 10) {
-            set_flash('error', 'Maksimal 10 user dalam satu proses.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $rows = normalize_bulk_users($rawRows);
-        $rowErrors = [];
-        $filledRows = [];
-
-        foreach ($rows as $index => $row) {
-            if (!bulk_row_has_input($row)) {
-                continue;
-            }
-
-            $filledRows[$index] = $row;
-
-            if ($row['username'] === '') {
-                $rowErrors[$index]['username'] = 'Username wajib diisi.';
-            }
-
-            if ($row['email'] === '') {
-                $rowErrors[$index]['email'] = 'Email wajib diisi.';
-            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
-                $rowErrors[$index]['email'] = 'Format email tidak valid.';
-            }
-
-            if ((int) ($row['id_branch'] ?? 0) <= 0) {
-                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
-            }
-        }
-
-        if (empty($filledRows)) {
-            set_bulk_form_state($rows, $rowErrors);
-            set_flash('error', 'Isi minimal 1 user pada form tambah banyak.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $usernameGroups = [];
-        $emailGroups = [];
-
-        foreach ($filledRows as $index => $row) {
-            $usernameKey = strtolower($row['username']);
-            $emailKey = strtolower($row['email']);
-
-            if ($row['username'] !== '') {
-                $usernameGroups[$usernameKey][] = $index;
-            }
-
-            if ($row['email'] !== '') {
-                $emailGroups[$emailKey][] = $index;
-            }
-        }
-
-        foreach ($usernameGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['username'] = 'Username duplikat di form.';
-                }
-            }
-        }
-
-        foreach ($emailGroups as $indexes) {
-            if (count($indexes) > 1) {
-                foreach ($indexes as $index) {
-                    $rowErrors[$index]['email'] = 'Email duplikat di form.';
-                }
-            }
-        }
-
-        foreach ($filledRows as $index => $row) {
-            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
-                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
-            }
-
-            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
-                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
-            }
-        }
-
-        if (!empty($rowErrors)) {
-            set_bulk_form_state($rows, $rowErrors);
-            set_flash('error', 'Periksa kembali form tambah banyak user.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        mysqli_begin_transaction($koneksi);
-
-        try {
-            $stmt = mysqli_prepare($koneksi, "INSERT INTO users (username, email, password, role, must_change_password, id_branch) VALUES (?, ?, ?, ?, ?, ?)");
-            $insertedCount = 0;
-
-            foreach ($filledRows as $row) {
-                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
-                $hash = password_hash($plainPassword, PASSWORD_DEFAULT);
-                $mustChangePassword = 1;
-                $idBranch = (int) ($row['id_branch'] ?? 0);
-
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'ssssii',
-                    $row['username'],
-                    $row['email'],
-                    $hash,
-                    $row['role'],
-                    $mustChangePassword,
-                    $idBranch
-                );
-
-                if (!mysqli_stmt_execute($stmt)) {
-                    throw new Exception(mysqli_stmt_error($stmt));
-                }
-
-                $insertedCount++;
-            }
-
-            mysqli_stmt_close($stmt);
-            mysqli_commit($koneksi);
-
-            clear_bulk_form_state();
-            set_flash('success', $insertedCount . ' user berhasil dibuat.');
-        } catch (Throwable $e) {
-            mysqli_rollback($koneksi);
-            set_bulk_form_state($rows, []);
-            set_flash('error', 'Gagal membuat banyak user sekaligus.');
-        }
-
-        redirect_to(base_url('users/index.php'));
-    }
-
-    if ($action === 'update') {
-        $id = (int) ($_POST['id'] ?? 0);
-        $username = trim($_POST['username'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $newPassword = (string) ($_POST['new_password'] ?? '');
-        $role = normalize_role($_POST['role'] ?? 'user');
-        $idBranch = (int) ($_POST['id_branch'] ?? 0);
-
-        if ($idBranch <= 0) {
-            $idBranch = null;
-        }
-
-        $targetUser = find_user_by_id($koneksi, $id);
-        if (!$targetUser) {
-            set_flash('error', 'User tidak ditemukan.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if ($username === '' || $email === '') {
-            set_flash('error', 'Username dan email wajib diisi.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            set_flash('error', 'Format email tidak valid.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (username_exists($koneksi, $username, $id)) {
-            set_flash('error', 'Username sudah digunakan user lain.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (email_exists($koneksi, $email, $id)) {
-            set_flash('error', 'Email sudah digunakan user lain.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $superAdminCount = count_super_admins($koneksi);
-        $isSelf = current_user_id() === $id;
-        $isLastSuperAdmin = $targetUser['role'] === 'super_admin' && $superAdminCount <= 1;
-
-        if ($isSelf && $targetUser['role'] === 'super_admin' && $role !== 'super_admin') {
-            set_flash('error', 'Anda tidak boleh menurunkan role diri sendiri dari Super Admin.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if ($isLastSuperAdmin && $role !== 'super_admin') {
-            set_flash('error', 'Tidak bisa mengubah role Super Admin terakhir.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if ($newPassword !== '') {
-            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-            $mustChangePassword = 0;
-            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ?, id_branch = ?, password = ?, must_change_password = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'sssissi', $username, $email, $role, $idBranch, $hash, $mustChangePassword, $id);
-        } else {
-            $stmt = mysqli_prepare($koneksi, "UPDATE users SET username = ?, email = ?, role = ?, id_branch = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'sssii', $username, $email, $role, $idBranch, $id);
-        }
-
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-
-        if ($isSelf && isset($_SESSION['user'])) {
-            $_SESSION['user']['username'] = $username;
-            $_SESSION['user']['email'] = $email;
-            $_SESSION['user']['role'] = $role;
-            $_SESSION['user']['id_branch'] = $idBranch;
-            refresh_permissions($koneksi);
-        }
-
-        set_flash('success', 'Data user berhasil diperbarui.');
-        redirect_to(base_url('users/index.php'));
-    }
-
-    if ($action === 'delete') {
-        $id = (int) ($_POST['id'] ?? 0);
-        $targetUser = find_user_by_id($koneksi, $id);
-
-        if (!$targetUser) {
-            set_flash('error', 'User tidak ditemukan.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if (current_user_id() === $id) {
-            set_flash('error', 'Anda tidak bisa menghapus akun sendiri.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        if ($targetUser['role'] === 'super_admin' && count_super_admins($koneksi) <= 1) {
-            set_flash('error', 'Super Admin terakhir tidak boleh dihapus.');
-            redirect_to(base_url('users/index.php'));
-        }
-
-        $stmt = mysqli_prepare($koneksi, "DELETE FROM users WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, 'i', $id);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-
-        set_flash('success', 'User berhasil dihapus.');
-        redirect_to(base_url('users/index.php'));
-    }
-}
-
 function default_create_user_rows(): array
 {
     return [
@@ -602,11 +250,11 @@ function normalize_create_user_rows(array $rows): array
 
     foreach ($rows as $row) {
         $normalized[] = [
-            'username' => trim((string) ($row['username'] ?? '')),
-            'email' => trim((string) ($row['email'] ?? '')),
-            'password' => (string) ($row['password'] ?? ''),
-            'role' => normalize_role((string) ($row['role'] ?? 'user')),
-            'id_branch' => (int) ($row['id_branch'] ?? 0)
+            'username'  => trim((string) ($row['username'] ?? '')),
+            'email'     => trim((string) ($row['email'] ?? '')),
+            'password'  => (string) ($row['password'] ?? ''),
+            'role'      => normalize_role((string) ($row['role'] ?? 'user')),
+            'id_branch' => (int) ($row['id_branch'] ?? 0),
         ];
     }
 
@@ -615,7 +263,10 @@ function normalize_create_user_rows(array $rows): array
 
 function create_user_row_has_value(array $row): bool
 {
-    return $row['username'] !== '' || $row['email'] !== '' || $row['password'] !== '' || (int) ($row['id_branch'] ?? 0) > 0;
+    return $row['username'] !== ''
+        || $row['email'] !== ''
+        || $row['password'] !== ''
+        || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
 function set_create_user_form_state(array $rows, array $errors = [], string $generalError = ''): void
@@ -670,10 +321,370 @@ function create_user_field_error(array $errors, int $rowIndex, string $field): s
     return (string) ($errors[$rowIndex][$field] ?? '');
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'create') {
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $role = normalize_role((string) ($_POST['role'] ?? 'user'));
+        $password = resolve_password_input($role, $_POST['password'] ?? '');
+        $idBranch = (int) ($_POST['id_branch'] ?? 0);
+        $idBranch = $idBranch > 0 ? $idBranch : null;
+
+        $errorMessage = validate_single_user_input($koneksi, $username, $email, $idBranch);
+
+        if ($errorMessage !== null) {
+            set_flash('error', $errorMessage);
+            redirect_users_index();
+        }
+
+        if (!insert_user($koneksi, $username, $email, $role, $password, (int) $idBranch)) {
+            set_flash('error', 'Gagal menyimpan user.');
+            redirect_users_index();
+        }
+
+        set_flash('success', 'User berhasil dibuat.');
+        redirect_users_index();
+    }
+
+    if ($action === 'save_users') {
+        $rawRows = $_POST['users'] ?? [];
+
+        if (!is_array($rawRows)) {
+            $rawRows = [];
+        }
+
+        if (count($rawRows) > 10) {
+            set_create_user_form_state(
+                normalize_create_user_rows(array_slice($rawRows, 0, 10)),
+                [],
+                'Maksimal 10 baris user dalam satu proses.'
+            );
+            redirect_users_index();
+        }
+
+        $rows = normalize_create_user_rows($rawRows);
+        $rowErrors = [];
+        $filledRows = [];
+        $generalError = '';
+
+        foreach ($rows as $index => $row) {
+            if (!create_user_row_has_value($row)) {
+                continue;
+            }
+
+            $filledRows[$index] = $row;
+
+            if ($row['username'] === '') {
+                $rowErrors[$index]['username'] = 'Username wajib diisi.';
+            }
+
+            if ($row['email'] === '') {
+                $rowErrors[$index]['email'] = 'Email wajib diisi.';
+            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+                $rowErrors[$index]['email'] = 'Format email tidak valid.';
+            }
+
+            if ((int) ($row['id_branch'] ?? 0) <= 0) {
+                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
+            }
+        }
+
+        if (empty($filledRows)) {
+            $generalError = 'Isi minimal 1 baris user.';
+            set_create_user_form_state($rows, $rowErrors, $generalError);
+            redirect_users_index();
+        }
+
+        $usernameGroups = [];
+        $emailGroups = [];
+
+        foreach ($filledRows as $index => $row) {
+            $usernameKey = strtolower($row['username']);
+            $emailKey = strtolower($row['email']);
+
+            if ($row['username'] !== '') {
+                $usernameGroups[$usernameKey][] = $index;
+            }
+
+            if ($row['email'] !== '') {
+                $emailGroups[$emailKey][] = $index;
+            }
+        }
+
+        foreach ($usernameGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['username'] = 'Username duplikat.';
+                }
+            }
+        }
+
+        foreach ($emailGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['email'] = 'Email duplikat.';
+                }
+            }
+        }
+
+        foreach ($filledRows as $index => $row) {
+            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
+                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
+            }
+
+            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
+                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
+            }
+        }
+
+        if (!empty($rowErrors) || $generalError !== '') {
+            set_create_user_form_state($rows, $rowErrors, $generalError);
+            redirect_users_index();
+        }
+
+        mysqli_begin_transaction($koneksi);
+
+        try {
+            $insertedCount = 0;
+
+            foreach ($filledRows as $row) {
+                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
+                $idBranch = (int) ($row['id_branch'] ?? 0);
+
+                if (!insert_user($koneksi, $row['username'], $row['email'], $row['role'], $plainPassword, $idBranch)) {
+                    throw new Exception('Gagal menyimpan salah satu user.');
+                }
+
+                $insertedCount++;
+            }
+
+            mysqli_commit($koneksi);
+
+            clear_create_user_form_state();
+            set_flash('success', $insertedCount . ' user berhasil dibuat.');
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            set_create_user_form_state($rows, [], 'Terjadi kesalahan saat menyimpan data user.');
+        }
+
+        redirect_users_index();
+    }
+
+    if ($action === 'bulk_create') {
+        $rawRows = $_POST['bulk_users'] ?? [];
+
+        if (!is_array($rawRows)) {
+            $rawRows = [];
+        }
+
+        if (count($rawRows) > 10) {
+            set_flash('error', 'Maksimal 10 user dalam satu proses.');
+            redirect_users_index();
+        }
+
+        $rows = normalize_bulk_users($rawRows);
+        $rowErrors = [];
+        $filledRows = [];
+
+        foreach ($rows as $index => $row) {
+            if (!bulk_row_has_input($row)) {
+                continue;
+            }
+
+            $filledRows[$index] = $row;
+
+            if ($row['username'] === '') {
+                $rowErrors[$index]['username'] = 'Username wajib diisi.';
+            }
+
+            if ($row['email'] === '') {
+                $rowErrors[$index]['email'] = 'Email wajib diisi.';
+            } elseif (!filter_var($row['email'], FILTER_VALIDATE_EMAIL)) {
+                $rowErrors[$index]['email'] = 'Format email tidak valid.';
+            }
+
+            if ((int) ($row['id_branch'] ?? 0) <= 0) {
+                $rowErrors[$index]['id_branch'] = 'Cabang wajib dipilih.';
+            }
+        }
+
+        if (empty($filledRows)) {
+            set_bulk_form_state($rows, $rowErrors);
+            set_flash('error', 'Isi minimal 1 user pada form tambah banyak.');
+            redirect_users_index();
+        }
+
+        $usernameGroups = [];
+        $emailGroups = [];
+
+        foreach ($filledRows as $index => $row) {
+            $usernameKey = strtolower($row['username']);
+            $emailKey = strtolower($row['email']);
+
+            if ($row['username'] !== '') {
+                $usernameGroups[$usernameKey][] = $index;
+            }
+
+            if ($row['email'] !== '') {
+                $emailGroups[$emailKey][] = $index;
+            }
+        }
+
+        foreach ($usernameGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['username'] = 'Username duplikat di form.';
+                }
+            }
+        }
+
+        foreach ($emailGroups as $indexes) {
+            if (count($indexes) > 1) {
+                foreach ($indexes as $index) {
+                    $rowErrors[$index]['email'] = 'Email duplikat di form.';
+                }
+            }
+        }
+
+        foreach ($filledRows as $index => $row) {
+            if ($row['username'] !== '' && !isset($rowErrors[$index]['username']) && username_exists($koneksi, $row['username'])) {
+                $rowErrors[$index]['username'] = 'Username sudah digunakan.';
+            }
+
+            if ($row['email'] !== '' && !isset($rowErrors[$index]['email']) && email_exists($koneksi, $row['email'])) {
+                $rowErrors[$index]['email'] = 'Email sudah digunakan.';
+            }
+        }
+
+        if (!empty($rowErrors)) {
+            set_bulk_form_state($rows, $rowErrors);
+            set_flash('error', 'Periksa kembali form tambah banyak user.');
+            redirect_users_index();
+        }
+
+        mysqli_begin_transaction($koneksi);
+
+        try {
+            $insertedCount = 0;
+
+            foreach ($filledRows as $row) {
+                $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
+                $idBranch = (int) ($row['id_branch'] ?? 0);
+
+                if (!insert_user($koneksi, $row['username'], $row['email'], $row['role'], $plainPassword, $idBranch)) {
+                    throw new Exception('Gagal membuat salah satu user.');
+                }
+
+                $insertedCount++;
+            }
+
+            mysqli_commit($koneksi);
+
+            clear_bulk_form_state();
+            set_flash('success', $insertedCount . ' user berhasil dibuat.');
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            set_bulk_form_state($rows, []);
+            set_flash('error', 'Gagal membuat banyak user sekaligus.');
+        }
+
+        redirect_users_index();
+    }
+
+    if ($action === 'update') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $username = trim((string) ($_POST['username'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $role = normalize_role((string) ($_POST['role'] ?? 'user'));
+        $idBranch = (int) ($_POST['id_branch'] ?? 0);
+        $idBranch = $idBranch > 0 ? $idBranch : null;
+
+        $targetUser = find_user_by_id($koneksi, $id);
+        if (!$targetUser) {
+            set_flash('error', 'User tidak ditemukan.');
+            redirect_users_index();
+        }
+
+        $errorMessage = validate_single_user_input($koneksi, $username, $email, $idBranch, $id);
+
+        if ($errorMessage !== null) {
+            set_flash('error', $errorMessage);
+            redirect_users_index();
+        }
+
+        $isSelf = current_user_id() === $id;
+
+        if ($newPassword !== '') {
+            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $mustChangePassword = 0;
+
+            $stmt = mysqli_prepare(
+                $koneksi,
+                "UPDATE users
+                 SET username = ?, email = ?, role = ?, id_branch = ?, password = ?, must_change_password = ?
+                 WHERE id = ?"
+            );
+
+            mysqli_stmt_bind_param($stmt, 'sssissi', $username, $email, $role, $idBranch, $hash, $mustChangePassword, $id);
+        } else {
+            $stmt = mysqli_prepare(
+                $koneksi,
+                "UPDATE users
+                 SET username = ?, email = ?, role = ?, id_branch = ?
+                 WHERE id = ?"
+            );
+
+            mysqli_stmt_bind_param($stmt, 'sssii', $username, $email, $role, $idBranch, $id);
+        }
+
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+
+        if ($isSelf && isset($_SESSION['user'])) {
+            $_SESSION['user']['username'] = $username;
+            $_SESSION['user']['email'] = $email;
+            $_SESSION['user']['role'] = $role;
+            $_SESSION['user']['id_branch'] = $idBranch;
+            refresh_permissions($koneksi);
+        }
+
+        set_flash('success', 'Data user berhasil diperbarui.');
+        redirect_users_index();
+    }
+
+    if ($action === 'delete') {
+        $id = (int) ($_POST['id'] ?? 0);
+        $targetUser = find_user_by_id($koneksi, $id);
+
+        if (!$targetUser) {
+            set_flash('error', 'User tidak ditemukan.');
+            redirect_users_index();
+        }
+
+        if (current_user_id() === $id) {
+            set_flash('error', 'Anda tidak bisa menghapus akun sendiri.');
+            redirect_users_index();
+        }
+
+        $stmt = mysqli_prepare($koneksi, "DELETE FROM users WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+
+        set_flash('success', 'User berhasil dihapus.');
+        redirect_users_index();
+    }
+}
+
 $alertError = get_flash('error');
 $alertSuccess = get_flash('success');
+
 $bulkOldRows = pull_bulk_form_old();
 $bulkErrors = pull_bulk_form_errors();
+
 $createUserRowsOld = pull_create_user_rows_old();
 $createUserRowsErrors = pull_create_user_rows_errors();
 $createUserGeneralError = pull_create_user_general_error();
@@ -694,17 +705,16 @@ $page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 
 $summaryQuery = mysqli_query(
     $koneksi,
-    "SELECT 
+    "SELECT
         COUNT(*) AS total_users,
-        SUM(CASE WHEN role = 'super_admin' THEN 1 ELSE 0 END) AS total_super_admin,
         SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS total_admin,
         SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS total_user
      FROM users"
 );
-$summaryData = mysqli_fetch_assoc($summaryQuery) ?: [];
+
+$summaryData = $summaryQuery ? (mysqli_fetch_assoc($summaryQuery) ?: []) : [];
 
 $totalUsers = (int) ($summaryData['total_users'] ?? 0);
-$superAdminTotal = (int) ($summaryData['total_super_admin'] ?? 0);
 $adminTotal = (int) ($summaryData['total_admin'] ?? 0);
 $userTotal = (int) ($summaryData['total_user'] ?? 0);
 
@@ -717,18 +727,20 @@ $offset = ($page - 1) * $limit;
 $displayFrom = $totalUsers > 0 ? $offset + 1 : 0;
 $displayTo = min($offset + $limit, $totalUsers);
 
+$users = [];
 $usersResult = mysqli_query(
     $koneksi,
     "SELECT users.id, users.username, users.email, users.role, users.id_branch, tb_branch.nama_branch
      FROM users
      LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
-     ORDER BY FIELD(role, 'super_admin', 'admin', 'user'), username ASC
+     ORDER BY FIELD(role, 'admin', 'user'), username ASC
      LIMIT $offset, $limit"
 );
 
-$users = [];
-while ($row = mysqli_fetch_assoc($usersResult)) {
-    $users[] = $row;
+if ($usersResult) {
+    while ($row = mysqli_fetch_assoc($usersResult)) {
+        $users[] = $row;
+    }
 }
 
 $branches = [];
@@ -741,41 +753,17 @@ if ($branchesResult) {
 
 function role_badge_class(string $role): string
 {
-    if ($role === 'super_admin') {
-        return 'role-badge super-admin';
-    }
-
-    if ($role === 'admin') {
-        return 'role-badge admin';
-    }
-
-    return 'role-badge user';
+    return $role === 'admin' ? 'role-badge admin' : 'role-badge user';
 }
 
 function role_label(string $role): string
 {
-    if ($role === 'super_admin') {
-        return 'Super Admin';
-    }
-
-    if ($role === 'admin') {
-        return 'Admin';
-    }
-
-    return 'User';
+    return $role === 'admin' ? 'Administrator' : 'User';
 }
 
 function role_icon(string $role): string
 {
-    if ($role === 'super_admin') {
-        return 'bi-shield-lock';
-    }
-
-    if ($role === 'admin') {
-        return 'bi-person-gear';
-    }
-
-    return 'bi-person';
+    return $role === 'admin' ? 'bi-shield-check' : 'bi-person';
 }
 ?>
 <!DOCTYPE html>
@@ -1167,11 +1155,6 @@ function role_icon(string $role): string
             font-weight: 800;
         }
 
-        .role-badge.super-admin {
-            background: #222;
-            color: #fff;
-        }
-
         .role-badge.admin {
             background: #fff3de;
             color: #8b4f00;
@@ -1492,8 +1475,8 @@ function role_icon(string $role): string
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Super Admin</div>
-                                        <div class="summary-value"><?= $superAdminTotal ?></div>
+                                        <div class="summary-label">Administrator</div>
+                                        <div class="summary-value"><?= $adminTotal ?></div>
                                         <div class="summary-note">Akun dengan akses penuh sistem</div>
                                     </div>
                                     <div class="summary-icon">
@@ -1507,8 +1490,8 @@ function role_icon(string $role): string
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Admin & User</div>
-                                        <div class="summary-value"><?= $adminTotal + $userTotal ?></div>
+                                        <div class="summary-label">User</div>
+                                        <div class="summary-value"><?= $userTotal ?></div>
                                         <div class="summary-note">Akun operasional aktif di sistem</div>
                                     </div>
                                     <div class="summary-icon">
@@ -1555,7 +1538,6 @@ function role_icon(string $role): string
                                             <select name="role" class="form-select">
                                                 <option value="user">User</option>
                                                 <option value="admin">Admin</option>
-                                                <option value="super_admin">Super Admin</option>
                                             </select>
                                         </div>
 
@@ -1687,7 +1669,6 @@ function role_icon(string $role): string
                                                                         name="bulk_users[<?= $index ?>][role]">
                                                                         <option value="user" <?= $bulkRow['role'] === 'user' ? 'selected' : '' ?>>User</option>
                                                                         <option value="admin" <?= $bulkRow['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                                        <option value="super_admin" <?= $bulkRow['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                                     </select>
                                                                     <div class="invalid-feedback"></div>
                                                                 </div>
@@ -1784,7 +1765,6 @@ function role_icon(string $role): string
                                                                 name="">
                                                                 <option value="user" selected>User</option>
                                                                 <option value="admin">Admin</option>
-                                                                <option value="super_admin">Super Admin</option>
                                                             </select>
                                                             <div class="invalid-feedback"></div>
                                                         </div>
@@ -1901,7 +1881,6 @@ function role_icon(string $role): string
                                                                             name="users[<?= $index ?>][role]">
                                                                             <option value="user" <?= $row['role'] === 'user' ? 'selected' : '' ?>>User</option>
                                                                             <option value="admin" <?= $row['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                                            <option value="super_admin" <?= $row['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                                         </select>
                                                                         <div class="invalid-feedback"></div>
                                                                     </td>
@@ -1996,7 +1975,6 @@ function role_icon(string $role): string
                                                             name="">
                                                             <option value="user" selected>User</option>
                                                             <option value="admin">Admin</option>
-                                                            <option value="super_admin">Super Admin</option>
                                                         </select>
                                                         <div class="invalid-feedback"></div>
                                                     </td>
@@ -2124,7 +2102,6 @@ function role_icon(string $role): string
                                                             <select name="role" class="form-select">
                                                                 <option value="user" <?= $user['role'] === 'user' ? 'selected' : '' ?>>User</option>
                                                                 <option value="admin" <?= $user['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                                                <option value="super_admin" <?= $user['role'] === 'super_admin' ? 'selected' : '' ?>>Super Admin</option>
                                                             </select>
                                                         </div>
 

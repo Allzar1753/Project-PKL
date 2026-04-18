@@ -1,38 +1,40 @@
 <?php
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+
 require_login();
 
-function esc(mysqli $koneksi, $value): string
-{
-    return mysqli_real_escape_string($koneksi, trim((string) $value));
-}
+const STATUS_BELUM_DIKIRIM = 'Belum dikirim';
+const STATUS_SEDANG_DIKEMAS = 'Sedang dikemas';
+const STATUS_SEDANG_PERJALANAN = 'Sedang perjalanan';
+const STATUS_SUDAH_DITERIMA = 'Sudah diterima';
 
 function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-function sqlNullable(string $value): string
+function normalizeNullableString($value): ?string
 {
-    return $value !== '' ? "'$value'" : "NULL";
+    $value = trim((string) $value);
+    return $value !== '' ? $value : null;
 }
 
 function uploadImage(string $fieldName, string $targetDir = "../assets/images/"): array
 {
     if (!isset($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
-        return ["status" => "empty", "filename" => ""];
+        return ['status' => 'empty', 'filename' => ''];
     }
 
     $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
 
     if (!in_array($ext, $allowed, true)) {
-        return ["status" => "error", "message" => "Format file {$fieldName} tidak diperbolehkan"];
+        return ['status' => 'error', 'message' => "Format file {$fieldName} tidak diperbolehkan"];
     }
 
     if ($_FILES[$fieldName]['size'] > 2000000) {
-        return ["status" => "error", "message" => "Ukuran file {$fieldName} maksimal 2MB"];
+        return ['status' => 'error', 'message' => "Ukuran file {$fieldName} maksimal 2MB"];
     }
 
     if (!is_dir($targetDir)) {
@@ -42,28 +44,30 @@ function uploadImage(string $fieldName, string $targetDir = "../assets/images/")
     $filename = uniqid($fieldName . "_", true) . "." . $ext;
 
     if (!move_uploaded_file($_FILES[$fieldName]['tmp_name'], $targetDir . $filename)) {
-        return ["status" => "error", "message" => "Gagal upload file {$fieldName}"];
+        return ['status' => 'error', 'message' => "Gagal upload file {$fieldName}"];
     }
 
-    return ["status" => "success", "filename" => $filename];
+    return ['status' => 'success', 'filename' => $filename];
+}
+
+function jsonResponse(string $status, string $message): void
+{
+    header('Content-Type: application/json');
+    echo json_encode([
+        'status' => $status,
+        'message' => $message
+    ]);
+    exit;
 }
 
 function jsonError(string $message): void
 {
-    echo json_encode([
-        "status" => "error",
-        "message" => $message
-    ]);
-    exit;
+    jsonResponse('error', $message);
 }
 
 function jsonSuccess(string $message): void
 {
-    echo json_encode([
-        "status" => "success",
-        "message" => $message
-    ]);
-    exit;
+    jsonResponse('success', $message);
 }
 
 function getBarangById(mysqli $koneksi, int $id): ?array
@@ -82,8 +86,18 @@ function getLastPengiriman(mysqli $koneksi, int $idBarang): ?array
 {
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT * FROM barang_pengiriman WHERE id_barang = ? ORDER BY id_pengiriman DESC LIMIT 1"
+        "SELECT
+            bp.*,
+            asal.nama_branch AS nama_branch_asal,
+            tujuan.nama_branch AS nama_branch_tujuan
+         FROM barang_pengiriman bp
+         LEFT JOIN tb_branch asal ON bp.branch_asal = asal.id_branch
+         LEFT JOIN tb_branch tujuan ON bp.branch_tujuan = tujuan.id_branch
+         WHERE bp.id_barang = ?
+         ORDER BY bp.id_pengiriman DESC
+         LIMIT 1"
     );
+
     mysqli_stmt_bind_param($stmt, 'i', $idBarang);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
@@ -93,7 +107,118 @@ function getLastPengiriman(mysqli $koneksi, int $idBarang): ?array
     return $row;
 }
 
+function getSelectOptions(mysqli $koneksi, string $sql): array
+{
+    $rows = [];
+    $query = mysqli_query($koneksi, $sql);
+
+    if (!$query) {
+        return $rows;
+    }
+
+    while ($row = mysqli_fetch_assoc($query)) {
+        $rows[] = $row;
+    }
+
+    return $rows;
+}
+
+function ensureBarangAccess(array $barang, ?array $pengirimanTerakhir): void
+{
+    if (is_admin()) {
+        return;
+    }
+
+    $myBranchId = (int) current_user_branch_id();
+    $barangBranchId = (int) ($barang['id_branch'] ?? 0);
+    $branchTujuan = (int) ($pengirimanTerakhir['branch_tujuan'] ?? 0);
+    $statusPengiriman = (string) ($pengirimanTerakhir['status_pengiriman'] ?? '');
+
+    $sedangDikirim = !empty($pengirimanTerakhir) && $statusPengiriman !== STATUS_SUDAH_DITERIMA;
+
+    if ($barangBranchId === $myBranchId) {
+        return;
+    }
+
+    if ($sedangDikirim && $branchTujuan === $myBranchId) {
+        return;
+    }
+
+    http_response_code(403);
+    exit('Anda tidak boleh mengakses barang cabang lain.');
+}
+
+function isSedangDikirim(?array $pengirimanTerakhir): bool
+{
+    if (empty($pengirimanTerakhir)) {
+        return false;
+    }
+
+    return (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') !== STATUS_SUDAH_DITERIMA;
+}
+
+function isSudahDiterima(?array $pengirimanTerakhir): bool
+{
+    if (empty($pengirimanTerakhir)) {
+        return false;
+    }
+
+    return (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') === STATUS_SUDAH_DITERIMA;
+}
+
+function ensureUserCanReceive(?array $pengirimanTerakhir): void
+{
+    if (is_admin()) {
+        return;
+    }
+
+    $myBranchId = (int) current_user_branch_id();
+    $branchTujuan = (int) ($pengirimanTerakhir['branch_tujuan'] ?? 0);
+
+    if (!$pengirimanTerakhir || !isSedangDikirim($pengirimanTerakhir) || $branchTujuan !== $myBranchId) {
+        http_response_code(403);
+        exit('User cabang hanya boleh konfirmasi penerimaan barang untuk branch-nya sendiri.');
+    }
+}
+
+function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, string $serialNumber): ?string
+{
+    $stmt = mysqli_prepare(
+        $koneksi,
+        "SELECT id, no_asset, serial_number
+         FROM barang
+         WHERE (no_asset = ? OR serial_number = ?)
+           AND id != ?
+         LIMIT 1"
+    );
+
+    mysqli_stmt_bind_param($stmt, 'ssi', $noAsset, $serialNumber, $id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $duplikat = mysqli_fetch_assoc($result) ?: null;
+    mysqli_stmt_close($stmt);
+
+    if (!$duplikat) {
+        return null;
+    }
+
+    if (($duplikat['no_asset'] ?? '') === $noAsset && ($duplikat['serial_number'] ?? '') === $serialNumber) {
+        return "No Asset dan Serial Number sudah digunakan oleh data lain.";
+    }
+
+    if (($duplikat['no_asset'] ?? '') === $noAsset) {
+        return "No Asset sudah digunakan oleh data lain.";
+    }
+
+    if (($duplikat['serial_number'] ?? '') === $serialNumber) {
+        return "Serial Number sudah digunakan oleh data lain.";
+    }
+
+    return "Data sudah digunakan oleh barang lain.";
+}
+
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+
 if ($id <= 0) {
     exit('ID tidak valid.');
 }
@@ -104,35 +229,41 @@ if (!$barang) {
 }
 
 $pengirimanTerakhir = getLastPengiriman($koneksi, $id);
+ensureBarangAccess($barang, $pengirimanTerakhir);
 
 $pernahDikirim = !empty($pengirimanTerakhir);
-$sudahDiterima = $pernahDikirim && (($pengirimanTerakhir['status_pengiriman'] ?? '') === 'Sudah diterima');
-$sedangDikirim = $pernahDikirim && !$sudahDiterima;
+$sudahDiterima = isSudahDiterima($pengirimanTerakhir);
+$sedangDikirim = isSedangDikirim($pengirimanTerakhir);
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    if ($sedangDikirim) {
-        require_permission($koneksi, 'barang.kirim');
-    } elseif (!$pernahDikirim) {
-        require_permission($koneksi, 'barang.update');
+    if (is_admin()) {
+        if ($sedangDikirim) {
+            require_permission($koneksi, 'barang.kirim');
+        } elseif (!$pernahDikirim) {
+            require_permission($koneksi, 'barang.update');
+        } else {
+            require_permission($koneksi, 'barang.view');
+        }
     } else {
-        require_permission($koneksi, 'barang.view');
+        ensureUserCanReceive($pengirimanTerakhir);
+        require_permission($koneksi, 'barang.kirim');
     }
 
-    $merkQuery   = mysqli_query($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
-    $tipeQuery   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
-    $jenisQuery  = mysqli_query($koneksi, "SELECT * FROM tb_jenis ORDER BY nama_jenis ASC");
-    $branchQuery = mysqli_query($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
-    $tujuanQuery = mysqli_query($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
+    $merkOptions = getSelectOptions($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
+    $tipeOptions = getSelectOptions($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
+    $jenisOptions = getSelectOptions($koneksi, "SELECT * FROM tb_jenis ORDER BY nama_jenis ASC");
+    $branchOptions = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
+    $tujuanOptions = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
 
     $statusPengirimanBaruOptions = [
-        'Sedang dikemas',
-        'Sedang perjalanan'
+        STATUS_SEDANG_DIKEMAS,
+        STATUS_SEDANG_PERJALANAN,
     ];
 
     $statusPenerimaanOptions = [
-        'Sedang dikemas',
-        'Sedang perjalanan',
-        'Sudah diterima'
+        STATUS_SEDANG_DIKEMAS,
+        STATUS_SEDANG_PERJALANAN,
+        STATUS_SUDAH_DITERIMA,
     ];
     ?>
     <form id="formUpdate" enctype="multipart/form-data">
@@ -197,44 +328,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <div class="col-md-6">
                             <label class="form-label">Merk</label>
                             <select name="id_merk" class="form-control select2">
-                                <?php while ($m = mysqli_fetch_assoc($merkQuery)): ?>
+                                <?php foreach ($merkOptions as $m): ?>
                                     <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>>
                                         <?= h($m['nama_merk']) ?>
                                     </option>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label">Tipe</label>
                             <select name="id_tipe" class="form-control select2">
-                                <?php while ($t = mysqli_fetch_assoc($tipeQuery)): ?>
+                                <?php foreach ($tipeOptions as $t): ?>
                                     <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>>
                                         <?= h($t['nama_tipe']) ?>
                                     </option>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label">Jenis</label>
                             <select name="id_jenis" class="form-control select2">
-                                <?php while ($j = mysqli_fetch_assoc($jenisQuery)): ?>
+                                <?php foreach ($jenisOptions as $j): ?>
                                     <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>>
                                         <?= h($j['nama_jenis']) ?>
                                     </option>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label">Branch</label>
                             <select name="id_branch" class="form-control select2">
-                                <?php while ($b = mysqli_fetch_assoc($branchQuery)): ?>
+                                <?php foreach ($branchOptions as $b): ?>
                                     <option value="<?= (int) $b['id_branch'] ?>" <?= (int) $b['id_branch'] === (int) $barang['id_branch'] ? 'selected' : '' ?>>
                                         <?= h($b['nama_branch']) ?>
                                     </option>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
@@ -294,9 +425,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             <label class="form-label">Tujuan</label>
                             <select name="tujuan" class="form-control select2">
                                 <option value="">-- Pilih Tujuan --</option>
-                                <?php while ($bt = mysqli_fetch_assoc($tujuanQuery)): ?>
+                                <?php foreach ($tujuanOptions as $bt): ?>
                                     <option value="<?= (int) $bt['id_branch'] ?>"><?= h($bt['nama_branch']) ?></option>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
@@ -342,7 +473,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             <div class="alert alert-light border mb-2">
                                 <b>Ringkasan Pengiriman</b><br>
                                 Tanggal Keluar: <?= h($pengirimanTerakhir['tanggal_keluar'] ?? '-') ?><br>
-                                Tujuan: <?= h($pengirimanTerakhir['branch_tujuan'] ?? '-') ?><br>
+                                Tujuan: <?= h($pengirimanTerakhir['nama_branch_tujuan'] ?? '-') ?><br>
                                 Status Saat Ini: <?= h($pengirimanTerakhir['status_pengiriman'] ?? '-') ?><br>
                                 Resi Keluar: <?= h($pengirimanTerakhir['nomor_resi_keluar'] ?? '-') ?>
                             </div>
@@ -371,7 +502,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                         <div class="col-md-6">
                             <label class="form-label">Nomor Resi Masuk</label>
-                            <input type="text" name="nomor_resi_masuk" class="form-control" placeholder="Masukkan nomor resi masuk" value="<?= h($pengirimanTerakhir['nomor_resi_masuk'] ?? '') ?>">
+                            <input
+                                type="text"
+                                name="nomor_resi_masuk"
+                                class="form-control"
+                                readonly
+                                value="<?= h($pengirimanTerakhir['nomor_resi_masuk'] ?? ($pengirimanTerakhir['nomor_resi_keluar'] ?? '')) ?>">
+                            <small class="text-muted">Otomatis mengikuti nomor resi keluar.</small>
                         </div>
 
                         <div class="col-md-6">
@@ -454,18 +591,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     exit;
 }
 
-header('Content-Type: application/json');
-
 $barang = getBarangById($koneksi, $id);
 if (!$barang) {
     jsonError("Data barang tidak ditemukan.");
 }
 
 $pengirimanTerakhir = getLastPengiriman($koneksi, $id);
+ensureBarangAccess($barang, $pengirimanTerakhir);
 
 $pernahDikirim = !empty($pengirimanTerakhir);
-$sudahDiterima = $pernahDikirim && (($pengirimanTerakhir['status_pengiriman'] ?? '') === 'Sudah diterima');
-$sedangDikirim = $pernahDikirim && !$sudahDiterima;
+$sudahDiterima = isSudahDiterima($pengirimanTerakhir);
+$sedangDikirim = isSedangDikirim($pengirimanTerakhir);
 
 if ($sudahDiterima) {
     jsonError("Barang yang sudah diterima tidak bisa diubah lagi.");
@@ -474,24 +610,36 @@ if ($sudahDiterima) {
 if ($sedangDikirim) {
     require_permission($koneksi, 'barang.kirim');
 
-    $status_penerimaan = trim((string) ($_POST['status_penerimaan'] ?? ($pengirimanTerakhir['status_pengiriman'] ?? 'Sedang perjalanan')));
-    $allowedStatusPenerimaan = ['Sedang dikemas', 'Sedang perjalanan', 'Sudah diterima'];
-
-    if (!in_array($status_penerimaan, $allowedStatusPenerimaan, true)) {
-        $status_penerimaan = $pengirimanTerakhir['status_pengiriman'] ?? 'Sedang perjalanan';
+    if (!is_admin()) {
+        ensureUserCanReceive($pengirimanTerakhir);
     }
 
-    $tanggal_diterima   = esc($koneksi, $_POST['tanggal_diterima'] ?? '');
-    $nama_penerima      = esc($koneksi, $_POST['nama_penerima'] ?? '');
-    $nomor_resi_masuk   = esc($koneksi, $_POST['nomor_resi_masuk'] ?? '');
-    $catatan_penerimaan = esc($koneksi, $_POST['catatan_penerimaan'] ?? '');
+    $allowedStatusPenerimaan = [
+        STATUS_SEDANG_DIKEMAS,
+        STATUS_SEDANG_PERJALANAN,
+        STATUS_SUDAH_DITERIMA,
+    ];
 
-    if ($status_penerimaan === 'Sudah diterima') {
-        if ($tanggal_diterima === '') {
+    $statusPenerimaan = trim((string) ($_POST['status_penerimaan'] ?? ($pengirimanTerakhir['status_pengiriman'] ?? STATUS_SEDANG_PERJALANAN)));
+    if (!in_array($statusPenerimaan, $allowedStatusPenerimaan, true)) {
+        $statusPenerimaan = (string) ($pengirimanTerakhir['status_pengiriman'] ?? STATUS_SEDANG_PERJALANAN);
+    }
+
+    $tanggalDiterima = normalizeNullableString($_POST['tanggal_diterima'] ?? '');
+    $namaPenerima = normalizeNullableString($_POST['nama_penerima'] ?? '');
+    $nomorResiMasuk = normalizeNullableString($_POST['nomor_resi_masuk'] ?? ($pengirimanTerakhir['nomor_resi_keluar'] ?? ''));
+    $catatanPenerimaan = normalizeNullableString($_POST['catatan_penerimaan'] ?? '');
+
+    if ($nomorResiMasuk === null) {
+        $nomorResiMasuk = (string) ($pengirimanTerakhir['nomor_resi_keluar'] ?? '');
+    }
+
+    if ($statusPenerimaan === STATUS_SUDAH_DITERIMA) {
+        if ($tanggalDiterima === null) {
             jsonError("Tanggal diterima wajib diisi jika status sudah diterima.");
         }
 
-        if ($nama_penerima === '') {
+        if ($namaPenerima === null) {
             jsonError("Nama penerima wajib diisi jika status sudah diterima.");
         }
     }
@@ -500,53 +648,69 @@ if ($sedangDikirim) {
     if ($uploadFotoResiMasuk['status'] === 'error') {
         jsonError($uploadFotoResiMasuk['message']);
     }
-    $fotoResiMasukBaru = $uploadFotoResiMasuk['status'] === 'success' ? $uploadFotoResiMasuk['filename'] : '';
 
-    $id_status_barang = (($barang['bermasalah'] ?? '') === 'Iya') ? 5 : 3;
-    $id_branch_final = (int) $barang['id_branch'];
+    $fotoResiMasukBaru = $uploadFotoResiMasuk['status'] === 'success' ? $uploadFotoResiMasuk['filename'] : null;
 
-    if ($status_penerimaan === 'Sudah diterima') {
-        $id_status_barang = (($barang['bermasalah'] ?? '') === 'Iya') ? 5 : 4;
+    $idStatusBarang = (($barang['bermasalah'] ?? '') === 'Iya') ? 5 : 3;
+    $idBranchFinal = (int) $barang['id_branch'];
+
+    if ($statusPenerimaan === STATUS_SUDAH_DITERIMA) {
+        $idStatusBarang = (($barang['bermasalah'] ?? '') === 'Iya') ? 5 : 4;
+
         if ((int) ($pengirimanTerakhir['branch_tujuan'] ?? 0) > 0) {
-            $id_branch_final = (int) $pengirimanTerakhir['branch_tujuan'];
+            $idBranchFinal = (int) $pengirimanTerakhir['branch_tujuan'];
         }
     }
 
     mysqli_begin_transaction($koneksi);
 
     try {
-        $queryLogistik = "
-            UPDATE barang_pengiriman SET
-                status_pengiriman = '$status_penerimaan',
-                tanggal_diterima = " . sqlNullable($tanggal_diterima) . ",
-                nama_penerima = " . sqlNullable($nama_penerima) . ",
-                nomor_resi_masuk = " . sqlNullable($nomor_resi_masuk) . ",
-                catatan_penerimaan = " . sqlNullable($catatan_penerimaan);
+        $stmtUpdatePengiriman = mysqli_prepare(
+            $koneksi,
+            "UPDATE barang_pengiriman
+             SET status_pengiriman = ?,
+                 tanggal_diterima = ?,
+                 nama_penerima = ?,
+                 nomor_resi_masuk = ?,
+                 foto_resi_masuk = COALESCE(?, foto_resi_masuk),
+                 catatan_penerimaan = ?
+             WHERE id_pengiriman = ?"
+        );
 
-        if ($fotoResiMasukBaru !== '') {
-            $queryLogistik .= ", foto_resi_masuk = '$fotoResiMasukBaru'";
+        $idPengiriman = (int) $pengirimanTerakhir['id_pengiriman'];
+        mysqli_stmt_bind_param(
+            $stmtUpdatePengiriman,
+            'ssssssi',
+            $statusPenerimaan,
+            $tanggalDiterima,
+            $namaPenerima,
+            $nomorResiMasuk,
+            $fotoResiMasukBaru,
+            $catatanPenerimaan,
+            $idPengiriman
+        );
+
+        if (!mysqli_stmt_execute($stmtUpdatePengiriman)) {
+            throw new Exception("Update logistik penerimaan gagal: " . mysqli_stmt_error($stmtUpdatePengiriman));
         }
+        mysqli_stmt_close($stmtUpdatePengiriman);
 
-        $queryLogistik .= " WHERE id_pengiriman = '" . (int) $pengirimanTerakhir['id_pengiriman'] . "'";
+        $stmtUpdateBarang = mysqli_prepare(
+            $koneksi,
+            "UPDATE barang
+             SET id_status = ?, id_branch = ?
+             WHERE id = ?"
+        );
 
-        if (!mysqli_query($koneksi, $queryLogistik)) {
-            throw new Exception("Update logistik penerimaan gagal: " . mysqli_error($koneksi));
+        mysqli_stmt_bind_param($stmtUpdateBarang, 'iii', $idStatusBarang, $idBranchFinal, $id);
+        if (!mysqli_stmt_execute($stmtUpdateBarang)) {
+            throw new Exception("Update status barang gagal: " . mysqli_stmt_error($stmtUpdateBarang));
         }
-
-        $queryBarang = "
-            UPDATE barang SET
-                id_status = '$id_status_barang',
-                id_branch = '$id_branch_final'
-            WHERE id = '$id'
-        ";
-
-        if (!mysqli_query($koneksi, $queryBarang)) {
-            throw new Exception("Update status barang gagal: " . mysqli_error($koneksi));
-        }
+        mysqli_stmt_close($stmtUpdateBarang);
 
         mysqli_commit($koneksi);
 
-        if ($status_penerimaan === 'Sudah diterima') {
+        if ($statusPenerimaan === STATUS_SUDAH_DITERIMA) {
             jsonSuccess("Penerimaan barang berhasil disimpan. Barang sudah diterima dan sekarang terkunci total.");
         }
 
@@ -557,39 +721,47 @@ if ($sedangDikirim) {
     }
 }
 
+if (is_user_role()) {
+    jsonError("User cabang tidak boleh mengubah data master barang dari halaman ini.");
+}
+
 require_permission($koneksi, 'barang.update');
 
-$no_asset      = esc($koneksi, $_POST['no_asset'] ?? '');
-$serial        = esc($koneksi, $_POST['serial_number'] ?? '');
-$id_merk       = (int) ($_POST['id_merk'] ?? 0);
-$id_tipe       = (int) ($_POST['id_tipe'] ?? 0);
-$id_jenis      = (int) ($_POST['id_jenis'] ?? 0);
-$id_branch     = (int) ($_POST['id_branch'] ?? 0);
-$user          = esc($koneksi, $_POST['user'] ?? '');
-$bermasalah    = esc($koneksi, $_POST['bermasalah'] ?? 'Tidak');
-$ket           = esc($koneksi, $_POST['keterangan_masalah'] ?? '');
-$tanggal_masuk = esc($koneksi, $_POST['tanggal_masuk'] ?? '');
+$noAsset = trim((string) ($_POST['no_asset'] ?? ''));
+$serialNumber = trim((string) ($_POST['serial_number'] ?? ''));
+$idMerk = (int) ($_POST['id_merk'] ?? 0);
+$idTipe = (int) ($_POST['id_tipe'] ?? 0);
+$idJenis = (int) ($_POST['id_jenis'] ?? 0);
+$idBranch = (int) ($_POST['id_branch'] ?? 0);
+$userBarang = trim((string) ($_POST['user'] ?? ''));
+$bermasalah = trim((string) ($_POST['bermasalah'] ?? 'Tidak'));
+$keteranganMasalah = normalizeNullableString($_POST['keterangan_masalah'] ?? '');
+$tanggalMasuk = normalizeNullableString($_POST['tanggal_masuk'] ?? '');
 
-$tanggal_keluar      = esc($koneksi, $_POST['tanggal_keluar'] ?? '');
-$tujuan              = (isset($_POST['tujuan']) && $_POST['tujuan'] !== '') ? (int) $_POST['tujuan'] : 0;
-$jasa_pengiriman     = esc($koneksi, $_POST['jasa_pengiriman'] ?? '');
-$nomor_resi          = esc($koneksi, $_POST['nomor_resi'] ?? '');
-$estimasi_pengiriman = esc($koneksi, $_POST['estimasi_pengiriman'] ?? '');
-$catatan_pengiriman  = esc($koneksi, $_POST['catatan_pengiriman'] ?? '');
-$status_pengiriman_baru = trim((string) ($_POST['status_pengiriman_baru'] ?? 'Sedang dikemas'));
+$tanggalKeluar = normalizeNullableString($_POST['tanggal_keluar'] ?? '');
+$tujuan = isset($_POST['tujuan']) && trim((string) $_POST['tujuan']) !== '' ? (int) $_POST['tujuan'] : 0;
+$jasaPengiriman = normalizeNullableString($_POST['jasa_pengiriman'] ?? '');
+$nomorResiKeluar = normalizeNullableString($_POST['nomor_resi'] ?? '');
+$estimasiPengiriman = normalizeNullableString($_POST['estimasi_pengiriman'] ?? '');
+$catatanPengiriman = normalizeNullableString($_POST['catatan_pengiriman'] ?? '');
+$statusPengirimanBaru = trim((string) ($_POST['status_pengiriman_baru'] ?? STATUS_SEDANG_DIKEMAS));
 
-$allowedStatusBaru = ['Sedang dikemas', 'Sedang perjalanan'];
-if (!in_array($status_pengiriman_baru, $allowedStatusBaru, true)) {
-    $status_pengiriman_baru = 'Sedang dikemas';
+$allowedStatusBaru = [
+    STATUS_SEDANG_DIKEMAS,
+    STATUS_SEDANG_PERJALANAN,
+];
+
+if (!in_array($statusPengirimanBaru, $allowedStatusBaru, true)) {
+    $statusPengirimanBaru = STATUS_SEDANG_DIKEMAS;
 }
 
 $adaInputPengirimanBaru = (
-    $tanggal_keluar !== '' ||
+    $tanggalKeluar !== null ||
     $tujuan > 0 ||
-    $jasa_pengiriman !== '' ||
-    $nomor_resi !== '' ||
-    $estimasi_pengiriman !== '' ||
-    $catatan_pengiriman !== '' ||
+    $jasaPengiriman !== null ||
+    $nomorResiKeluar !== null ||
+    $estimasiPengiriman !== null ||
+    $catatanPengiriman !== null ||
     (isset($_FILES['foto_resi']) && !empty($_FILES['foto_resi']['name']))
 );
 
@@ -597,43 +769,25 @@ if ($adaInputPengirimanBaru) {
     require_permission($koneksi, 'barang.kirim');
 }
 
-if ($no_asset === '' || $serial === '') {
+if ($noAsset === '' || $serialNumber === '') {
     jsonError("No Asset dan Serial Number wajib diisi.");
 }
 
-$cekDuplikat = mysqli_query(
-    $koneksi,
-    "SELECT id, no_asset, serial_number
-     FROM barang
-     WHERE (no_asset = '$no_asset' OR serial_number = '$serial')
-     AND id != '$id'"
-);
-
-if (!$cekDuplikat) {
-    jsonError("Gagal cek data duplikat: " . mysqli_error($koneksi));
+if ($idMerk <= 0 || $idTipe <= 0 || $idJenis <= 0 || $idBranch <= 0) {
+    jsonError("Merk, tipe, jenis, dan branch wajib dipilih.");
 }
 
-if (mysqli_num_rows($cekDuplikat) > 0) {
-    $duplikat = mysqli_fetch_assoc($cekDuplikat);
-    $pesan = "Data sudah digunakan oleh barang lain.";
-
-    if (($duplikat['no_asset'] ?? '') === $no_asset && ($duplikat['serial_number'] ?? '') === $serial) {
-        $pesan = "No Asset dan Serial Number sudah digunakan oleh data lain.";
-    } elseif (($duplikat['no_asset'] ?? '') === $no_asset) {
-        $pesan = "No Asset sudah digunakan oleh data lain.";
-    } elseif (($duplikat['serial_number'] ?? '') === $serial) {
-        $pesan = "Serial Number sudah digunakan oleh data lain.";
-    }
-
-    jsonError($pesan);
+$duplicateMessage = validateDuplicateBarang($koneksi, $id, $noAsset, $serialNumber);
+if ($duplicateMessage !== null) {
+    jsonError($duplicateMessage);
 }
 
 if ($bermasalah === 'Iya' && $adaInputPengirimanBaru) {
-    jsonError("Barang bermasalah tidak boleh dikirim.");
+    jsonError("Barang bermasalah tidak boleh dikirim dari form ini.");
 }
 
 if ($adaInputPengirimanBaru) {
-    if ($tanggal_keluar === '') {
+    if ($tanggalKeluar === null) {
         jsonError("Tanggal keluar wajib diisi saat membuat pengiriman.");
     }
 
@@ -646,56 +800,80 @@ $uploadFotoBarang = uploadImage('foto');
 if ($uploadFotoBarang['status'] === 'error') {
     jsonError($uploadFotoBarang['message']);
 }
-$fotoBarangBaru = $uploadFotoBarang['status'] === 'success' ? $uploadFotoBarang['filename'] : '';
+$fotoBarangBaru = $uploadFotoBarang['status'] === 'success' ? $uploadFotoBarang['filename'] : null;
 
 $uploadFotoResiKeluar = uploadImage('foto_resi');
 if ($uploadFotoResiKeluar['status'] === 'error') {
     jsonError($uploadFotoResiKeluar['message']);
 }
-$fotoResiKeluarBaru = $uploadFotoResiKeluar['status'] === 'success' ? $uploadFotoResiKeluar['filename'] : '';
+$fotoResiKeluarBaru = $uploadFotoResiKeluar['status'] === 'success' ? $uploadFotoResiKeluar['filename'] : null;
 
-$id_status_barang = 4;
-$id_branch_final = $id_branch;
+$idStatusBarang = 4;
+$idBranchFinal = $idBranch;
 
 if ($bermasalah === 'Iya') {
-    $id_status_barang = 5;
+    $idStatusBarang = 5;
 } elseif ($adaInputPengirimanBaru) {
-    $id_status_barang = 3;
-    $id_branch_final = (int) $barang['id_branch'];
+    $idStatusBarang = 3;
+    $idBranchFinal = (int) $barang['id_branch'];
 }
 
 mysqli_begin_transaction($koneksi);
 
 try {
-    $queryBarang = "
-        UPDATE barang SET
-            no_asset = '$no_asset',
-            serial_number = '$serial',
-            id_merk = '$id_merk',
-            id_tipe = '$id_tipe',
-            id_jenis = '$id_jenis',
-            id_status = '$id_status_barang',
-            id_branch = '$id_branch_final',
-            `user` = '$user',
-            bermasalah = '$bermasalah',
-            keterangan_masalah = " . sqlNullable($ket) . ",
-            tanggal_masuk = " . sqlNullable($tanggal_masuk);
+    $stmtUpdateBarang = mysqli_prepare(
+        $koneksi,
+        "UPDATE barang
+         SET no_asset = ?,
+             serial_number = ?,
+             id_merk = ?,
+             id_tipe = ?,
+             id_jenis = ?,
+             id_status = ?,
+             id_branch = ?,
+             `user` = ?,
+             bermasalah = ?,
+             keterangan_masalah = ?,
+             tanggal_masuk = ?,
+             foto = COALESCE(?, foto)
+         WHERE id = ?"
+    );
 
-    if ($fotoBarangBaru !== '') {
-        $queryBarang .= ", foto = '$fotoBarangBaru'";
+    mysqli_stmt_bind_param(
+        $stmtUpdateBarang,
+        'ssiiiiisssssi',
+        $noAsset,
+        $serialNumber,
+        $idMerk,
+        $idTipe,
+        $idJenis,
+        $idStatusBarang,
+        $idBranchFinal,
+        $userBarang,
+        $bermasalah,
+        $keteranganMasalah,
+        $tanggalMasuk,
+        $fotoBarangBaru,
+        $id
+    );
+
+    if (!mysqli_stmt_execute($stmtUpdateBarang)) {
+        throw new Exception("Update barang gagal: " . mysqli_stmt_error($stmtUpdateBarang));
     }
-
-    $queryBarang .= " WHERE id = '$id'";
-
-    if (!mysqli_query($koneksi, $queryBarang)) {
-        throw new Exception("Update barang gagal: " . mysqli_error($koneksi));
-    }
+    mysqli_stmt_close($stmtUpdateBarang);
 
     if ($adaInputPengirimanBaru) {
-        $branch_asal_transaksi = (int) $barang['id_branch'];
+        $branchAsalTransaksi = (int) $barang['id_branch'];
+        $tanggalDiterimaNull = null;
+        $namaPenerimaNull = null;
+        $nomorResiMasukNull = null;
+        $fotoResiMasukNull = null;
+        $catatanPenerimaanNull = null;
+        $dibuatOleh = (int) current_user_id();
 
-        $queryLogistik = "
-            INSERT INTO barang_pengiriman (
+        $stmtInsertPengiriman = mysqli_prepare(
+            $koneksi,
+            "INSERT INTO barang_pengiriman (
                 id_barang,
                 branch_asal,
                 branch_tujuan,
@@ -712,29 +890,34 @@ try {
                 foto_resi_masuk,
                 catatan_penerimaan,
                 dibuat_oleh
-            ) VALUES (
-                '$id',
-                '$branch_asal_transaksi',
-                '$tujuan',
-                " . sqlNullable($tanggal_keluar) . ",
-                " . sqlNullable($jasa_pengiriman) . ",
-                " . sqlNullable($nomor_resi) . ",
-                " . ($fotoResiKeluarBaru !== '' ? "'$fotoResiKeluarBaru'" : "NULL") . ",
-                " . sqlNullable($estimasi_pengiriman) . ",
-                " . sqlNullable($catatan_pengiriman) . ",
-                '$status_pengiriman_baru',
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                NULL
-            )
-        ";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
 
-        if (!mysqli_query($koneksi, $queryLogistik)) {
-            throw new Exception("Simpan pengiriman baru gagal: " . mysqli_error($koneksi));
+        mysqli_stmt_bind_param(
+            $stmtInsertPengiriman,
+            'iiissssssssssssi',
+            $id,
+            $branchAsalTransaksi,
+            $tujuan,
+            $tanggalKeluar,
+            $jasaPengiriman,
+            $nomorResiKeluar,
+            $fotoResiKeluarBaru,
+            $estimasiPengiriman,
+            $catatanPengiriman,
+            $statusPengirimanBaru,
+            $tanggalDiterimaNull,
+            $namaPenerimaNull,
+            $nomorResiMasukNull,
+            $fotoResiMasukNull,
+            $catatanPenerimaanNull,
+            $dibuatOleh
+        );
+
+        if (!mysqli_stmt_execute($stmtInsertPengiriman)) {
+            throw new Exception("Simpan pengiriman baru gagal: " . mysqli_stmt_error($stmtInsertPengiriman));
         }
+        mysqli_stmt_close($stmtInsertPengiriman);
     }
 
     mysqli_commit($koneksi);

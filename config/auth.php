@@ -1,4 +1,5 @@
 <?php
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -28,11 +29,7 @@ if (!function_exists('h')) {
 if (!function_exists('e')) {
     function e($value): string
     {
-        if (is_array($value) || is_object($value)) {
-            return '';
-        }
-
-        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+        return h($value);
     }
 }
 
@@ -83,17 +80,17 @@ if (!function_exists('current_user')) {
     }
 }
 
-if (!function_exists('current_user_branch_id')) {
-    function current_user_branch_id(): ?int
-    {
-        return isset($_SESSION['user']['id_branch']) ? (int) $_SESSION['user']['id_branch'] : null;
-    }
-}
-
 if (!function_exists('current_user_id')) {
     function current_user_id(): ?int
     {
         return isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null;
+    }
+}
+
+if (!function_exists('current_user_branch_id')) {
+    function current_user_branch_id(): ?int
+    {
+        return isset($_SESSION['user']['id_branch']) ? (int) $_SESSION['user']['id_branch'] : null;
     }
 }
 
@@ -104,10 +101,24 @@ if (!function_exists('current_role')) {
     }
 }
 
-if (!function_exists('is_super_admin')) {
-    function is_super_admin(): bool
+if (!function_exists('current_permissions')) {
+    function current_permissions(): array
     {
-        return current_role() === 'super_admin';
+        return $_SESSION['user']['permissions'] ?? [];
+    }
+}
+
+if (!function_exists('is_admin')) {
+    function is_admin(): bool
+    {
+        return current_role() === 'admin';
+    }
+}
+
+if (!function_exists('is_user_role')) {
+    function is_user_role(): bool
+    {
+        return current_role() === 'user';
     }
 }
 
@@ -121,6 +132,27 @@ if (!function_exists('require_login')) {
     }
 }
 
+if (!function_exists('forbidden_response')) {
+    function forbidden_response(string $message = 'Anda tidak memiliki izin untuk mengakses halaman ini.'): void
+    {
+        http_response_code(403);
+        echo "<h1>403 Forbidden</h1>";
+        echo "<p>" . h($message) . "</p>";
+        exit;
+    }
+}
+
+if (!function_exists('require_admin')) {
+    function require_admin(): void
+    {
+        require_login();
+
+        if (!is_admin()) {
+            forbidden_response('Halaman ini hanya untuk Administrator.');
+        }
+    }
+}
+
 if (!function_exists('logout_user')) {
     function logout_user(): void
     {
@@ -128,14 +160,15 @@ if (!function_exists('logout_user')) {
 
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
+
             setcookie(
                 session_name(),
                 '',
                 time() - 42000,
                 $params['path'],
                 $params['domain'],
-                $params['secure'],
-                $params['httponly']
+                (bool) $params['secure'],
+                (bool) $params['httponly']
             );
         }
 
@@ -154,6 +187,10 @@ if (!function_exists('find_user_by_login')) {
         ";
 
         $stmt = mysqli_prepare($koneksi, $sql);
+        if (!$stmt) {
+            return null;
+        }
+
         mysqli_stmt_bind_param($stmt, 'ss', $login, $login);
         mysqli_stmt_execute($stmt);
 
@@ -171,19 +208,28 @@ if (!function_exists('verify_password_and_upgrade')) {
     {
         $storedPassword = (string) ($user['password'] ?? '');
 
+        if ($storedPassword === '') {
+            return false;
+        }
+
         $info = password_get_info($storedPassword);
+
         if (!empty($info['algo'])) {
             return password_verify($password, $storedPassword);
         }
 
         if (hash_equals($storedPassword, $password)) {
             $newHash = password_hash($password, PASSWORD_DEFAULT);
-            $id = (int) $user['id'];
+            $userId = (int) ($user['id'] ?? 0);
 
-            $stmt = mysqli_prepare($koneksi, "UPDATE users SET password = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'si', $newHash, $id);
-            mysqli_stmt_execute($stmt);
-            mysqli_stmt_close($stmt);
+            if ($userId > 0) {
+                $stmt = mysqli_prepare($koneksi, "UPDATE users SET password = ? WHERE id = ?");
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, 'si', $newHash, $userId);
+                    mysqli_stmt_execute($stmt);
+                    mysqli_stmt_close($stmt);
+                }
+            }
 
             return true;
         }
@@ -192,113 +238,16 @@ if (!function_exists('verify_password_and_upgrade')) {
     }
 }
 
-if (!function_exists('get_all_permissions')) {
-    function get_all_permissions(mysqli $koneksi): array
-    {
-        $permissions = [];
-        $result = mysqli_query($koneksi, "SELECT permission_key FROM rbac_permissions");
-
-        while ($row = mysqli_fetch_assoc($result)) {
-            $permissions[] = $row['permission_key'];
-        }
-
-        return array_values(array_unique($permissions));
-    }
-}
-
-if (!function_exists('get_user_permissions')) {
-    function get_user_permissions(mysqli $koneksi, int $userId, string $role): array
-    {
-        if ($role === 'super_admin') {
-            return ['*'];
-        }
-
-        $finalPermissions = [];
-
-        // 1. Permission bawaan dari role
-        $sqlRole = "
-            SELECT p.id, p.permission_key
-            FROM rbac_role_permissions rp
-            INNER JOIN rbac_permissions p ON rp.permission_id = p.id
-            WHERE rp.role = ?
-        ";
-        $stmtRole = mysqli_prepare($koneksi, $sqlRole);
-        mysqli_stmt_bind_param($stmtRole, 's', $role);
-        mysqli_stmt_execute($stmtRole);
-
-        $resultRole = mysqli_stmt_get_result($stmtRole);
-        while ($row = mysqli_fetch_assoc($resultRole)) {
-            $finalPermissions[(int)$row['id']] = $row['permission_key'];
-        }
-        mysqli_stmt_close($stmtRole);
-
-        // 2. Tambahan permission khusus user
-        $sqlAllow = "
-            SELECT p.id, p.permission_key
-            FROM rbac_user_permissions up
-            INNER JOIN rbac_permissions p ON up.permission_id = p.id
-            WHERE up.user_id = ?
-        ";
-        $stmtAllow = mysqli_prepare($koneksi, $sqlAllow);
-        mysqli_stmt_bind_param($stmtAllow, 'i', $userId);
-        mysqli_stmt_execute($stmtAllow);
-
-        $resultAllow = mysqli_stmt_get_result($stmtAllow);
-        while ($row = mysqli_fetch_assoc($resultAllow)) {
-            $finalPermissions[(int)$row['id']] = $row['permission_key'];
-        }
-        mysqli_stmt_close($stmtAllow);
-
-        // 3. Permission yang dicabut khusus user
-        $sqlDeny = "
-            SELECT permission_id
-            FROM rbac_user_denied_permissions
-            WHERE user_id = ?
-        ";
-        $stmtDeny = mysqli_prepare($koneksi, $sqlDeny);
-        mysqli_stmt_bind_param($stmtDeny, 'i', $userId);
-        mysqli_stmt_execute($stmtDeny);
-
-        $resultDeny = mysqli_stmt_get_result($stmtDeny);
-        while ($row = mysqli_fetch_assoc($resultDeny)) {
-            $permissionId = (int)$row['permission_id'];
-            unset($finalPermissions[$permissionId]);
-        }
-        mysqli_stmt_close($stmtDeny);
-
-        return array_values(array_unique($finalPermissions));
-    }
-}
-
-if (!function_exists('refresh_permissions')) {
-    function refresh_permissions(mysqli $koneksi): void
-    {
-        if (!is_logged_in()) {
-            return;
-        }
-
-        $userId = current_user_id();
-        $role = current_role() ?? '';
-
-        if (!$userId) {
-            $_SESSION['user']['permissions'] = [];
-            return;
-        }
-
-        $_SESSION['user']['permissions'] = get_user_permissions($koneksi, $userId, $role);
-    }
-}
-
 if (!function_exists('login_user')) {
     function login_user(mysqli $koneksi, array $user): void
     {
         $_SESSION['user'] = [
-            'id' => (int) $user['id'],
-            'username' => $user['username'],
-            'email' => $user['email'],
-            'role' => $user['role'],
-            'id_branch' => isset($user['id_branch']) ? (int) $user['id_branch'] : null,
-            'permissions' => []
+            'id'          => (int) ($user['id'] ?? 0),
+            'username'    => (string) ($user['username'] ?? ''),
+            'email'       => (string) ($user['email'] ?? ''),
+            'role'        => (string) ($user['role'] ?? 'user'),
+            'id_branch'   => isset($user['id_branch']) ? (int) $user['id_branch'] : null,
+            'permissions' => [],
         ];
 
         refresh_permissions($koneksi);
@@ -312,52 +261,75 @@ if (!function_exists('needs_password_change')) {
     }
 }
 
-if (!function_exists('create_password_reset_token')) {
-    function create_password_reset_token(mysqli $koneksi, int $userId): string
+if (!function_exists('get_all_permissions')) {
+    function get_all_permissions(mysqli $koneksi): array
     {
-        $token = bin2hex(random_bytes(32));
-        $expiresAt = date('Y-m-d H:i:s', time() + 3600);
+        $permissions = [];
+        $result = mysqli_query($koneksi, "SELECT permission_key FROM rbac_permissions");
 
-        $stmtDelete = mysqli_prepare($koneksi, "DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL");
-        mysqli_stmt_bind_param($stmtDelete, 'i', $userId);
-        mysqli_stmt_execute($stmtDelete);
-        mysqli_stmt_close($stmtDelete);
+        if (!$result) {
+            return [];
+        }
 
-        $stmt = mysqli_prepare($koneksi, "INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'iss', $userId, $token, $expiresAt);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
+        while ($row = mysqli_fetch_assoc($result)) {
+            $permissions[] = (string) $row['permission_key'];
+        }
 
-        return $token;
+        return array_values(array_unique($permissions));
     }
 }
 
-if (!function_exists('find_valid_password_reset')) {
-    function find_valid_password_reset(mysqli $koneksi, string $token): ?array
+if (!function_exists('get_user_permissions')) {
+    function get_user_permissions(mysqli $koneksi, int $userId, string $role): array
     {
-        $stmt = mysqli_prepare(
-            $koneksi,
-            "SELECT pr.id, pr.user_id, pr.expires_at, u.username, u.email
-             FROM password_resets pr
-             INNER JOIN users u ON u.id = pr.user_id
-             WHERE pr.reset_token = ? AND pr.used_at IS NULL
-             LIMIT 1"
-        );
-        mysqli_stmt_bind_param($stmt, 's', $token);
+        if ($role === 'admin') {
+            return ['*'];
+        }
+
+        $permissions = [];
+
+        $sql = "
+            SELECT p.id, p.permission_key
+            FROM rbac_role_permissions rp
+            INNER JOIN rbac_permissions p ON rp.permission_id = p.id
+            WHERE rp.role = ?
+        ";
+
+        $stmt = mysqli_prepare($koneksi, $sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        mysqli_stmt_bind_param($stmt, 's', $role);
         mysqli_stmt_execute($stmt);
+
         $result = mysqli_stmt_get_result($stmt);
-        $row = mysqli_fetch_assoc($result) ?: null;
+        while ($row = mysqli_fetch_assoc($result)) {
+            $permissions[(int) $row['id']] = (string) $row['permission_key'];
+        }
+
         mysqli_stmt_close($stmt);
 
-        if (!$row) {
-            return null;
+        return array_values(array_unique($permissions));
+    }
+}
+
+if (!function_exists('refresh_permissions')) {
+    function refresh_permissions(mysqli $koneksi): void
+    {
+        if (!is_logged_in()) {
+            return;
         }
 
-        if (strtotime((string) $row['expires_at']) < time()) {
-            return null;
+        $userId = current_user_id();
+        $role   = current_role() ?? 'user';
+
+        if (!$userId) {
+            $_SESSION['user']['permissions'] = [];
+            return;
         }
 
-        return $row;
+        $_SESSION['user']['permissions'] = get_user_permissions($koneksi, $userId, $role);
     }
 }
 
@@ -368,7 +340,7 @@ if (!function_exists('can')) {
             return false;
         }
 
-        $permissions = $_SESSION['user']['permissions'] ?? [];
+        $permissions = current_permissions();
 
         if (in_array('*', $permissions, true)) {
             return true;
@@ -388,24 +360,121 @@ if (!function_exists('require_permission')) {
         }
 
         if (!can($permission)) {
-            http_response_code(403);
-            echo "<h1>403 Forbidden</h1>";
-            echo "<p>Anda tidak memiliki izin untuk mengakses halaman ini.</p>";
-            exit;
+            forbidden_response('Anda tidak memiliki izin untuk mengakses halaman ini.');
         }
     }
 }
 
-if (!function_exists('require_super_admin')) {
-    function require_super_admin(): void
+if (!function_exists('user_can_access_branch')) {
+    function user_can_access_branch(?int $targetBranchId): bool
+    {
+        if (!is_logged_in()) {
+            return false;
+        }
+
+        if (is_admin()) {
+            return true;
+        }
+        $myBranchId = current_user_branch_id();
+
+        if ($myBranchId === null || $targetBranchId === null) {
+            return false;
+        }
+
+        return $myBranchId === $targetBranchId;
+    }
+}
+
+if (!function_exists('enforce_branch_access')) {
+    function enforce_branch_access(?int $targetBranchId): void
     {
         require_login();
 
-        if (!is_super_admin()) {
-            http_response_code(403);
-            echo "<h1>403 Forbidden</h1>";
-            echo "<p>Halaman ini hanya untuk Super Admin.</p>";
-            exit;
+        if (!user_can_access_branch($targetBranchId)) {
+            forbidden_response('Anda tidak boleh mengakses data cabang lain.');
         }
+    }
+}
+
+if (!function_exists('resolve_input_branch_id')) {
+    function resolve_input_branch_id(?int $postedBranchId = null): ?int
+    {
+        if (is_user_role()) {
+            return current_user_branch_id();
+        }
+
+        if ($postedBranchId === null || $postedBranchId <= 0) {
+            return null;
+        }
+
+        return $postedBranchId;
+    }
+}
+
+if (!function_exists('create_password_reset_token')) {
+    function create_password_reset_token(mysqli $koneksi, int $userId): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $expiresAt = date('Y-m-d H:i:s', time() + 3600);
+
+        $stmtDelete = mysqli_prepare(
+            $koneksi,
+            "DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL"
+        );
+
+        if ($stmtDelete) {
+            mysqli_stmt_bind_param($stmtDelete, 'i', $userId);
+            mysqli_stmt_execute($stmtDelete);
+            mysqli_stmt_close($stmtDelete);
+        }
+
+        $stmt = mysqli_prepare(
+            $koneksi,
+            "INSERT INTO password_resets (user_id, reset_token, expires_at) VALUES (?, ?, ?)"
+        );
+
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'iss', $userId, $token, $expiresAt);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+        }
+
+        return $token;
+    }
+}
+
+if (!function_exists('find_valid_password_reset')) {
+    function find_valid_password_reset(mysqli $koneksi, string $token): ?array
+    {
+        $stmt = mysqli_prepare(
+            $koneksi,
+            "SELECT pr.id, pr.user_id, pr.expires_at, u.username, u.email
+             FROM password_resets pr
+             INNER JOIN users u ON u.id = pr.user_id
+             WHERE pr.reset_token = ? AND pr.used_at IS NULL
+             LIMIT 1"
+        );
+
+        if (!$stmt) {
+            return null;
+        }
+
+        mysqli_stmt_bind_param($stmt, 's', $token);
+        mysqli_stmt_execute($stmt);
+
+        $result = mysqli_stmt_get_result($stmt);
+        $row = mysqli_fetch_assoc($result) ?: null;
+
+        mysqli_stmt_close($stmt);
+
+        if (!$row) {
+            return null;
+        }
+
+        if (strtotime((string) $row['expires_at']) < time()) {
+            return null;
+        }
+
+        return $row;
     }
 }

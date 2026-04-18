@@ -35,4 +35,9 @@ if (needs_password_change($user)) {
 }
 
 set_flash('success', 'Login berhasil. Selamat datang, ' . $user['username'] . '.');
-redirect_to(base_url('dashboard/index.php'));
+
+if (($user['role'] ?? '') === 'admin') {
+    redirect_to(base_url('dashboard/index.php'));
+}
+
+redirect_to(base_url('barang/index.php'));

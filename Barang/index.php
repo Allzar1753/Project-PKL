@@ -975,7 +975,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                 <?php if (canOpenPengirimanUser()): ?>
                                     <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
-                                        <i class="bi bi-truck me-2"></i>Kirim ke HO
+                                        <i class="bi bi-truck me-2"></i>Kirim ke Cabang Jakarta
                                     </button>
                                 <?php endif; ?>
                             </div>
@@ -1399,7 +1399,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-warning-custom">
-                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Pengiriman Barang ke HO</h5>
+                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Pengiriman Barang ke Cabang Jakarta</h5>
                     <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="contentPengirimanUser">
@@ -1693,7 +1693,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         });
 
         $('#modalPengirimanUser').on('show.bs.modal', function() {
-            loadModalContent('#modalPengirimanUser', '#contentPengirimanUser', 'pengiriman_user.php', 'Gagal memuat form pengiriman user.');
+            loadModalContent('#modalPengirimanUser', '#contentPengirimanUser', 'pengiriman_user.php', 'Gagal memuat form pengiriman ke Cabang Jakarta.');
         });
 
         resetModalContent('#modalPengirimanUser', '#contentPengirimanUser');

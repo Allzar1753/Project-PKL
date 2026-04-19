@@ -110,7 +110,7 @@ if ($search_input !== "") {
         OR tb_status.nama_status LIKE '%$search%'
         OR tb_jenis.nama_jenis LIKE '%$search%'
         OR barang.keterangan_masalah LIKE '%$search%'
-        OR barang.tanggal_masuk LIKE '%$search%'
+        OR barang.tanggal_kirim LIKE '%$search%'
         OR barang.bermasalah LIKE '%$search%'
         OR barang.`user` LIKE '%$search%'
         OR branch_aktif.nama_branch LIKE '%$search%'
@@ -183,7 +183,7 @@ $query = mysqli_query($koneksi, "
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_masuk,
+        barang.tanggal_kirim,
         barang.bermasalah,
         barang.keterangan_masalah,
         barang.foto,
@@ -1073,7 +1073,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                         <span class="badge bg-success mb-2">
                                                             <i class="bi bi-box-arrow-in-down me-1"></i>Masuk
                                                         </span>
-                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_kirim']) ? h($data['tanggal_kirim']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-muted"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
                                                     </td>
@@ -1177,7 +1177,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     <td>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
-                                                        <span class="meta-muted"><i class="bi bi-calendar"></i> Masuk: <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-calendar"></i> Kirim: <?= !empty($data['tanggal_kirim']) ? h($data['tanggal_kirim']) : '-' ?></span>
                                                     </td>
 
                                                     <td>

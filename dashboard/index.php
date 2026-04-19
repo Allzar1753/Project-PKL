@@ -139,7 +139,7 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_masuk,
+        barang.tanggal_kirim,
         barang.`user`,
         tb_barang.nama_barang,
         tb_merk.nama_merk,

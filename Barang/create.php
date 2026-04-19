@@ -55,7 +55,7 @@ function ambilDetailBarangUntukEmail($koneksi, $idBarangBaru)
             b.id,
             b.no_asset,
             b.serial_number,
-            b.tanggal_masuk,
+            b.tanggal_kirim,
             b.bermasalah,
             b.keterangan_masalah,
             b.foto,
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'serial_number',
         'id_tipe',
         'id_jenis',
-        'tanggal_masuk',
+        'tanggal_kirim',
         'bermasalah',
         'id_branch',
         'user'
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $serial_number = esc($koneksi, $_POST['serial_number']);
     $id_tipe       = (int) $_POST['id_tipe'];
     $id_jenis      = (int) $_POST['id_jenis'];
-    $tanggal_masuk = esc($koneksi, $_POST['tanggal_masuk']);
+    $tanggal_kirim = esc($koneksi, $_POST['tanggal_kirim']);
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
     $user          = esc($koneksi, $_POST['user']);
@@ -133,39 +133,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $keterangan_masalah = esc($koneksi, $_POST['keterangan_masalah']);
     }
 
-    $cekDuplikat = mysqli_query($koneksi, "
-        SELECT id, no_asset, serial_number
+    $cekSerial = mysqli_query($koneksi, "
+        SELECT id 
         FROM barang
-        WHERE no_asset = '$no_asset' OR serial_number = '$serial_number'
+        WHERE serial_number = '$serial_number'
+    LIMIT 1 
+    ");
+
+    if (!$cekSerial) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Gagal cek serial number: ' . mysqli_error($koneksi)
+        ]);
+        exit;
+    }
+
+    if (mysqli_num_rows($cekSerial) > 0) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Serial Number sudah terdaftar'
+        ]);
+        exit;
+    }
+
+    $getBarangDipilih = mysqli_query($koneksi, "
+        SELECT id_barang, nama_barang
+        FROM tb_barang
+        WHERE id_barang = '$id_barang'
         LIMIT 1
     ");
 
-    if (!$cekDuplikat) {
+    if (!$getBarangDipilih) {
         echo json_encode([
             'status' => 'error',
-            'message' => 'Gagal cek duplikasi: ' . mysqli_error($koneksi)
+            'message' => 'Gagal ambil data barang: ' . mysqli_error($koneksi)
         ]);
         exit;
     }
 
-    if (mysqli_num_rows($cekDuplikat) > 0) {
-        $duplikat = mysqli_fetch_assoc($cekDuplikat);
+    if (!$getBarangDipilih || mysqli_num_rows($getBarangDipilih) === 0) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Barang yang dipilih tidak valid'
+        ]);
+        exit;
+    }
 
-        $pesan = 'Data sudah digunakan.';
-        if ($duplikat['no_asset'] === $no_asset && $duplikat['serial_number'] === $serial_number) {
-            $pesan = 'No Asset dan Serial Number sudah terdaftar';
-        } elseif ($duplikat['no_asset'] === $no_asset) {
-            $pesan = 'No Asset sudah terdaftar';
-        } elseif ($duplikat['serial_number'] === $serial_number) {
-            $pesan = 'Serial Number sudah terdaftar';
+    $dataBarangDipilih = mysqli_fetch_assoc($getBarangDipilih);
+    $namaBarangInput = strtolower(trim($dataBarangDipilih['nama_barang']));
+
+    $pasanganBarang = ['monitor', 'cpu'];
+
+    $cekNoAsset = mysqli_query($koneksi, "
+    SELECT 
+        b.id,
+        b.no_asset,
+        tb.nama_barang
+    FROM barang b 
+    INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang 
+    WHERE b.no_asset = '$no_asset'
+");
+
+    if (!$cekNoAsset) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Gagal cek no asset: ' . mysqli_error($koneksi)
+        ]);
+        exit;
+    }
+
+    $barangSudahAda = [];
+    $inputTermasukPasangan = in_array($namaBarangInput, $pasanganBarang, true);
+
+    if (mysqli_num_rows($cekNoAsset) > 0) {
+        while ($row = mysqli_fetch_assoc($cekNoAsset)) {
+            $namaBarangDb = strtolower(trim($row['nama_barang']));
+            $barangSudahAda[] = $namaBarangDb;
+
+            // jika barang yang sama sudah ada untuk no asset yang sama
+            if ($namaBarangDb === $namaBarangInput) {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'Barang tersebut sudah tersedia di daftar barang'
+                ]);
+                exit;
+            }
+
+            // jika no asset sudah dipakai barang selain monitor/cpu
+            if (!in_array($namaBarangDb, $pasanganBarang, true)) {
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'No Asset sudah terdaftar'
+                ]);
+                exit;
+            }
         }
 
-        echo json_encode([
-            'status' => 'error',
-            'message' => $pesan
-        ]);
-        exit;
+        $barangSudahAda = array_unique($barangSudahAda);
+
+        // jika input sekarang bukan monitor/cpu, tidak boleh pakai no_asset yang sudah ada
+        if (!$inputTermasukPasangan) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No Asset sudah terdaftar'
+            ]);
+            exit;
+        }
+
+        // jika sudah lengkap monitor + cpu, jangan tambah lagi
+        if (count($barangSudahAda) >= 2) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'No Asset ini sudah dipakai untuk Monitor dan CPU'
+            ]);
+            exit;
+        }
     }
+
 
     $foto = null;
 
@@ -201,7 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             serial_number,
             id_tipe,
             id_jenis,
-            tanggal_masuk,
+            tanggal_kirim,
             bermasalah,
             keterangan_masalah,
             id_status,
@@ -215,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             '$serial_number',
             '$id_tipe',
             '$id_jenis',
-            '$tanggal_masuk',
+            '$tanggal_kirim',
             '$bermasalah',
             " . ($keterangan_masalah !== null ? "'$keterangan_masalah'" : "NULL") . ",
             '$id_status',
@@ -261,7 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'merk'          => $detailBarang['nama_merk'] ?? '-',
                 'tipe'          => $detailBarang['nama_tipe'] ?? '-',
                 'jenis'         => $detailBarang['nama_jenis'] ?? '-',
-                'tanggal_masuk' => $detailBarang['tanggal_masuk'] ?? '-',
+                'tanggal_kirim' => $detailBarang['tanggal_kirim'] ?? '-',
                 'user'          => $detailBarang['user'] ?? '-',
                 'bermasalah'    => $detailBarang['bermasalah'] ?? '-',
                 'foto_path'     => $fotoPath
@@ -307,7 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Serial Number</label>
+            <label>Serial Number / Service tag</label>
             <input type="text" name="serial_number" class="form-control" required>
         </div>
 
@@ -352,8 +436,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Tanggal Masuk</label>
-            <input type="date" name="tanggal_masuk" class="form-control" required>
+            <label>Tanggal Kirim</label>
+            <input type="date" name="tanggal_kirim" class="form-control" required>
         </div>
 
         <div class="col-md-6">
@@ -396,36 +480,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </form> -->
-<div class="col-md-12 text-end">
-    <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
-        <span class="btn-text">Simpan</span>
-        <span class="btn-loading d-none">
-            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-            Menyimpan...
-        </span>
-    </button>
-</div>
+        <div class="col-md-12 text-end">
+            <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
+                <span class="btn-text">Simpan</span>
+                <span class="btn-loading d-none">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Menyimpan...
+                </span>
+            </button>
+        </div>
 
-<script>
-    $(document).ready(function() {
-        $('#bermasalahSelect').on('change', function() {
-            if ($(this).val() === 'Iya') {
-                $('#keteranganMasalahDiv').slideDown();
-                $('textarea[name="keterangan_masalah"]').attr('required', true);
-            } else {
-                $('#keteranganMasalahDiv').slideUp();
-                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-            }
-        });
-    });
+        <script>
+            $(document).ready(function() {
+                $('#bermasalahSelect').on('change', function() {
+                    if ($(this).val() === 'Iya') {
+                        $('#keteranganMasalahDiv').slideDown();
+                        $('textarea[name="keterangan_masalah"]').attr('required', true);
+                    } else {
+                        $('#keteranganMasalahDiv').slideUp();
+                        $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+                    }
+                });
+            });
 
-    $('#fotoInput').change(function() {
-        if (!this.files || !this.files[0]) return;
+            $('#fotoInput').change(function() {
+                if (!this.files || !this.files[0]) return;
 
-        let reader = new FileReader();
-        reader.onload = function(e) {
-            $('#previewFoto').attr('src', e.target.result).show();
-        };
-        reader.readAsDataURL(this.files[0]);
-    });
-</script>
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    $('#previewFoto').attr('src', e.target.result).show();
+                };
+                reader.readAsDataURL(this.files[0]);
+            });
+        </script>

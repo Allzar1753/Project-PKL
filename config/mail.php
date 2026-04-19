@@ -179,7 +179,7 @@ function kirimEmailKeBranchInti(array $data): array
                                             <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#1f1f1f;font-weight:700;">' . $jenis . '</td>
                                         </tr>
                                         <tr>
-                                            <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#6b7280;">Tanggal Masuk</td>
+                                            <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#6b7280;">Tanggal Kirim</td>
                                             <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#1f1f1f;font-weight:700;">' . $tanggalMasuk . '</td>
                                         </tr>
                                         <tr>
@@ -224,7 +224,7 @@ function kirimEmailKeBranchInti(array $data): array
             "Merk: " . ($data['merk'] ?? '-') . "\n" .
             "Tipe: " . ($data['tipe'] ?? '-') . "\n" .
             "Jenis: " . ($data['jenis'] ?? '-') . "\n" .
-            "Tanggal Masuk: " . ($data['tanggal_masuk'] ?? '-') . "\n" .
+            "Tanggal Kirim: " . ($data['tanggal_kirim'] ?? '-') . "\n" .
             "User: " . ($data['user'] ?? '-') . "\n" .
             "Bermasalah: " . ($data['bermasalah'] ?? '-');
         $mail->send();

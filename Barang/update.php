@@ -257,8 +257,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Tanggal Masuk</label>
-                            <input type="date" name="tanggal_masuk" class="form-control" value="<?= h($barang['tanggal_masuk'] ?? '') ?>">
+                            <label class="form-label">Tanggal Kirim</label>
+                            <input type="date" name="tanggal_kirim" class="form-control" value="<?= h($barang['tanggal_kirim'] ?? '') ?>">
                         </div>
 
                         <div class="col-md-6">

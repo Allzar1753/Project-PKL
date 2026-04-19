@@ -2,30 +2,55 @@
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
-require_permission($koneksi, 'barang.delete');
+require_admin();
 
 header('Content-Type: application/json');
 
-$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+$id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 
 if ($id <= 0) {
     echo json_encode([
-        "status" => "error",
-        "message" => "ID tidak valid"
+        'status' => 'error',
+        'message' => 'ID tidak valid'
     ]);
     exit;
 }
 
-$delete = mysqli_query($koneksi, "DELETE FROM barang WHERE id = $id");
+$stmtCheck = mysqli_prepare(
+    $koneksi,
+    "SELECT id_pengiriman
+     FROM barang_pengiriman
+     WHERE id_barang = ?
+     LIMIT 1"
+);
 
-if ($delete) {
+mysqli_stmt_bind_param($stmtCheck, 'i', $id);
+mysqli_stmt_execute($stmtCheck);
+$resultCheck = mysqli_stmt_get_result($stmtCheck);
+$hasHistory = (bool) mysqli_fetch_assoc($resultCheck);
+mysqli_stmt_close($stmtCheck);
+
+if ($hasHistory) {
     echo json_encode([
-        "status" => "success",
-        "message" => "Data berhasil dihapus"
+        'status' => 'error',
+        'message' => 'Barang tidak bisa dihapus karena sudah memiliki riwayat pengiriman.'
+    ]);
+    exit;
+}
+
+$stmt = mysqli_prepare($koneksi, "DELETE FROM barang WHERE id = ?");
+mysqli_stmt_bind_param($stmt, 'i', $id);
+
+if (mysqli_stmt_execute($stmt)) {
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Data berhasil dihapus'
     ]);
 } else {
     echo json_encode([
-        "status" => "error",
-        "message" => "Data gagal dihapus: " . mysqli_error($koneksi)
+        'status' => 'error',
+        'message' => 'Data gagal dihapus: ' . mysqli_stmt_error($stmt)
     ]);
 }
+
+mysqli_stmt_close($stmt);

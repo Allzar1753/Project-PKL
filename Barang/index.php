@@ -1,23 +1,63 @@
 <?php
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+
 require_permission($koneksi, 'barang.view');
 
-function h($value)
-{
-    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$isAdmin = is_admin();
+$myBranchId = current_user_branch_id();
+
+if (!$isAdmin && (!$myBranchId || $myBranchId <= 0)) {
+    http_response_code(403);
+    exit('Branch user belum ditentukan.');
 }
 
-function resolveShippingStatus($row)
+function h($value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+
+function getBranchScopeSql(bool $isAdmin, ?int $myBranchId): string
+{
+    if ($isAdmin) {
+        return '1=1';
+    }
+
+    $myBranchId = (int) $myBranchId;
+
+    return "(
+        barang.id_branch = {$myBranchId}
+        OR (
+            pengiriman.branch_tujuan = {$myBranchId}
+            AND pengiriman.id_pengiriman IS NOT NULL
+            AND COALESCE(pengiriman.status_pengiriman, 'Belum dikirim') IN ('Sedang dikemas', 'Sedang perjalanan')
+        )
+    )";
+}
+
+function buildWhereSql(array $conditions): string
+{
+    $conditions = array_values(array_filter($conditions, static function ($value) {
+        return trim((string) $value) !== '';
+    }));
+
+    if (empty($conditions)) {
+        return '';
+    }
+
+    return 'WHERE ' . implode(' AND ', $conditions);
+}
+
+function resolveShippingStatus(array $row): string
 {
     if (empty($row['id_pengiriman'])) {
         return 'Belum dikirim';
     }
 
-    return !empty($row['status_pengiriman']) ? $row['status_pengiriman'] : 'Sedang perjalanan';
+    return !empty($row['status_pengiriman']) ? (string) $row['status_pengiriman'] : 'Sedang perjalanan';
 }
 
-function shippingBadge($status)
+function shippingBadge(string $status): string
 {
     $class = 'bg-secondary';
     $icon  = 'bi-dash-circle';
@@ -36,7 +76,7 @@ function shippingBadge($status)
     return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
 }
 
-function barangBadge($bermasalah)
+function barangBadge(string $bermasalah): string
 {
     if ($bermasalah === 'Iya') {
         return '<span class="badge rounded-pill bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
@@ -59,23 +99,86 @@ function isBarangLocked(array $row): bool
         );
 }
 
-$search_input = isset($_GET['cari']) ? trim($_GET['cari']) : "";
-$filter       = isset($_GET['filter']) ? trim($_GET['filter']) : "";
+function canEditMasterBarang(): bool
+{
+    return is_admin() && can('barang.update');
+}
+
+function canDeleteMasterBarang(): bool
+{
+    return is_admin() && can('barang.delete');
+}
+
+function canCreateBarang(): bool
+{
+    return is_admin() && can('barang.create');
+}
+
+function canOpenPengirimanUser(): bool
+{
+    return is_user_role() && can('barang.kirim');
+}
+
+function canProcessShippingAction(array $row, bool $isAdmin, ?int $myBranchId): bool
+{
+    if (!can('barang.kirim')) {
+        return false;
+    }
+
+    if (isBarangLocked($row) || empty($row['id_pengiriman'])) {
+        return false;
+    }
+
+    if ($isAdmin) {
+        return true;
+    }
+
+    return (int) ($row['branch_tujuan'] ?? 0) === (int) $myBranchId;
+}
+
+function getShippingActionTitle(array $row, bool $isAdmin, ?int $myBranchId): string
+{
+    if (!$isAdmin && (int) ($row['branch_tujuan'] ?? 0) === (int) $myBranchId) {
+        return 'Proses penerimaan barang';
+    }
+
+    return 'Update logistik / pengiriman';
+}
+
+function fetchCountValue(mysqli $koneksi, string $baseFrom, string $whereSql): int
+{
+    $sql = "
+        SELECT COUNT(DISTINCT barang.id) AS total
+        {$baseFrom}
+        {$whereSql}
+    ";
+
+    $result = mysqli_query($koneksi, $sql);
+    if (!$result) {
+        return 0;
+    }
+
+    $row = mysqli_fetch_assoc($result);
+
+    return (int) ($row['total'] ?? 0);
+}
+
+$searchInput = isset($_GET['cari']) ? trim((string) $_GET['cari']) : '';
+$filter = isset($_GET['filter']) ? trim((string) $_GET['filter']) : '';
 
 if (!in_array($filter, ['', 'masuk', 'keluar'], true)) {
     $filter = '';
 }
 
-$allowed_limits = [5, 25, 50, 100];
-$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 25;
-if (!in_array($limit, $allowed_limits, true)) {
+$allowedLimits = [5, 25, 50, 100];
+$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
+if (!in_array($limit, $allowedLimits, true)) {
     $limit = 25;
 }
 
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$where = [];
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 
-$base_from = "
+$baseFrom = "
 FROM barang
 LEFT JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
 LEFT JOIN tb_merk ON barang.id_merk = tb_merk.id_merk
@@ -83,7 +186,6 @@ LEFT JOIN tb_tipe ON barang.id_tipe = tb_tipe.id_tipe
 LEFT JOIN tb_status ON barang.id_status = tb_status.id_status
 LEFT JOIN tb_jenis ON barang.id_jenis = tb_jenis.id_jenis
 LEFT JOIN tb_branch AS branch_aktif ON barang.id_branch = branch_aktif.id_branch
-
 LEFT JOIN (
     SELECT bp1.*
     FROM barang_pengiriman bp1
@@ -93,90 +195,69 @@ LEFT JOIN (
         GROUP BY id_barang
     ) last_bp ON bp1.id_pengiriman = last_bp.id_pengiriman_terakhir
 ) AS pengiriman ON barang.id = pengiriman.id_barang
-
 LEFT JOIN tb_branch AS branch_tujuan ON pengiriman.branch_tujuan = branch_tujuan.id_branch
 LEFT JOIN tb_branch AS branch_asal_pengiriman ON pengiriman.branch_asal = branch_asal_pengiriman.id_branch
 ";
 
-if ($search_input !== "") {
-    $search = mysqli_real_escape_string($koneksi, $search_input);
+$where = [];
+$where[] = getBranchScopeSql($isAdmin, $myBranchId);
+
+if ($searchInput !== '') {
+    $search = mysqli_real_escape_string($koneksi, $searchInput);
 
     $where[] = "(
-        tb_barang.nama_barang LIKE '%$search%'
-        OR barang.no_asset LIKE '%$search%'
-        OR barang.serial_number LIKE '%$search%'
-        OR tb_merk.nama_merk LIKE '%$search%'
-        OR tb_tipe.nama_tipe LIKE '%$search%'
-        OR tb_status.nama_status LIKE '%$search%'
-        OR tb_jenis.nama_jenis LIKE '%$search%'
-        OR barang.keterangan_masalah LIKE '%$search%'
-        OR barang.tanggal_kirim LIKE '%$search%'
-        OR barang.bermasalah LIKE '%$search%'
-        OR barang.`user` LIKE '%$search%'
-        OR branch_aktif.nama_branch LIKE '%$search%'
-        OR branch_tujuan.nama_branch LIKE '%$search%'
-        OR branch_asal_pengiriman.nama_branch LIKE '%$search%'
-        OR pengiriman.tanggal_keluar LIKE '%$search%'
-        OR pengiriman.status_pengiriman LIKE '%$search%'
-        OR pengiriman.nomor_resi_keluar LIKE '%$search%'
-        OR pengiriman.estimasi_pengiriman LIKE '%$search%'
-        OR pengiriman.jasa_pengiriman LIKE '%$search%'
-        OR pengiriman.nama_penerima LIKE '%$search%'
-        OR pengiriman.nomor_resi_masuk LIKE '%$search%'
+        tb_barang.nama_barang LIKE '%{$search}%'
+        OR barang.no_asset LIKE '%{$search}%'
+        OR barang.serial_number LIKE '%{$search}%'
+        OR tb_merk.nama_merk LIKE '%{$search}%'
+        OR tb_tipe.nama_tipe LIKE '%{$search}%'
+        OR tb_status.nama_status LIKE '%{$search}%'
+        OR tb_jenis.nama_jenis LIKE '%{$search}%'
+        OR barang.keterangan_masalah LIKE '%{$search}%'
+        OR barang.tanggal_masuk LIKE '%{$search}%'
+        OR barang.bermasalah LIKE '%{$search}%'
+        OR barang.`user` LIKE '%{$search}%'
+        OR branch_aktif.nama_branch LIKE '%{$search}%'
+        OR branch_tujuan.nama_branch LIKE '%{$search}%'
+        OR branch_asal_pengiriman.nama_branch LIKE '%{$search}%'
+        OR pengiriman.tanggal_keluar LIKE '%{$search}%'
+        OR pengiriman.status_pengiriman LIKE '%{$search}%'
+        OR pengiriman.nomor_resi_keluar LIKE '%{$search}%'
+        OR pengiriman.estimasi_pengiriman LIKE '%{$search}%'
+        OR pengiriman.jasa_pengiriman LIKE '%{$search}%'
+        OR pengiriman.nama_penerima LIKE '%{$search}%'
+        OR pengiriman.nomor_resi_masuk LIKE '%{$search}%'
     )";
 }
 
-/*
-    LOGIKA FINAL:
-    - MASUK  = belum pernah ada record pengiriman
-    - KELUAR = sudah pernah ada record pengiriman
-*/
-if ($filter === "masuk") {
-    $where[] = "pengiriman.id_pengiriman IS NULL";
-} elseif ($filter === "keluar") {
-    $where[] = "pengiriman.id_pengiriman IS NOT NULL";
+$whereForTable = $where;
+
+if ($filter === 'masuk') {
+    $whereForTable[] = "pengiriman.id_pengiriman IS NULL";
+} elseif ($filter === 'keluar') {
+    $whereForTable[] = "pengiriman.id_pengiriman IS NOT NULL";
 }
 
-$where_sql = "";
-if (count($where) > 0) {
-    $where_sql = "WHERE " . implode(" AND ", $where);
-}
+$whereSql = buildWhereSql($whereForTable);
 
-$count_query = mysqli_query($koneksi, "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $base_from
-    $where_sql
-");
+$totalRows = fetchCountValue($koneksi, $baseFrom, $whereSql);
+$totalPages = max(1, (int) ceil($totalRows / $limit));
 
-if (!$count_query) {
-    die(mysqli_error($koneksi));
-}
-
-$total_rows = (int) mysqli_fetch_assoc($count_query)['total'];
-$total_pages = max(1, (int) ceil($total_rows / $limit));
-
-if ($page > $total_pages) {
-    $page = $total_pages;
+if ($page > $totalPages) {
+    $page = $totalPages;
 }
 
 $offset = ($page - 1) * $limit;
 
-$total_query = mysqli_query($koneksi, "SELECT COUNT(*) AS total FROM barang");
-$total = (int) mysqli_fetch_assoc($total_query)['total'];
+$total = fetchCountValue($koneksi, $baseFrom, buildWhereSql($where));
 
-$masuk_query = mysqli_query($koneksi, "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $base_from
-    WHERE pengiriman.id_pengiriman IS NULL
-");
-$masuk = (int) mysqli_fetch_assoc($masuk_query)['total'];
+$whereMasuk = $where;
+$whereMasuk[] = "pengiriman.id_pengiriman IS NULL";
+$masuk = fetchCountValue($koneksi, $baseFrom, buildWhereSql($whereMasuk));
 
-$keluar_query = mysqli_query($koneksi, "
-    SELECT COUNT(DISTINCT barang.id) AS total
-    $base_from
-    WHERE pengiriman.id_pengiriman IS NOT NULL
-");
-$keluar = (int) mysqli_fetch_assoc($keluar_query)['total'];
+$whereKeluar = $where;
+$whereKeluar[] = "pengiriman.id_pengiriman IS NOT NULL";
+$keluar = fetchCountValue($koneksi, $baseFrom, buildWhereSql($whereKeluar));
 
 $query = mysqli_query($koneksi, "
     SELECT
@@ -216,18 +297,18 @@ $query = mysqli_query($koneksi, "
         pengiriman.foto_resi_masuk,
         pengiriman.catatan_pengiriman_keluar,
         pengiriman.catatan_penerimaan
-    $base_from
-    $where_sql
+    {$baseFrom}
+    {$whereSql}
     ORDER BY barang.id DESC
-    LIMIT $offset, $limit
+    LIMIT {$offset}, {$limit}
 ");
 
 if (!$query) {
     die(mysqli_error($koneksi));
 }
 
-$search_value = h($search_input);
-$filter_value = h($filter);
+$searchValue = h($searchInput);
+$filterValue = h($filter);
 
 $tableTitle = 'Daftar Semua Barang';
 $tableIcon  = 'bi bi-grid-1x2-fill';
@@ -243,8 +324,8 @@ if ($filter === 'masuk') {
     $emptyColspan = 8;
 }
 
-$from_row = $total_rows > 0 ? $offset + 1 : 0;
-$to_row   = min($offset + $limit, $total_rows);
+$fromRow = $totalRows > 0 ? $offset + 1 : 0;
+$toRow   = min($offset + $limit, $totalRows);
 
 $btnSemua  = $filter === '' ? 'btn-mode is-active' : 'btn-mode';
 $btnMasuk  = $filter === 'masuk' ? 'btn-mode is-active' : 'btn-mode';
@@ -860,7 +941,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             }
         }
 
-        #btnSimpanBarang[disabled] {
+        #btnSimpanBarang[disabled],
+        #btnSimpanPengirimanUser[disabled] {
             opacity: 0.8;
             cursor: not-allowed;
         }
@@ -870,7 +952,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 <body>
     <div class="container-fluid">
         <div class="row">
-
             <?php include '../layout/sidebar.php'; ?>
 
             <div class="col-md-10">
@@ -885,11 +966,19 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                 </p>
                             </div>
 
-                            <?php if (can('barang.create')): ?>
-                                <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalCreate">
-                                    <i class="bi bi-plus-circle me-2"></i>Tambah Barang
-                                </button>
-                            <?php endif; ?>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <?php if (canCreateBarang()): ?>
+                                    <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalCreate">
+                                        <i class="bi bi-plus-circle me-2"></i>Tambah Barang
+                                    </button>
+                                <?php endif; ?>
+
+                                <?php if (canOpenPengirimanUser()): ?>
+                                    <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
+                                        <i class="bi bi-truck me-2"></i>Kirim ke HO
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
 
@@ -897,7 +986,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                         <div class="row g-3 align-items-end">
                             <div class="col-lg-7">
                                 <form method="GET" class="search-wrap">
-                                    <input type="hidden" name="filter" value="<?= $filter_value ?>">
+                                    <input type="hidden" name="filter" value="<?= $filterValue ?>">
                                     <input type="hidden" name="limit" value="<?= $limit ?>">
 
                                     <label class="toolbar-label">Pencarian Barang</label>
@@ -907,7 +996,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                             name="cari"
                                             class="form-control"
                                             placeholder="Cari asset, nama barang, serial number, merk, cabang..."
-                                            value="<?= $search_value ?>">
+                                            value="<?= $searchValue ?>">
                                         <button class="btn search-btn" type="submit">
                                             <i class="bi bi-search me-2"></i>Cari
                                         </button>
@@ -921,13 +1010,13 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                             <div class="col-lg-5">
                                 <label class="toolbar-label">Mode Tampilan</label>
                                 <div class="mode-switch">
-                                    <a href="index.php?cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnSemua ?>">
+                                    <a href="index.php?cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnSemua ?>">
                                         <i class="bi bi-grid-1x2-fill"></i>Semua Barang
                                     </a>
-                                    <a href="index.php?filter=masuk&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnMasuk ?>">
+                                    <a href="index.php?filter=masuk&cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnMasuk ?>">
                                         <i class="bi bi-box-arrow-in-down"></i>Barang Masuk
                                     </a>
-                                    <a href="index.php?filter=keluar&cari=<?= urlencode($search_input) ?>&limit=<?= $limit ?>" class="<?= $btnKeluar ?>">
+                                    <a href="index.php?filter=keluar&cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnKeluar ?>">
                                         <i class="bi bi-box-arrow-up"></i>Barang Keluar
                                     </a>
                                 </div>
@@ -990,21 +1079,21 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                         <i class="<?= $tableIcon ?> me-2"></i><?= h($tableTitle) ?>
                                     </div>
                                     <div class="table-subinfo">
-                                        Menampilkan <?= $from_row ?> - <?= $to_row ?> dari <?= $total_rows ?> data
+                                        Menampilkan <?= $fromRow ?> - <?= $toRow ?> dari <?= $totalRows ?> data
                                     </div>
                                 </div>
 
                                 <form method="GET" class="mb-0">
-                                    <input type="hidden" name="cari" value="<?= $search_value ?>">
-                                    <input type="hidden" name="filter" value="<?= $filter_value ?>">
+                                    <input type="hidden" name="cari" value="<?= $searchValue ?>">
+                                    <input type="hidden" name="filter" value="<?= $filterValue ?>">
 
                                     <div class="limit-box">
                                         <span class="section-label">Tampilkan</span>
                                         <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm">
-                                            <option value="5" <?= $limit == 5 ? 'selected' : '' ?>>5</option>
-                                            <option value="25" <?= $limit == 25 ? 'selected' : '' ?>>25</option>
-                                            <option value="50" <?= $limit == 50 ? 'selected' : '' ?>>50</option>
-                                            <option value="100" <?= $limit == 100 ? 'selected' : '' ?>>100</option>
+                                            <option value="5" <?= $limit === 5 ? 'selected' : '' ?>>5</option>
+                                            <option value="25" <?= $limit === 25 ? 'selected' : '' ?>>25</option>
+                                            <option value="50" <?= $limit === 50 ? 'selected' : '' ?>>50</option>
+                                            <option value="100" <?= $limit === 100 ? 'selected' : '' ?>>100</option>
                                         </select>
                                     </div>
                                 </form>
@@ -1049,6 +1138,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                             $shippingStatus = resolveShippingStatus($data);
                                             $isKeluar = isBarangKeluar($data);
                                             $isLocked = isBarangLocked($data);
+                                            $canShippingAction = canProcessShippingAction($data, $isAdmin, $myBranchId);
+                                            $shippingActionTitle = getShippingActionTitle($data, $isAdmin, $myBranchId);
                                             ?>
                                             <tr data-keluar="<?= $isKeluar ? '1' : '0' ?>" data-locked="<?= $isLocked ? '1' : '0' ?>">
                                                 <td><?= $no++ ?></td>
@@ -1101,17 +1192,17 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                     <td class="text-center">
                                                         <div class="action-group">
-                                                            <?php if (can('barang.update')): ?>
+                                                            <?php if (canEditMasterBarang()): ?>
                                                                 <button class="btn btn-sm btn-warning btnEdit"
-                                                                    data-id="<?= $data['id'] ?>"
+                                                                    data-id="<?= (int) $data['id'] ?>"
                                                                     title="Edit data barang">
                                                                     <i class="bi bi-pencil"></i>
                                                                 </button>
                                                             <?php endif; ?>
 
-                                                            <?php if (can('barang.delete')): ?>
+                                                            <?php if (canDeleteMasterBarang()): ?>
                                                                 <button class="btn btn-sm btn-danger btnDelete"
-                                                                    data-id="<?= $data['id'] ?>"
+                                                                    data-id="<?= (int) $data['id'] ?>"
                                                                     title="Hapus data">
                                                                     <i class="bi bi-trash"></i>
                                                                 </button>
@@ -1159,10 +1250,10 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                     <td class="text-center">
                                                         <div class="action-group">
-                                                            <?php if (!$isLocked && can('barang.kirim')): ?>
+                                                            <?php if ($canShippingAction): ?>
                                                                 <button class="btn btn-sm btn-info btnEdit"
-                                                                    data-id="<?= $data['id'] ?>"
-                                                                    title="Update logistik / pengiriman">
+                                                                    data-id="<?= (int) $data['id'] ?>"
+                                                                    title="<?= h($shippingActionTitle) ?>">
                                                                     <i class="bi bi-truck"></i>
                                                                 </button>
                                                             <?php endif; ?>
@@ -1181,7 +1272,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     </td>
 
                                                     <td>
-                                                        <div class="mb-2"><?= barangBadge($data['bermasalah'] ?? 'Tidak') ?></div>
+                                                        <div class="mb-2"><?= barangBadge((string) ($data['bermasalah'] ?? 'Tidak')) ?></div>
                                                         <span class="meta-muted"><?= h($data['nama_status'] ?? '-') ?></span>
                                                     </td>
 
@@ -1213,10 +1304,10 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     <td class="text-center">
                                                         <div class="action-group">
                                                             <?php if ($isKeluar): ?>
-                                                                <?php if (!$isLocked && can('barang.kirim')): ?>
+                                                                <?php if ($canShippingAction): ?>
                                                                     <button class="btn btn-sm btn-info btnEdit"
-                                                                        data-id="<?= $data['id'] ?>"
-                                                                        title="Update logistik / pengiriman">
+                                                                        data-id="<?= (int) $data['id'] ?>"
+                                                                        title="<?= h($shippingActionTitle) ?>">
                                                                         <i class="bi bi-truck"></i>
                                                                     </button>
                                                                 <?php endif; ?>
@@ -1225,17 +1316,17 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                                     <i class="bi bi-lock-fill"></i>
                                                                 </button>
                                                             <?php else: ?>
-                                                                <?php if (can('barang.update')): ?>
+                                                                <?php if (canEditMasterBarang()): ?>
                                                                     <button class="btn btn-sm btn-warning btnEdit"
-                                                                        data-id="<?= $data['id'] ?>"
+                                                                        data-id="<?= (int) $data['id'] ?>"
                                                                         title="Edit data barang">
                                                                         <i class="bi bi-pencil"></i>
                                                                     </button>
                                                                 <?php endif; ?>
 
-                                                                <?php if (can('barang.delete')): ?>
+                                                                <?php if (canDeleteMasterBarang()): ?>
                                                                     <button class="btn btn-sm btn-danger btnDelete"
-                                                                        data-id="<?= $data['id'] ?>"
+                                                                        data-id="<?= (int) $data['id'] ?>"
                                                                         title="Hapus data">
                                                                         <i class="bi bi-trash"></i>
                                                                     </button>
@@ -1246,7 +1337,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                 <?php endif; ?>
                                             </tr>
                                         <?php endwhile; ?>
-
                                     <?php else: ?>
                                         <tr>
                                             <td colspan="<?= $emptyColspan ?>" class="empty-state">
@@ -1262,9 +1352,9 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                         <div class="p-3 p-md-4">
                             <nav>
                                 <ul class="pagination mb-0 flex-wrap">
-                                    <?php for ($i = 1; $i <= $total_pages; $i++) : ?>
-                                        <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
-                                            <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>&cari=<?= urlencode($search_input) ?>&filter=<?= urlencode($filter) ?>">
+                                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                        <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                            <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>&cari=<?= urlencode($searchInput) ?>&filter=<?= urlencode($filter) ?>">
                                                 <?= $i ?>
                                             </a>
                                         </li>
@@ -1305,6 +1395,20 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         </div>
     </div>
 
+    <div class="modal fade" id="modalPengirimanUser" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning-custom">
+                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Pengiriman Barang ke HO</h5>
+                    <button class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="contentPengirimanUser">
+                    <p class="text-center text-muted">Loading form...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalFoto" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content bg-dark">
@@ -1323,6 +1427,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
     <script>
         function destroySelect2InContainer(containerSelector) {
             const $container = $(containerSelector);
+
             $container.find('select').each(function() {
                 if ($(this).hasClass('select2-hidden-accessible')) {
                     $(this).select2('destroy');
@@ -1364,61 +1469,29 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             }
         }
 
-        $('#modalCreate').on('show.bs.modal', function() {
-            $('#contentCreate').html('<p class="text-center text-muted">Loading form...</p>');
+        function loadModalContent(modalSelector, contentSelector, url, errorMessage) {
+            $(contentSelector).html('<p class="text-center text-muted">Loading form...</p>');
 
-            $.get('create.php', function(html) {
-                $('#contentCreate').html(html);
-                initSelect2WhenModalReady('#contentCreate', '#modalCreate', 'Pilih...');
+            $.get(url, function(html) {
+                $(contentSelector).html(html);
+                initSelect2WhenModalReady(contentSelector, modalSelector, 'Pilih...');
             }).fail(function() {
-                $('#contentCreate').html('<p class="text-danger">Gagal memuat form.</p>');
+                $(contentSelector).html('<p class="text-danger">' + errorMessage + '</p>');
             });
+        }
+
+        function resetModalContent(modalSelector, contentSelector, loadingText = 'Loading form...') {
+            $(modalSelector).on('hidden.bs.modal', function() {
+                destroySelect2InContainer(contentSelector);
+                $(contentSelector).html('<p class="text-center text-muted">' + loadingText + '</p>');
+            });
+        }
+
+        $('#modalCreate').on('show.bs.modal', function() {
+            loadModalContent('#modalCreate', '#contentCreate', 'create.php', 'Gagal memuat form.');
         });
 
-        $('#modalCreate').on('hidden.bs.modal', function() {
-            destroySelect2InContainer('#contentCreate');
-            $('#contentCreate').html('<p class="text-center text-muted">Loading form...</p>');
-        });
-
-        // $(document).on('submit', '#formCreate', function(e) {
-        //     e.preventDefault();
-
-        //     let formData = new FormData(this);
-
-        //     $.ajax({
-        //         url: 'create.php',
-        //         type: 'POST',
-        //         data: formData,
-        //         contentType: false,
-        //         processData: false,
-        //         dataType: 'json',
-        //         success: function(response) {
-        //             if (response.success || response.status === 'success') {
-        //                 Swal.fire({
-        //                     icon: 'success',
-        //                     title: 'Berhasil',
-        //                     text: response.message || 'Data berhasil ditambahkan'
-        //                 }).then(() => {
-        //                     location.reload();
-        //                 });
-        //             } else {
-        //                 Swal.fire({
-        //                     icon: 'error',
-        //                     title: 'Gagal',
-        //                     text: response.error || response.message || 'Terjadi kesalahan'
-        //                 });
-        //             }
-        //         },
-        //         error: function(xhr) {
-        //             console.log(xhr.responseText);
-        //             Swal.fire({
-        //                 icon: 'error',
-        //                 title: 'Error',
-        //                 text: 'Terjadi kesalahan server'
-        //             });
-        //         }
-        //     });
-        // });
+        resetModalContent('#modalCreate', '#contentCreate');
 
         let isSubmittingCreate = false;
 
@@ -1431,8 +1504,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
             const $form = $(this);
             const $btn = $form.find('#btnSimpanBarang');
-
-            let formData = new FormData(this);
+            const formData = new FormData(this);
 
             $.ajax({
                 url: 'create.php',
@@ -1496,10 +1568,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             });
         });
 
-        // Sampai Sini 
-
         $(document).on('click', '.btnEdit', function() {
-            let id = $(this).data('id');
+            const id = $(this).data('id');
             const modalEl = document.getElementById('modalUpdate');
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
@@ -1524,8 +1594,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         });
 
         $(document).on('click', '.btnDelete', function() {
-            let id = this.dataset.id;
-            let row = this.closest('tr');
+            const id = this.dataset.id;
+            const row = this.closest('tr');
 
             Swal.fire({
                 title: 'Yakin hapus data?',
@@ -1535,50 +1605,49 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 confirmButtonColor: '#d33',
                 confirmButtonText: 'Ya hapus'
             }).then(result => {
-                if (result.isConfirmed) {
-                    $.getJSON('delete.php', {
-                        id: id
-                    }, function(response) {
-                        if (response.status === 'success') {
-                            row.remove();
-
-                            let total = document.getElementById('totalInventaris');
-                            let masuk = document.getElementById('barangMasuk');
-                            let keluar = document.getElementById('barangKeluar');
-
-                            total.innerText = parseInt(total.innerText) - 1;
-
-                            let isKeluar = row.dataset.keluar === '1';
-
-                            if (isKeluar) {
-                                keluar.innerText = parseInt(keluar.innerText) - 1;
-                            } else {
-                                masuk.innerText = parseInt(masuk.innerText) - 1;
-                            }
-
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Terhapus!',
-                                text: response.message
-                            }).then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Gagal!',
-                                text: response.message
-                            });
-                        }
-                    });
+                if (!result.isConfirmed) {
+                    return;
                 }
+
+                $.getJSON('delete.php', { id: id }, function(response) {
+                    if (response.status === 'success') {
+                        row.remove();
+
+                        const total = document.getElementById('totalInventaris');
+                        const masuk = document.getElementById('barangMasuk');
+                        const keluar = document.getElementById('barangKeluar');
+
+                        total.innerText = parseInt(total.innerText, 10) - 1;
+
+                        const isKeluar = row.dataset.keluar === '1';
+                        if (isKeluar) {
+                            keluar.innerText = parseInt(keluar.innerText, 10) - 1;
+                        } else {
+                            masuk.innerText = parseInt(masuk.innerText, 10) - 1;
+                        }
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Terhapus!',
+                            text: response.message
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal!',
+                            text: response.message
+                        });
+                    }
+                });
             });
         });
 
         $(document).on('submit', '#formUpdate', function(e) {
             e.preventDefault();
 
-            let formData = new FormData(this);
+            const formData = new FormData(this);
 
             $.ajax({
                 url: 'update.php',
@@ -1616,11 +1685,67 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         });
 
         $(document).on('click', '.previewFoto', function() {
-            let foto = $(this).data('foto');
+            const foto = $(this).data('foto');
             $('#fotoPreview').attr('src', foto);
 
-            let modal = new bootstrap.Modal(document.getElementById('modalFoto'));
+            const modal = new bootstrap.Modal(document.getElementById('modalFoto'));
             modal.show();
+        });
+
+        $('#modalPengirimanUser').on('show.bs.modal', function() {
+            loadModalContent('#modalPengirimanUser', '#contentPengirimanUser', 'pengiriman_user.php', 'Gagal memuat form pengiriman user.');
+        });
+
+        resetModalContent('#modalPengirimanUser', '#contentPengirimanUser');
+
+        $(document).on('submit', '#formPengirimanUser', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const $form = $(this);
+            const $btn = $form.find('#btnSimpanPengirimanUser');
+
+            $.ajax({
+                url: 'pengiriman_user.php',
+                type: 'POST',
+                data: formData,
+                contentType: false,
+                processData: false,
+                dataType: 'json',
+                beforeSend: function() {
+                    $btn.prop('disabled', true);
+                    $btn.find('.btn-text').addClass('d-none');
+                    $btn.find('.btn-loading').removeClass('d-none');
+                },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Berhasil',
+                            text: response.message
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal',
+                            text: response.message || 'Terjadi kesalahan'
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    console.log(xhr.responseText);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Terjadi kesalahan server'
+                    });
+                },
+                complete: function() {
+                    $btn.prop('disabled', false);
+                    $btn.find('.btn-text').removeClass('d-none');
+                    $btn.find('.btn-loading').addClass('d-none');
+                }
+            });
         });
     </script>
 </body>

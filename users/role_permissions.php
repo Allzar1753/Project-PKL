@@ -2,78 +2,165 @@
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
-if (!function_exists('normalize_role')) {
-    function normalize_role(string $role): string
-    {
-        $role = strtolower(trim($role));
-        $allowedRoles = ['super_admin', 'admin', 'user'];
+require_admin();
+refresh_permissions($koneksi);
 
-        return in_array($role, $allowedRoles, true) ? $role : 'admin';
+$currentRole = 'user';
+
+if (!function_exists('redirect_role_permissions')) {
+    function redirect_role_permissions(): void
+    {
+        redirect_to(base_url('users/role_permissions.php'));
     }
 }
 
-require_super_admin();
-refresh_permissions($koneksi);
+if (!function_exists('role_color_class')) {
+    function role_color_class(string $role): string
+    {
+        return $role === 'admin' ? 'role-admin' : 'role-user';
+    }
+}
 
-$editableRoles = ['admin', 'user'];
-$currentRole = normalize_role($_GET['role'] ?? 'admin');
-if (!in_array($currentRole, $editableRoles, true)) {
-    $currentRole = 'admin';
+if (!function_exists('role_button_class')) {
+    function role_button_class(string $role, string $currentRole): string
+    {
+        if ($role === $currentRole) {
+            return $role === 'admin'
+                ? 'role-switch-btn is-active admin'
+                : 'role-switch-btn is-active user';
+        }
+
+        return $role === 'admin'
+            ? 'role-switch-btn admin'
+            : 'role-switch-btn user';
+    }
+}
+
+function get_assigned_permission_ids(mysqli $koneksi, string $role): array
+{
+    $assignedIds = [];
+
+    $stmt = mysqli_prepare($koneksi, "SELECT permission_id FROM rbac_role_permissions WHERE role = ?");
+    if (!$stmt) {
+        return [];
+    }
+
+    mysqli_stmt_bind_param($stmt, 's', $role);
+    mysqli_stmt_execute($stmt);
+
+    $result = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($result)) {
+        $assignedIds[] = (int) $row['permission_id'];
+    }
+
+    mysqli_stmt_close($stmt);
+
+    return $assignedIds;
+}
+
+function get_all_permission_ids(mysqli $koneksi): array
+{
+    $ids = [];
+
+    $result = mysqli_query($koneksi, "SELECT id FROM rbac_permissions");
+    if (!$result) {
+        return [];
+    }
+
+    while ($row = mysqli_fetch_assoc($result)) {
+        $ids[] = (int) $row['id'];
+    }
+
+    return $ids;
+}
+
+function get_grouped_permissions(mysqli $koneksi): array
+{
+    $groupedPermissions = [];
+
+    $query = mysqli_query(
+        $koneksi,
+        "SELECT id, permission_key, permission_name, menu_group
+         FROM rbac_permissions
+         ORDER BY menu_group, permission_name"
+    );
+
+    if (!$query) {
+        return [];
+    }
+
+    while ($permission = mysqli_fetch_assoc($query)) {
+        $group = $permission['menu_group'] ?: 'Lainnya';
+        $groupedPermissions[$group][] = $permission;
+    }
+
+    return $groupedPermissions;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $role = normalize_role($_POST['role'] ?? 'admin');
-
-    if (!in_array($role, $editableRoles, true)) {
-        set_flash('error', 'Role tidak valid.');
-        redirect_to(base_url('users/role_permissions.php'));
-    }
+    $role = 'user';
 
     $selectedPermissions = array_map('intval', $_POST['permissions'] ?? []);
+    $selectedPermissions = array_values(array_unique(array_filter($selectedPermissions, function ($id) {
+        return $id > 0;
+    })));
+
+    $validPermissionIds = get_all_permission_ids($koneksi);
+    $validPermissionMap = array_fill_keys($validPermissionIds, true);
+
+    $selectedPermissions = array_values(array_filter($selectedPermissions, function ($id) use ($validPermissionMap) {
+        return isset($validPermissionMap[$id]);
+    }));
 
     mysqli_begin_transaction($koneksi);
 
     try {
         $deleteStmt = mysqli_prepare($koneksi, "DELETE FROM rbac_role_permissions WHERE role = ?");
+        if (!$deleteStmt) {
+            throw new Exception('Gagal menyiapkan query hapus permission.');
+        }
+
         mysqli_stmt_bind_param($deleteStmt, 's', $role);
-        mysqli_stmt_execute($deleteStmt);
+
+        if (!mysqli_stmt_execute($deleteStmt)) {
+            throw new Exception(mysqli_stmt_error($deleteStmt));
+        }
+
         mysqli_stmt_close($deleteStmt);
 
         if (!empty($selectedPermissions)) {
-            $insertStmt = mysqli_prepare($koneksi, "INSERT INTO rbac_role_permissions (role, permission_id) VALUES (?, ?)");
+            $insertStmt = mysqli_prepare(
+                $koneksi,
+                "INSERT INTO rbac_role_permissions (role, permission_id) VALUES (?, ?)"
+            );
+
+            if (!$insertStmt) {
+                throw new Exception('Gagal menyiapkan query simpan permission.');
+            }
+
             foreach ($selectedPermissions as $permissionId) {
                 mysqli_stmt_bind_param($insertStmt, 'si', $role, $permissionId);
-                mysqli_stmt_execute($insertStmt);
+
+                if (!mysqli_stmt_execute($insertStmt)) {
+                    throw new Exception(mysqli_stmt_error($insertStmt));
+                }
             }
+
             mysqli_stmt_close($insertStmt);
         }
 
         mysqli_commit($koneksi);
-        set_flash('success', 'Hak akses role berhasil disimpan.');
+        set_flash('success', 'Hak akses role User berhasil disimpan.');
     } catch (Throwable $e) {
         mysqli_rollback($koneksi);
         set_flash('error', 'Gagal menyimpan hak akses role: ' . $e->getMessage());
     }
 
-    redirect_to(base_url('users/role_permissions.php?role=' . $role));
+    redirect_role_permissions();
 }
 
-$assignedIds = [];
-$stmt = mysqli_prepare($koneksi, "SELECT permission_id FROM rbac_role_permissions WHERE role = ?");
-mysqli_stmt_bind_param($stmt, 's', $currentRole);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-while ($row = mysqli_fetch_assoc($result)) {
-    $assignedIds[] = (int) $row['permission_id'];
-}
-mysqli_stmt_close($stmt);
-
-$permissionsQuery = mysqli_query($koneksi, "SELECT id, permission_key, permission_name, menu_group FROM rbac_permissions ORDER BY menu_group, permission_name");
-$groupedPermissions = [];
-while ($permission = mysqli_fetch_assoc($permissionsQuery)) {
-    $group = $permission['menu_group'] ?: 'Lainnya';
-    $groupedPermissions[$group][] = $permission;
-}
+$assignedIds = get_assigned_permission_ids($koneksi, $currentRole);
+$groupedPermissions = get_grouped_permissions($koneksi);
 
 $allPermissionsCount = 0;
 foreach ($groupedPermissions as $items) {
@@ -82,20 +169,6 @@ foreach ($groupedPermissions as $items) {
 
 $error = get_flash('error');
 $success = get_flash('success');
-
-function role_color_class(string $role): string
-{
-    return $role === 'admin' ? 'role-admin' : 'role-user';
-}
-
-function role_button_class(string $role, string $currentRole): string
-{
-    if ($role === $currentRole) {
-        return $role === 'admin' ? 'role-switch-btn is-active admin' : 'role-switch-btn is-active user';
-    }
-
-    return $role === 'admin' ? 'role-switch-btn admin' : 'role-switch-btn user';
-}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -642,19 +715,14 @@ function role_button_class(string $role, string $currentRole): string
                             <div class="col-lg-8">
                                 <div class="info-title">Informasi Pengaturan Role</div>
                                 <p class="info-text">
-                                    Super Admin memiliki akses penuh secara otomatis. Halaman ini digunakan untuk mengatur hak akses role
-                                    <b>Admin</b> dan <b>User</b> agar sesuai dengan kebutuhan operasional.
+                                    Administrator memiliki akses penuh secara otomatis. Halaman ini digunakan untuk mengatur hak akses role
+                                    <b>User</b> agar sesuai dengan kebutuhan operasional.
                                 </p>
                             </div>
 
                             <div class="col-lg-4">
                                 <div class="role-switch justify-content-lg-end">
-                                    <a href="<?= e(base_url('users/role_permissions.php?role=admin')) ?>"
-                                       class="<?= role_button_class('admin', $currentRole) ?>">
-                                        Role Admin
-                                    </a>
-
-                                    <a href="<?= e(base_url('users/role_permissions.php?role=user')) ?>"
+                                    <a href="<?= e(base_url('users/role_permissions.php')) ?>"
                                        class="<?= role_button_class('user', $currentRole) ?>">
                                         Role User
                                     </a>

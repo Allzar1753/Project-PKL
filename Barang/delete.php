@@ -8,7 +8,7 @@ header('Content-Type: application/json');
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 
-if ($id <= 0) {
+if ($id <= 0) { 
     echo json_encode([
         'status' => 'error',
         'message' => 'ID tidak valid'

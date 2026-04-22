@@ -1,4 +1,5 @@
 <?php
+
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
@@ -183,38 +184,91 @@ function ensureUserCanReceive(?array $pengirimanTerakhir): void
 
 function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, string $serialNumber): ?string
 {
-    $stmt = mysqli_prepare(
+    $stmtCurrent = mysqli_prepare(
         $koneksi,
-        "SELECT id, no_asset, serial_number
-         FROM barang
-         WHERE (no_asset = ? OR serial_number = ?)
-           AND id != ?
+        "SELECT tb.nama_barang
+         FROM barang b
+         INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang
+         WHERE b.id = ?
          LIMIT 1"
     );
 
-    mysqli_stmt_bind_param($stmt, 'ssi', $noAsset, $serialNumber, $id);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $duplikat = mysqli_fetch_assoc($result) ?: null;
-    mysqli_stmt_close($stmt);
+    mysqli_stmt_bind_param($stmtCurrent, 'i', $id);
+    mysqli_stmt_execute($stmtCurrent);
+    $resultCurrent = mysqli_stmt_get_result($stmtCurrent);
+    $currentRow = mysqli_fetch_assoc($resultCurrent) ?: null;
+    mysqli_stmt_close($stmtCurrent);
 
-    if (!$duplikat) {
-        return null;
+    if (!$currentRow) {
+        return "Data barang saat ini tidak ditemukan.";
     }
 
-    if (($duplikat['no_asset'] ?? '') === $noAsset && ($duplikat['serial_number'] ?? '') === $serialNumber) {
-        return "No Asset dan Serial Number sudah digunakan oleh data lain.";
-    }
+    $namaBarangInput = strtolower(trim($currentRow['nama_barang']));
+    $pasanganBarang = ['monitor', 'cpu'];
 
-    if (($duplikat['no_asset'] ?? '') === $noAsset) {
-        return "No Asset sudah digunakan oleh data lain.";
-    }
+    $stmSerial = mysqli_prepare(
+        $koneksi,
+        "SELECT id 
+        FROM barang
+        WHERE serial_number = ?
+            AND id != ?
+        LIMIT 1"
+    );
 
-    if (($duplikat['serial_number'] ?? '') === $serialNumber) {
+    mysqli_stmt_bind_param($stmSerial, 'si', $serialNumber, $id);
+    mysqli_stmt_execute($stmSerial);
+    $resultSerial = mysqli_stmt_get_result($stmSerial);
+    $serialDuplikat = mysqli_fetch_assoc($resultSerial) ?: null;
+    mysqli_stmt_close($stmSerial);
+
+    if ($serialDuplikat) {
         return "Serial Number sudah digunakan oleh data lain.";
     }
 
-    return "Data sudah digunakan oleh barang lain.";
+    $stmtAsset = mysqli_prepare(
+        $koneksi,
+        "SELECT b.id, b.no_asset, tb.nama_barang
+        FROM barang b 
+        INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang 
+        WHERE b.no_asset = ?
+            AND b.id != ?"
+    );
+    mysqli_stmt_bind_param($stmtAsset, 'si', $noAsset, $id);
+    mysqli_stmt_execute($stmtAsset);
+    $resultAsset = mysqli_stmt_get_result($stmtAsset);
+
+    $barangSudahAda = [];
+    $inputTermasukPasangan = in_array($namaBarangInput, $pasanganBarang, true);
+
+    while ($row = mysqli_fetch_assoc($resultAsset)) {
+        $namaBarangDB = strtolower(trim($row['nama_barang']));
+        $barangSudahAda[] = $namaBarangDB;
+
+        if ($namaBarangDB === $namaBarangInput) {
+            mysqli_stmt_close($stmtAsset);
+            return "Barang tersebut sudah tersedia di daftar barang.";
+        }
+
+        if (!in_array($namaBarangDB, $pasanganBarang, true)) {
+            mysqli_stmt_close($stmtAsset);
+            return "No Asset sudah digunakan oleh data lain.";
+        }
+    }
+
+    mysqli_stmt_close($stmtAsset);
+
+    $barangSudahAda = array_unique($barangSudahAda);
+    if (count($barangSudahAda) > 0) {
+        if (!$inputTermasukPasangan) {
+            return "No Asset sudah digunakan oleh data lain.";
+        }
+
+        if (count($barangSudahAda) >= 2) {
+            return "No Asset ini sudah dipakai untuk Monitor dan CPU.";
+        }
+    }
+
+    return null;
 }
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
@@ -265,9 +319,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         STATUS_SEDANG_PERJALANAN,
         STATUS_SUDAH_DITERIMA,
     ];
-    ?>
+?>
     <form id="formUpdate" enctype="multipart/form-data">
         <input type="hidden" name="id" value="<?= (int) $barang['id'] ?>">
+        <input type="hidden" name="bermasalah_awal" id="bermasalahAwal" value="<?= h($barang['bermasalah'] ?? 'Tidak') ?>">
 
         <?php if (!$pernahDikirim): ?>
             <div class="alert alert-info mb-3">
@@ -376,20 +431,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                         <div class="col-md-6">
                             <label class="form-label">Bermasalah</label>
-                            <select name="bermasalah" class="form-control">
+                            <select name="bermasalah" id="bermasalahUpdate" class="form-control">
                                 <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>Tidak</option>
                                 <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>Iya</option>
                             </select>
                         </div>
 
-                        <div class="col-md-12">
+                        <div class="col-md-12" id="keteranganMasalahWrap">
                             <label class="form-label">Keterangan Masalah</label>
-                            <textarea name="keterangan_masalah" class="form-control"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
+                            <textarea name="keterangan_masalah" id="keteranganMasalahUpdate" class="form-control"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Tanggal Masuk</label>
-                            <input type="date" name="tanggal_masuk" class="form-control" value="<?= h($barang['tanggal_masuk'] ?? '') ?>">
+                            <label class="form-label">Tanggal Kirim</label>
+                            <input type="date" name="tanggal_kirim" class="form-control" value="<?= h($barang['tanggal_kirim'] ?? '') ?>">
                         </div>
 
                         <div class="col-md-6">
@@ -451,19 +506,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Estimasi Pengiriman</label>
-                            <input type="text" name="estimasi_pengiriman" class="form-control" placeholder="Contoh: 2-3 hari / Tiba besok">
-                        </div>
-
-                        <div class="col-md-6">
                             <label class="form-label">Foto Resi Keluar / Bukti Kirim</label>
                             <input type="file" name="foto_resi" class="form-control">
                         </div>
 
-                        <div class="col-md-12">
-                            <label class="form-label">Catatan Pengiriman Keluar</label>
-                            <textarea name="catatan_pengiriman" class="form-control" rows="3" placeholder="Catatan tambahan pengiriman keluar"></textarea>
-                        </div>
                     </div>
                 </div>
             <?php elseif ($sedangDikirim): ?>
@@ -512,25 +558,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Foto Resi Masuk / Bukti Terima</label>
-                            <input type="file" name="foto_resi_masuk" class="form-control">
+                            <label class="form-label">Foto barang diterima</label>
+                            <input type="file" name="foto_barang_diterima" class="form-control">
                         </div>
 
-                        <?php if (!empty($pengirimanTerakhir['foto_resi_masuk'])): ?>
+                        <?php if (!empty($pengirimanTerakhir['foto_barang_diterima'])): ?>
                             <div class="col-md-6">
                                 <label class="form-label">Foto Resi Masuk Saat Ini</label>
                                 <div>
-                                    <button type="button" class="btn btn-outline-secondary previewFoto" data-foto="../assets/images/<?= h($pengirimanTerakhir['foto_resi_masuk']) ?>">
+                                    <button type="button" class="btn btn-outline-secondary previewFoto" data-foto="../assets/images/<?= h($pengirimanTerakhir['foto_barang_diterima']) ?>">
                                         <i class="bi bi-image"></i> Lihat Foto Resi Masuk
                                     </button>
                                 </div>
                             </div>
                         <?php endif; ?>
 
-                        <div class="col-md-12">
-                            <label class="form-label">Catatan Penerimaan</label>
-                            <textarea name="catatan_penerimaan" class="form-control" rows="3" placeholder="Catatan penerimaan barang"><?= h($pengirimanTerakhir['catatan_penerimaan'] ?? '') ?></textarea>
-                        </div>
                     </div>
                 </div>
             <?php else: ?>
@@ -565,11 +607,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             <label class="form-label">Nama Penerima</label>
                             <input type="text" class="form-control" value="<?= h($pengirimanTerakhir['nama_penerima'] ?? '') ?>" readonly>
                         </div>
-
-                        <div class="col-md-12">
-                            <label class="form-label">Catatan Penerimaan</label>
-                            <textarea class="form-control" rows="3" readonly><?= h($pengirimanTerakhir['catatan_penerimaan'] ?? '') ?></textarea>
-                        </div>
                     </div>
                 </div>
             <?php endif; ?>
@@ -587,7 +624,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             </div>
         <?php endif; ?>
     </form>
-    <?php
+
+    <script>
+        (function() {
+            const bermasalahAwal = document.getElementById('bermasalahAwal');
+            const bermasalahSelect = document.getElementById('bermasalahUpdate');
+            const keteranganWrap = document.getElementById('keteranganMasalahWrap');
+            const keteranganInput = document.getElementById('keteranganMasalahUpdate');
+
+            if (!bermasalahAwal || !bermasalahSelect || !keteranganWrap || !keteranganInput) {
+                return;
+            }
+
+            function applyBermasalahState(value) {
+                if (value === 'Iya') {
+                    keteranganWrap.style.display = '';
+                    keteranganInput.setAttribute('required', 'required');
+                } else {
+                    keteranganWrap.style.display = 'none';
+                    keteranganInput.removeAttribute('required');
+                }
+            }
+
+            applyBermasalahState(bermasalahSelect.value);
+
+            bermasalahSelect.addEventListener('change', function() {
+                const nilaiAwal = bermasalahAwal.value;
+                const nilaiSekarang = this.value;
+
+                if (nilaiAwal === 'Iya' && nilaiSekarang === 'Tidak') {
+                    Swal.fire({
+                        icon: 'question',
+                        title: 'Konfirmasi',
+                        text: 'Barang ini sudah tidak bermasalah lagi?',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, sudah',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            keteranganInput.value = '';
+                            applyBermasalahState('Tidak');
+                        } else {
+                            bermasalahSelect.value = 'Iya';
+                            applyBermasalahState('Iya');
+                        }
+                    });
+                    return;
+                }
+
+                if (nilaiSekarang === 'Iya') {
+                    applyBermasalahState('Iya');
+                } else {
+                    keteranganInput.value = '';
+                    applyBermasalahState('Tidak');
+                }
+            });
+        })();
+    </script>
+
+<?php
     exit;
 }
 
@@ -628,8 +723,6 @@ if ($sedangDikirim) {
     $tanggalDiterima = normalizeNullableString($_POST['tanggal_diterima'] ?? '');
     $namaPenerima = normalizeNullableString($_POST['nama_penerima'] ?? '');
     $nomorResiMasuk = normalizeNullableString($_POST['nomor_resi_masuk'] ?? ($pengirimanTerakhir['nomor_resi_keluar'] ?? ''));
-    $catatanPenerimaan = normalizeNullableString($_POST['catatan_penerimaan'] ?? '');
-
     if ($nomorResiMasuk === null) {
         $nomorResiMasuk = (string) ($pengirimanTerakhir['nomor_resi_keluar'] ?? '');
     }
@@ -644,7 +737,7 @@ if ($sedangDikirim) {
         }
     }
 
-    $uploadFotoResiMasuk = uploadImage('foto_resi_masuk');
+    $uploadFotoResiMasuk = uploadImage('foto_barang_diterima');
     if ($uploadFotoResiMasuk['status'] === 'error') {
         jsonError($uploadFotoResiMasuk['message']);
     }
@@ -672,21 +765,19 @@ if ($sedangDikirim) {
                  tanggal_diterima = ?,
                  nama_penerima = ?,
                  nomor_resi_masuk = ?,
-                 foto_resi_masuk = COALESCE(?, foto_resi_masuk),
-                 catatan_penerimaan = ?
+                 foto_barang_diterima = COALESCE(?, foto_barang_diterima)
              WHERE id_pengiriman = ?"
         );
 
         $idPengiriman = (int) $pengirimanTerakhir['id_pengiriman'];
         mysqli_stmt_bind_param(
             $stmtUpdatePengiriman,
-            'ssssssi',
+            'sssssi',
             $statusPenerimaan,
             $tanggalDiterima,
             $namaPenerima,
             $nomorResiMasuk,
             $fotoResiMasukBaru,
-            $catatanPenerimaan,
             $idPengiriman
         );
 
@@ -736,14 +827,20 @@ $idBranch = (int) ($_POST['id_branch'] ?? 0);
 $userBarang = trim((string) ($_POST['user'] ?? ''));
 $bermasalah = trim((string) ($_POST['bermasalah'] ?? 'Tidak'));
 $keteranganMasalah = normalizeNullableString($_POST['keterangan_masalah'] ?? '');
-$tanggalMasuk = normalizeNullableString($_POST['tanggal_masuk'] ?? '');
+$tanggalKirim = normalizeNullableString($_POST['tanggal_kirim'] ?? '');
+
+if ($bermasalah == 'Iya' && $keteranganMasalah === null) {
+    jsonError("Keterangan masalah wajib diisi jika barang bermasalah.");
+}
+
+if ($bermasalah !== 'Iya') {
+    $keteranganMasalah = null;
+}
 
 $tanggalKeluar = normalizeNullableString($_POST['tanggal_keluar'] ?? '');
 $tujuan = isset($_POST['tujuan']) && trim((string) $_POST['tujuan']) !== '' ? (int) $_POST['tujuan'] : 0;
 $jasaPengiriman = normalizeNullableString($_POST['jasa_pengiriman'] ?? '');
 $nomorResiKeluar = normalizeNullableString($_POST['nomor_resi'] ?? '');
-$estimasiPengiriman = normalizeNullableString($_POST['estimasi_pengiriman'] ?? '');
-$catatanPengiriman = normalizeNullableString($_POST['catatan_pengiriman'] ?? '');
 $statusPengirimanBaru = trim((string) ($_POST['status_pengiriman_baru'] ?? STATUS_SEDANG_DIKEMAS));
 
 $allowedStatusBaru = [
@@ -760,8 +857,6 @@ $adaInputPengirimanBaru = (
     $tujuan > 0 ||
     $jasaPengiriman !== null ||
     $nomorResiKeluar !== null ||
-    $estimasiPengiriman !== null ||
-    $catatanPengiriman !== null ||
     (isset($_FILES['foto_resi']) && !empty($_FILES['foto_resi']['name']))
 );
 
@@ -777,7 +872,13 @@ if ($idMerk <= 0 || $idTipe <= 0 || $idJenis <= 0 || $idBranch <= 0) {
     jsonError("Merk, tipe, jenis, dan branch wajib dipilih.");
 }
 
-$duplicateMessage = validateDuplicateBarang($koneksi, $id, $noAsset, $serialNumber);
+$duplicateMessage = validateDuplicateBarang(
+    $koneksi,
+    $id,
+    $noAsset,
+    $serialNumber
+);
+
 if ($duplicateMessage !== null) {
     jsonError($duplicateMessage);
 }
@@ -834,7 +935,7 @@ try {
              `user` = ?,
              bermasalah = ?,
              keterangan_masalah = ?,
-             tanggal_masuk = ?,
+             tanggal_kirim = ?,
              foto = COALESCE(?, foto)
          WHERE id = ?"
     );
@@ -852,7 +953,7 @@ try {
         $userBarang,
         $bermasalah,
         $keteranganMasalah,
-        $tanggalMasuk,
+        $tanggalKirim,
         $fotoBarangBaru,
         $id
     );
@@ -868,7 +969,6 @@ try {
         $namaPenerimaNull = null;
         $nomorResiMasukNull = null;
         $fotoResiMasukNull = null;
-        $catatanPenerimaanNull = null;
         $dibuatOleh = (int) current_user_id();
 
         $stmtInsertPengiriman = mysqli_prepare(
@@ -881,21 +981,18 @@ try {
                 jasa_pengiriman,
                 nomor_resi_keluar,
                 foto_resi_keluar,
-                estimasi_pengiriman,
-                catatan_pengiriman_keluar,
                 status_pengiriman,
                 tanggal_diterima,
                 nama_penerima,
                 nomor_resi_masuk,
-                foto_resi_masuk,
-                catatan_penerimaan,
+                foto_barang_diterima,
                 dibuat_oleh
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
 
         mysqli_stmt_bind_param(
             $stmtInsertPengiriman,
-            'iiissssssssssssi',
+            'iiisssssssssi',
             $id,
             $branchAsalTransaksi,
             $tujuan,
@@ -903,14 +1000,11 @@ try {
             $jasaPengiriman,
             $nomorResiKeluar,
             $fotoResiKeluarBaru,
-            $estimasiPengiriman,
-            $catatanPengiriman,
             $statusPengirimanBaru,
             $tanggalDiterimaNull,
             $namaPenerimaNull,
             $nomorResiMasukNull,
             $fotoResiMasukNull,
-            $catatanPenerimaanNull,
             $dibuatOleh
         );
 

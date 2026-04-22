@@ -46,7 +46,7 @@ function kirimEmailKeBranchInti(array $data): array
         $merk          = $e($data['merk'] ?? '-');
         $tipe          = $e($data['tipe'] ?? '-');
         $jenis         = $e($data['jenis'] ?? '-');
-        $tanggalMasuk  = $e($data['tanggal_masuk'] ?? '-');
+        $tanggalKirim  = $e($data['tanggal_kirim'] ?? '-');
         $userPenginput = $e($data['user'] ?? '-');
         $bermasalah    = $e($data['bermasalah'] ?? '-');
         $keterangan    = $e($data['keterangan_masalah'] ?? '-');
@@ -180,7 +180,7 @@ function kirimEmailKeBranchInti(array $data): array
                                         </tr>
                                         <tr>
                                             <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#6b7280;">Tanggal Masuk</td>
-                                            <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#1f1f1f;font-weight:700;">' . $tanggalMasuk . '</td>
+                                            <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#1f1f1f;font-weight:700;">' . $tanggalKirim. '</td>
                                         </tr>
                                         <tr>
                                             <td style="padding:12px 0;border-bottom:1px solid #f2ede5;color:#6b7280;">User</td>
@@ -224,7 +224,7 @@ function kirimEmailKeBranchInti(array $data): array
             "Merk: " . ($data['merk'] ?? '-') . "\n" .
             "Tipe: " . ($data['tipe'] ?? '-') . "\n" .
             "Jenis: " . ($data['jenis'] ?? '-') . "\n" .
-            "Tanggal Masuk: " . ($data['tanggal_masuk'] ?? '-') . "\n" .
+            "Tanggal Kirim: " . ($data['tanggal_kirim'] ?? '-') . "\n" .
             "User: " . ($data['user'] ?? '-') . "\n" .
             "Bermasalah: " . ($data['bermasalah'] ?? '-');
         $mail->send();

@@ -214,7 +214,7 @@ if ($searchInput !== '') {
         OR tb_status.nama_status LIKE '%{$search}%'
         OR tb_jenis.nama_jenis LIKE '%{$search}%'
         OR barang.keterangan_masalah LIKE '%{$search}%'
-        OR barang.tanggal_masuk LIKE '%{$search}%'
+        OR barang.tanggal_kirim LIKE '%{$search}%'
         OR barang.bermasalah LIKE '%{$search}%'
         OR barang.`user` LIKE '%{$search}%'
         OR branch_aktif.nama_branch LIKE '%{$search}%'
@@ -223,7 +223,6 @@ if ($searchInput !== '') {
         OR pengiriman.tanggal_keluar LIKE '%{$search}%'
         OR pengiriman.status_pengiriman LIKE '%{$search}%'
         OR pengiriman.nomor_resi_keluar LIKE '%{$search}%'
-        OR pengiriman.estimasi_pengiriman LIKE '%{$search}%'
         OR pengiriman.jasa_pengiriman LIKE '%{$search}%'
         OR pengiriman.nama_penerima LIKE '%{$search}%'
         OR pengiriman.nomor_resi_masuk LIKE '%{$search}%'
@@ -264,7 +263,7 @@ $query = mysqli_query($koneksi, "
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_masuk,
+        barang.tanggal_kirim,
         barang.bermasalah,
         barang.keterangan_masalah,
         barang.foto,
@@ -289,14 +288,11 @@ $query = mysqli_query($koneksi, "
         pengiriman.jasa_pengiriman,
         pengiriman.nomor_resi_keluar,
         pengiriman.foto_resi_keluar,
-        pengiriman.estimasi_pengiriman,
         pengiriman.status_pengiriman,
         pengiriman.tanggal_diterima,
         pengiriman.nama_penerima,
         pengiriman.nomor_resi_masuk,
-        pengiriman.foto_resi_masuk,
-        pengiriman.catatan_pengiriman_keluar,
-        pengiriman.catatan_penerimaan
+        pengiriman.foto_barang_diterima
     {$baseFrom}
     {$whereSql}
     ORDER BY barang.id DESC
@@ -1046,7 +1042,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                     <div>
                                         <div class="summary-label">Barang Masuk</div>
                                         <div class="summary-value" id="barangMasuk"><?= $masuk ?></div>
-                                        <div class="summary-note">Item yang belum pernah dikirim</div>
+                                        <div class="summary-note">Asset yang belum pernah dikirim</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-in-down"></i>
@@ -1061,7 +1057,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
                                         <div class="summary-value" id="barangKeluar"><?= $keluar ?></div>
-                                        <div class="summary-note">Item yang sudah pernah dikirim / keluar</div>
+                                        <div class="summary-note">Asset yang sudah pernah dikirim / keluar</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-box-arrow-up"></i>
@@ -1164,7 +1160,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                         <span class="badge bg-success mb-2">
                                                             <i class="bi bi-box-arrow-in-down me-1"></i>Masuk
                                                         </span>
-                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                        <span class="meta-line"><i class="bi bi-calendar"></i> <?= !empty($data['tanggal_kirim']) ? h($data['tanggal_kirim']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-muted"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
                                                     </td>
@@ -1219,7 +1215,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_tujuan']) ? h($data['nama_branch_tujuan']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-truck"></i> <?= !empty($data['jasa_pengiriman']) ? h($data['jasa_pengiriman']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-receipt"></i> Resi: <?= !empty($data['nomor_resi_keluar']) ? h($data['nomor_resi_keluar']) : '-' ?></span>
-                                                        <span class="meta-muted"><i class="bi bi-hourglass-split"></i> Estimasi: <?= !empty($data['estimasi_pengiriman']) ? h($data['estimasi_pengiriman']) : '-' ?></span>
                                                     </td>
 
                                                     <td>
@@ -1268,7 +1263,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     <td>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
-                                                        <span class="meta-muted"><i class="bi bi-calendar"></i> Masuk: <?= !empty($data['tanggal_masuk']) ? h($data['tanggal_masuk']) : '-' ?></span>
+                                                        <span class="meta-muted"><i class="bi bi-calendar"></i> Kirim: <?= !empty($data['tanggal_kirim']) ? h($data['tanggal_kirim']) : '-' ?></span>
                                                     </td>
 
                                                     <td>
@@ -1568,6 +1563,22 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             });
         });
 
+        function applyBermasalahStateUpdate(container) {
+            const select = container.querySelector('#bermasalahUpdate');
+            const wrap = container.querySelector('#keteranganMasalahWrap');
+            const textarea = container.querySelector('#keteranganMasalahUpdate');
+
+            if (!select || !wrap || !textarea) return;
+
+            if (select.value === 'Iya') {
+                wrap.style.display = '';
+                textarea.setAttribute('required', 'required');
+            } else {
+                wrap.style.display = 'none';
+                textarea.removeAttribute('required');
+            }
+        }
+
         $(document).on('click', '.btnEdit', function() {
             const id = $(this).data('id');
             const modalEl = document.getElementById('modalUpdate');
@@ -1582,6 +1593,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 .then(html => {
                     $('#contentUpdate').html(html);
                     initSelect2WhenModalReady('#contentUpdate', '#modalUpdate', 'Pilih...');
+                    applyBermasalahStateUpdate(document.getElementById('contentUpdate'));
                 })
                 .catch(() => {
                     $('#contentUpdate').html('<p class="text-danger">Gagal memuat data update.</p>');
@@ -1609,7 +1621,9 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                     return;
                 }
 
-                $.getJSON('delete.php', { id: id }, function(response) {
+                $.getJSON('delete.php', {
+                    id: id
+                }, function(response) {
                     if (response.status === 'success') {
                         row.remove();
 
@@ -1642,6 +1656,77 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                     }
                 });
             });
+        });
+
+        $(document).on('change', '#bermasalahUpdate', function() {
+            const container = document.getElementById('contentUpdate');
+            if (!container) return;
+
+            const bermasalahAwal = container.querySelector('#bermasalahAwal');
+            const bermasalahSelect = container.querySelector('#bermasalahUpdate');
+            const keteranganWrap = container.querySelector('#keteranganMasalahWrap');
+            const keteranganInput = container.querySelector('#keteranganMasalahUpdate');
+
+            if (!bermasalahAwal || !bermasalahSelect || !keteranganWrap || !keteranganInput) {
+                return;
+            }
+
+            function applyState(value) {
+                if (value === 'Iya') {
+                    keteranganWrap.style.display = '';
+                    keteranganInput.setAttribute('required', 'required');
+                } else {
+                    keteranganWrap.style.display = 'none';
+                    keteranganInput.removeAttribute('required');
+                }
+            }
+
+            function lanjutSelesai() {
+                keteranganInput.value = '';
+                applyState('Tidak');
+            }
+
+            function batalSelesai() {
+                bermasalahSelect.value = 'Iya';
+                applyState('Iya');
+            }
+
+            const nilaiAwal = bermasalahAwal.value;
+            const nilaiSekarang = bermasalahSelect.value;
+
+            if (nilaiAwal === 'Iya' && nilaiSekarang === 'Tidak') {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'question',
+                        title: 'Konfirmasi',
+                        text: 'Barang ini sudah tidak bermasalah lagi?',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, sudah',
+                        cancelButtonText: 'Batal'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            lanjutSelesai();
+                        } else {
+                            batalSelesai();
+                        }
+                    });
+                } else {
+                    const ok = confirm('Barang ini sudah tidak bermasalah lagi?');
+                    if (ok) {
+                        lanjutSelesai();
+                    } else {
+                        batalSelesai();
+                    }
+                }
+                return;
+            }
+
+            if (nilaiSekarang === 'Iya') {
+                applyState('Iya');
+            } else {
+                keteranganInput.value = '';
+                applyState('Tidak');
+            }
         });
 
         $(document).on('submit', '#formUpdate', function(e) {

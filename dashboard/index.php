@@ -199,7 +199,7 @@ $qBarangMasukTerbaru = mysqli_query($koneksi, "
         barang.id,
         barang.no_asset,
         barang.serial_number,
-        barang.tanggal_masuk,
+        barang.tanggal_kirim,
         barang.`user`,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
@@ -254,7 +254,6 @@ $qPengirimanBelumDiterima = mysqli_query($koneksi, "
         pengiriman.tanggal_keluar,
         pengiriman.status_pengiriman,
         pengiriman.nomor_resi_keluar,
-        pengiriman.estimasi_pengiriman,
         tb_barang.nama_barang,
         tb_merk.nama_merk,
         branch_tujuan.nama_branch AS nama_branch_tujuan,
@@ -926,7 +925,7 @@ $branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId
                                                         <div class="text-end">
                                                             <span class="badge rounded-pill bg-success">Masuk</span>
                                                             <div class="meta-muted mt-2">
-                                                                <?= !empty($item['tanggal_masuk']) ? h($item['tanggal_masuk']) : '-' ?>
+                                                                <?= !empty($item['tanggal_kirim']) ? h($item['tanggal_kirim']) : '-' ?>
                                                             </div>
                                                         </div>
                                                     </div>

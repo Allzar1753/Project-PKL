@@ -88,7 +88,7 @@ $page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 
 $activityDateExpr = "
 CASE
-    WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_masuk)
+    WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_kirim)
     ELSE DATE(bp.tanggal_keluar)
 END
 ";
@@ -199,7 +199,7 @@ $query = mysqli_query($koneksi, "
         b.id,
         b.no_asset,
         b.serial_number,
-        b.tanggal_masuk,
+        b.tanggal_kirim,
         b.bermasalah,
         b.keterangan_masalah,
         b.user,
@@ -217,13 +217,12 @@ $query = mysqli_query($koneksi, "
         bp.nomor_resi_keluar,
         bp.nama_penerima,
         bp.jasa_pengiriman,
-        bp.estimasi_pengiriman,
         CASE
             WHEN bp.id_pengiriman IS NULL THEN 'Masuk'
             ELSE 'Keluar'
         END AS jenis_riwayat,
         CASE
-            WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_masuk)
+            WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_kirim)
             ELSE DATE(bp.tanggal_keluar)
         END AS tanggal_aktivitas
     $baseFrom
@@ -1091,8 +1090,8 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
                                                 <td>
                                                     <span class="meta-line"><i class="bi bi-calendar-event"></i> <?= h($d['tanggal_aktivitas'] ?? '-') ?></span>
 
-                                                    <?php if (!empty($d['tanggal_masuk']) && $jenisRiwayat === 'Masuk'): ?>
-                                                        <span class="meta-muted">Masuk awal: <?= h($d['tanggal_masuk']) ?></span>
+                                                    <?php if (!empty($d['tanggal_kirim']) && $jenisRiwayat === 'Masuk'): ?>
+                                                        <span class="meta-muted">Masuk awal: <?= h($d['tanggal_kirim']) ?></span>
                                                     <?php endif; ?>
 
                                                     <?php if (!empty($d['tanggal_keluar']) && $jenisRiwayat === 'Keluar'): ?>

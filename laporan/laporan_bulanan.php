@@ -122,12 +122,6 @@ function build_pengiriman_note(array $step): string
         $parts[] = 'Nomor resi <b>' . h($step['nomor_resi_keluar']) . '</b>';
     }
 
-    if (!empty($step['catatan_pengiriman_keluar'])) {
-        $parts[] = h($step['catatan_pengiriman_keluar']);
-    } else {
-        $parts[] = 'Pengiriman dibuat tanpa catatan tambahan';
-    }
-
     return implode('. ', $parts) . '.';
 }
 
@@ -147,12 +141,6 @@ function build_penerimaan_note(array $step): string
 
     if (!empty($step['tanggal_diterima'])) {
         $parts[] = 'pada <b>' . h($step['tanggal_diterima']) . '</b>';
-    }
-
-    if (!empty($step['catatan_penerimaan'])) {
-        $parts[] = h($step['catatan_penerimaan']);
-    } else {
-        $parts[] = 'Tanpa catatan tambahan saat penerimaan';
     }
 
     return implode('. ', $parts) . '.';
@@ -176,7 +164,7 @@ $sql = "
         b.id,
         b.no_asset,
         b.serial_number,
-        b.tanggal_masuk,
+        b.tanggal_kirim,
         b.user,
         b.bermasalah,
         b.keterangan_masalah,
@@ -192,13 +180,12 @@ $sql = "
         bp.nomor_resi_keluar,
         bp.nama_penerima,
         bp.jasa_pengiriman,
-        bp.catatan_pengiriman_keluar,
-        bp.catatan_penerimaan,
+
 
         bpasal.nama_branch AS branch_asal_pengiriman,
         bptujuan.nama_branch AS branch_tujuan,
 
-        DATE(COALESCE(bp.tanggal_keluar, b.tanggal_masuk)) AS tanggal_aktivitas
+        DATE(COALESCE(bp.tanggal_keluar, b.tanggal_kirim)) AS tanggal_aktivitas
     FROM barang b
     LEFT JOIN tb_barang tb ON tb.id_barang = b.id_barang
     LEFT JOIN tb_merk bm ON bm.id_merk = b.id_merk
@@ -207,7 +194,7 @@ $sql = "
     LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id
     LEFT JOIN tb_branch bpasal ON bpasal.id_branch = bp.branch_asal
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
-    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_masuk)) BETWEEN ? AND ?
+    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_kirim)) BETWEEN ? AND ?
     ORDER BY b.id DESC, bp.id_pengiriman ASC
 ";
 
@@ -234,7 +221,7 @@ while ($row = mysqli_fetch_assoc($result)) {
                 'id' => $row['id'],
                 'no_asset' => $row['no_asset'],
                 'serial_number' => $row['serial_number'],
-                'tanggal_masuk' => $row['tanggal_masuk'],
+                'tanggal_kirim' => $row['tanggal_kirim'],
                 'user' => $row['user'],
                 'bermasalah' => $row['bermasalah'],
                 'keterangan_masalah' => $row['keterangan_masalah'],
@@ -256,8 +243,6 @@ while ($row = mysqli_fetch_assoc($result)) {
             'nomor_resi_keluar' => $row['nomor_resi_keluar'],
             'nama_penerima' => $row['nama_penerima'],
             'jasa_pengiriman' => $row['jasa_pengiriman'],
-            'catatan_pengiriman_keluar' => $row['catatan_pengiriman_keluar'],
-            'catatan_penerimaan' => $row['catatan_penerimaan'],
             'branch_asal_pengiriman' => $row['branch_asal_pengiriman'],
             'branch_tujuan' => $row['branch_tujuan'],
         ];
@@ -1648,7 +1633,7 @@ $documentNumber = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['sta
                                                 <div class="info-box">
                                                     <div><b>Ringkasan Asset</b></div>
                                                     <div>Cabang aktif: <b><?= h($asset['branch_aktif'] ?? '-') ?></b></div>
-                                                    <div>Tanggal masuk: <b><?= h($asset['tanggal_masuk'] ?? '-') ?></b></div>
+                                                    <div>Tanggal masuk: <b><?= h($asset['tanggal_kirim'] ?? '-') ?></b></div>
                                                     <div>Status barang: <b><?= h($asset['nama_status'] ?? '-') ?></b></div>
                                                     <?php if (($asset['bermasalah'] ?? '') === 'Iya'): ?>
                                                         <div>Kondisi: <b>Bermasalah</b> — <?= h($asset['keterangan_masalah'] ?? '-') ?></div>
@@ -1674,7 +1659,7 @@ $documentNumber = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['sta
                                                                         </div>
                                                                         <div class="detail-box">
                                                                             <div class="detail-label">Tanggal Masuk</div>
-                                                                            <div class="detail-value"><?= h($asset['tanggal_masuk'] ?? '-') ?></div>
+                                                                            <div class="detail-value"><?= h($asset['tanggal_kirim'] ?? '-') ?></div>
                                                                         </div>
                                                                     </div>
                                                                 </div>

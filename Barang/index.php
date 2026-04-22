@@ -818,6 +818,13 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         .btn-danger {
             background: linear-gradient(135deg, #ff7a00, #ff9f1a);
             border: none;
+            color: #fff;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #218838);
+            border: none;
+            color: #fff;
         }
 
         .btn-info {
@@ -834,7 +841,8 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
         .btn-info:hover,
         .btn-dark:hover,
-        .btn-danger:hover {
+        .btn-danger:hover,
+        .btn-success:hover {
             filter: brightness(.98);
         }
 
@@ -1136,6 +1144,9 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                             $isLocked = isBarangLocked($data);
                                             $canShippingAction = canProcessShippingAction($data, $isAdmin, $myBranchId);
                                             $shippingActionTitle = getShippingActionTitle($data, $isAdmin, $myBranchId);
+
+                                            // LOGIKA BARU: Cek status barang bermasalah atau tidak
+                                            $isBermasalah = ($data['bermasalah'] ?? '') === 'Iya';
                                             ?>
                                             <tr data-keluar="<?= $isKeluar ? '1' : '0' ?>" data-locked="<?= $isLocked ? '1' : '0' ?>">
                                                 <td><?= $no++ ?></td>
@@ -1166,7 +1177,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     </td>
 
                                                     <td>
-                                                        <?php if (($data['bermasalah'] ?? '') === 'Iya'): ?>
+                                                        <?php if ($isBermasalah): ?>
                                                             <span class="badge bg-danger rounded-pill mb-2">
                                                                 <i class="bi bi-exclamation-triangle me-1"></i>Bermasalah
                                                             </span>
@@ -1188,14 +1199,26 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                     <td class="text-center">
                                                         <div class="action-group">
+                                                            <!-- Tombol Baru 1: Edit Master Data Saja -->
                                                             <?php if (canEditMasterBarang()): ?>
-                                                                <button class="btn btn-sm btn-warning btnEdit"
+                                                                <button class="btn btn-sm btn-warning btnEditMaster"
                                                                     data-id="<?= (int) $data['id'] ?>"
-                                                                    title="Edit data barang">
-                                                                    <i class="bi bi-pencil"></i>
+                                                                    title="Edit Data Barang">
+                                                                    <i class="bi bi-pencil-fill"></i>
                                                                 </button>
                                                             <?php endif; ?>
 
+                                                            <!-- Tombol Baru 2: Logistik Saja -->
+                                                            <?php if (can('barang.kirim')): ?>
+                                                                <button class="btn btn-sm <?= $isBermasalah ? 'btn-danger' : 'btn-success' ?> btnLogistik"
+                                                                    data-id="<?= (int) $data['id'] ?>"
+                                                                    data-bermasalah="<?= $isBermasalah ? '1' : '0' ?>"
+                                                                    title="Logistik Pengiriman">
+                                                                    <i class="bi bi-truck"></i>
+                                                                </button>
+                                                            <?php endif; ?>
+
+                                                            <!-- Tombol 3: Delete Saja -->
                                                             <?php if (canDeleteMasterBarang()): ?>
                                                                 <button class="btn btn-sm btn-danger btnDelete"
                                                                     data-id="<?= (int) $data['id'] ?>"
@@ -1245,9 +1268,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                                     <td class="text-center">
                                                         <div class="action-group">
+                                                            <!-- Button Penerimaan Logistik (Tetap di warna info/hitam karena ini penerimaan) -->
                                                             <?php if ($canShippingAction): ?>
-                                                                <button class="btn btn-sm btn-info btnEdit"
+                                                                <button class="btn btn-sm btn-info btnLogistik"
                                                                     data-id="<?= (int) $data['id'] ?>"
+                                                                    data-bermasalah="0"
                                                                     title="<?= h($shippingActionTitle) ?>">
                                                                     <i class="bi bi-truck"></i>
                                                                 </button>
@@ -1260,6 +1285,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     </td>
 
                                                 <?php else: ?>
+                                                    <!-- MODE TAMPILAN "SEMUA BARANG" -->
                                                     <td>
                                                         <span class="meta-line"><i class="bi bi-geo-alt"></i> <?= !empty($data['nama_branch_aktif']) ? h($data['nama_branch_aktif']) : '-' ?></span>
                                                         <span class="meta-line"><i class="bi bi-person"></i> <?= !empty($data['user']) ? h($data['user']) : '-' ?></span>
@@ -1299,9 +1325,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                     <td class="text-center">
                                                         <div class="action-group">
                                                             <?php if ($isKeluar): ?>
+                                                                <!-- Jika sudah keluar, hanya muncul aksi logistik penerimaan/kunci -->
                                                                 <?php if ($canShippingAction): ?>
-                                                                    <button class="btn btn-sm btn-info btnEdit"
+                                                                    <button class="btn btn-sm btn-info btnLogistik"
                                                                         data-id="<?= (int) $data['id'] ?>"
+                                                                        data-bermasalah="0"
                                                                         title="<?= h($shippingActionTitle) ?>">
                                                                         <i class="bi bi-truck"></i>
                                                                     </button>
@@ -1311,11 +1339,21 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                                                                     <i class="bi bi-lock-fill"></i>
                                                                 </button>
                                                             <?php else: ?>
+                                                                <!-- Jika BELUM keluar, muncul 3 tombol utuh (Edit, Logistik, Hapus) -->
                                                                 <?php if (canEditMasterBarang()): ?>
-                                                                    <button class="btn btn-sm btn-warning btnEdit"
+                                                                    <button class="btn btn-sm btn-warning btnEditMaster"
                                                                         data-id="<?= (int) $data['id'] ?>"
-                                                                        title="Edit data barang">
-                                                                        <i class="bi bi-pencil"></i>
+                                                                        title="Edit Data Barang">
+                                                                        <i class="bi bi-pencil-fill"></i>
+                                                                    </button>
+                                                                <?php endif; ?>
+
+                                                                <?php if (can('barang.kirim')): ?>
+                                                                    <button class="btn btn-sm <?= $isBermasalah ? 'btn-danger' : 'btn-success' ?> btnLogistik"
+                                                                        data-id="<?= (int) $data['id'] ?>"
+                                                                        data-bermasalah="<?= $isBermasalah ? '1' : '0' ?>"
+                                                                        title="Logistik Pengiriman">
+                                                                        <i class="bi bi-truck"></i>
                                                                     </button>
                                                                 <?php endif; ?>
 
@@ -1364,6 +1402,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         </div>
     </div>
 
+    <!-- Modal Create Tetap -->
     <div class="modal fade" id="modalCreate" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -1378,11 +1417,12 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         </div>
     </div>
 
+    <!-- Modal Update/Logistik -->
     <div class="modal fade" id="modalUpdate" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-warning-custom">
-                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Update Data Barang</h5>
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i><span id="modalUpdateTitle">Form Data</span></h5>
                     <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="contentUpdate">Loading...</div>
@@ -1422,7 +1462,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
     <script>
         function destroySelect2InContainer(containerSelector) {
             const $container = $(containerSelector);
-
             $container.find('select').each(function() {
                 if ($(this).hasClass('select2-hidden-accessible')) {
                     $(this).select2('destroy');
@@ -1438,7 +1477,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 if ($(this).hasClass('select2-hidden-accessible')) {
                     $(this).select2('destroy');
                 }
-
                 $(this).select2({
                     dropdownParent: $modal,
                     width: '100%',
@@ -1450,7 +1488,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
         function initSelect2WhenModalReady(containerSelector, modalSelector, placeholderText = 'Pilih...') {
             const $modal = $(modalSelector);
-
             const runInit = function() {
                 requestAnimationFrame(function() {
                     initSelect2InContainer(containerSelector, modalSelector, placeholderText);
@@ -1466,7 +1503,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
         function loadModalContent(modalSelector, contentSelector, url, errorMessage) {
             $(contentSelector).html('<p class="text-center text-muted">Loading form...</p>');
-
             $.get(url, function(html) {
                 $(contentSelector).html(html);
                 initSelect2WhenModalReady(contentSelector, modalSelector, 'Pilih...');
@@ -1487,15 +1523,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         });
 
         resetModalContent('#modalCreate', '#contentCreate');
-
         let isSubmittingCreate = false;
 
         $(document).on('submit', '#formCreate', function(e) {
             e.preventDefault();
-
-            if (isSubmittingCreate) {
-                return;
-            }
+            if (isSubmittingCreate) return;
 
             const $form = $(this);
             const $btn = $form.find('#btnSimpanBarang');
@@ -1510,9 +1542,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 dataType: 'json',
                 beforeSend: function() {
                     isSubmittingCreate = true;
-
-                    $btn.prop('disabled', true);
-                    $btn.addClass('disabled');
+                    $btn.prop('disabled', true).addClass('disabled');
                     $btn.find('.btn-text').addClass('d-none');
                     $btn.find('.btn-loading').removeClass('d-none');
 
@@ -1533,9 +1563,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                             icon: 'success',
                             title: 'Berhasil',
                             text: response.message || 'Data berhasil ditambahkan'
-                        }).then(() => {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                     } else {
                         Swal.fire({
                             icon: 'error',
@@ -1554,49 +1582,83 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 },
                 complete: function() {
                     isSubmittingCreate = false;
-
-                    $btn.prop('disabled', false);
-                    $btn.removeClass('disabled');
+                    $btn.prop('disabled', false).removeClass('disabled');
                     $btn.find('.btn-text').removeClass('d-none');
                     $btn.find('.btn-loading').addClass('d-none');
                 }
             });
         });
 
-        function applyBermasalahStateUpdate(container) {
-            const select = container.querySelector('#bermasalahUpdate');
-            const wrap = container.querySelector('#keteranganMasalahWrap');
-            const textarea = container.querySelector('#keteranganMasalahUpdate');
-
-            if (!select || !wrap || !textarea) return;
-
-            if (select.value === 'Iya') {
-                wrap.style.display = '';
-                textarea.setAttribute('required', 'required');
-            } else {
-                wrap.style.display = 'none';
-                textarea.removeAttribute('required');
-            }
-        }
-
-        $(document).on('click', '.btnEdit', function() {
+        // ==========================================
+        // SCRIPT UNTUK TOMBOL EDIT MASTER DATA
+        // ==========================================
+        $(document).on('click', '.btnEditMaster', function() {
             const id = $(this).data('id');
             const modalEl = document.getElementById('modalUpdate');
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+            document.getElementById('modalUpdateTitle').innerHTML = 'Update Data Barang';
 
             destroySelect2InContainer('#contentUpdate');
             $('#contentUpdate').html('<p class="text-center text-muted">Loading form...</p>');
             modal.show();
 
-            fetch('update.php?id=' + id)
+            // Melempar parameter type=master ke file update.php
+            // Melempar parameter type=master ke file update.php
+            fetch('update.php?id=' + id + '&type=master')
                 .then(res => res.text())
                 .then(html => {
                     $('#contentUpdate').html(html);
                     initSelect2WhenModalReady('#contentUpdate', '#modalUpdate', 'Pilih...');
-                    applyBermasalahStateUpdate(document.getElementById('contentUpdate'));
+                    
+                    // --- TAMBAHAN KODENYA DI SINI ---
+                    if ($('#bermasalahUpdate').length) {
+                        toggleKeteranganMasalah();
+                    }
+                    // --------------------------------
                 })
                 .catch(() => {
                     $('#contentUpdate').html('<p class="text-danger">Gagal memuat data update.</p>');
+                });
+        });
+
+        // ==========================================
+        // SCRIPT UNTUK TOMBOL LOGISTIK (PENGIRIMAN)
+        // ==========================================
+        $(document).on('click', '.btnLogistik', function() {
+            const id = $(this).data('id');
+            const isBermasalah = $(this).data('bermasalah') == '1';
+
+            // Jika tombol merah / barang bermasalah
+            if (isBermasalah) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Barang Bermasalah',
+                    text: 'Barang ini masih berstatus "Bermasalah" dan belum bisa melakukan transaksi pengiriman logistik.',
+                    confirmButtonColor: '#d33',
+                });
+                return; // Batalkan proses membuka modal jika bermasalah
+            }
+
+            // Jika barang aman (tombol hijau), lanjut buka modal logistik
+            const modalEl = document.getElementById('modalUpdate');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+            document.getElementById('modalUpdateTitle').innerHTML = 'Logistik Pengiriman';
+
+            destroySelect2InContainer('#contentUpdate');
+            $('#contentUpdate').html('<p class="text-center text-muted">Loading form...</p>');
+            modal.show();
+
+            // Melempar parameter type=logistik ke file update.php
+            fetch('update.php?id=' + id + '&type=logistik')
+                .then(res => res.text())
+                .then(html => {
+                    $('#contentUpdate').html(html);
+                    initSelect2WhenModalReady('#contentUpdate', '#modalUpdate', 'Pilih...');
+                })
+                .catch(() => {
+                    $('#contentUpdate').html('<p class="text-danger">Gagal memuat form logistik.</p>');
                 });
         });
 
@@ -1605,6 +1667,9 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             $('#contentUpdate').html('Loading...');
         });
 
+        // ==========================================
+        // SCRIPT UNTUK TOMBOL DELETE
+        // ==========================================
         $(document).on('click', '.btnDelete', function() {
             const id = this.dataset.id;
             const row = this.closest('tr');
@@ -1617,36 +1682,17 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                 confirmButtonColor: '#d33',
                 confirmButtonText: 'Ya hapus'
             }).then(result => {
-                if (!result.isConfirmed) {
-                    return;
-                }
+                if (!result.isConfirmed) return;
 
                 $.getJSON('delete.php', {
                     id: id
                 }, function(response) {
                     if (response.status === 'success') {
-                        row.remove();
-
-                        const total = document.getElementById('totalInventaris');
-                        const masuk = document.getElementById('barangMasuk');
-                        const keluar = document.getElementById('barangKeluar');
-
-                        total.innerText = parseInt(total.innerText, 10) - 1;
-
-                        const isKeluar = row.dataset.keluar === '1';
-                        if (isKeluar) {
-                            keluar.innerText = parseInt(keluar.innerText, 10) - 1;
-                        } else {
-                            masuk.innerText = parseInt(masuk.innerText, 10) - 1;
-                        }
-
                         Swal.fire({
                             icon: 'success',
                             title: 'Terhapus!',
                             text: response.message
-                        }).then(() => {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                     } else {
                         Swal.fire({
                             icon: 'error',
@@ -1658,80 +1704,11 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             });
         });
 
-        $(document).on('change', '#bermasalahUpdate', function() {
-            const container = document.getElementById('contentUpdate');
-            if (!container) return;
-
-            const bermasalahAwal = container.querySelector('#bermasalahAwal');
-            const bermasalahSelect = container.querySelector('#bermasalahUpdate');
-            const keteranganWrap = container.querySelector('#keteranganMasalahWrap');
-            const keteranganInput = container.querySelector('#keteranganMasalahUpdate');
-
-            if (!bermasalahAwal || !bermasalahSelect || !keteranganWrap || !keteranganInput) {
-                return;
-            }
-
-            function applyState(value) {
-                if (value === 'Iya') {
-                    keteranganWrap.style.display = '';
-                    keteranganInput.setAttribute('required', 'required');
-                } else {
-                    keteranganWrap.style.display = 'none';
-                    keteranganInput.removeAttribute('required');
-                }
-            }
-
-            function lanjutSelesai() {
-                keteranganInput.value = '';
-                applyState('Tidak');
-            }
-
-            function batalSelesai() {
-                bermasalahSelect.value = 'Iya';
-                applyState('Iya');
-            }
-
-            const nilaiAwal = bermasalahAwal.value;
-            const nilaiSekarang = bermasalahSelect.value;
-
-            if (nilaiAwal === 'Iya' && nilaiSekarang === 'Tidak') {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'question',
-                        title: 'Konfirmasi',
-                        text: 'Barang ini sudah tidak bermasalah lagi?',
-                        showCancelButton: true,
-                        confirmButtonText: 'Ya, sudah',
-                        cancelButtonText: 'Batal'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            lanjutSelesai();
-                        } else {
-                            batalSelesai();
-                        }
-                    });
-                } else {
-                    const ok = confirm('Barang ini sudah tidak bermasalah lagi?');
-                    if (ok) {
-                        lanjutSelesai();
-                    } else {
-                        batalSelesai();
-                    }
-                }
-                return;
-            }
-
-            if (nilaiSekarang === 'Iya') {
-                applyState('Iya');
-            } else {
-                keteranganInput.value = '';
-                applyState('Tidak');
-            }
-        });
-
+        // ==========================================
+        // SUBMIT FORM UNTUK MODAL (Master/Logistik)
+        // ==========================================
         $(document).on('submit', '#formUpdate', function(e) {
             e.preventDefault();
-
             const formData = new FormData(this);
 
             $.ajax({
@@ -1747,14 +1724,12 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                             icon: 'success',
                             title: 'Berhasil',
                             text: response.message
-                        }).then(() => {
-                            location.reload();
-                        });
+                        }).then(() => location.reload());
                     } else {
                         Swal.fire({
                             icon: 'error',
                             title: 'Gagal',
-                            text: response.message || 'Update gagal'
+                            text: response.message || 'Proses gagal'
                         });
                     }
                 },
@@ -1763,7 +1738,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
-                        text: 'Terjadi error di update.php. Cek console browser.'
+                        text: 'Terjadi error sistem backend.'
                     });
                 }
             });
@@ -1785,7 +1760,6 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
         $(document).on('submit', '#formPengirimanUser', function(e) {
             e.preventDefault();
-
             const formData = new FormData(this);
             const $form = $(this);
             const $btn = $form.find('#btnSimpanPengirimanUser');
@@ -1831,6 +1805,50 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
                     $btn.find('.btn-loading').addClass('d-none');
                 }
             });
+        });
+
+        // ==========================================
+        // FUNGSI TEXTAREA BARANG BERMASALAH
+        // ==========================================
+        function toggleKeteranganMasalah() {
+            const val = $('#bermasalahUpdate').val();
+            if (val === 'Iya') {
+                $('#keteranganMasalahWrap').slideDown();
+                $('#keteranganMasalahUpdate').attr('required', true);
+            } else {
+                $('#keteranganMasalahWrap').slideUp();
+                $('#keteranganMasalahUpdate').removeAttr('required');
+            }
+        }
+
+        // Event listener saat dropdown status bermasalah diubah (Menggunakan Event Delegation)
+        $(document).on('change', '#bermasalahUpdate', function() {
+            const nilaiAwal = $('#bermasalahAwal').val();
+            const nilaiSekarang = $(this).val();
+
+            if (nilaiAwal === 'Iya' && nilaiSekarang === 'Tidak') {
+                Swal.fire({
+                    icon: 'question',
+                    title: 'Konfirmasi',
+                    text: 'Barang ini sudah diperbaiki atau tidak bermasalah lagi?',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, sudah',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#keteranganMasalahUpdate').val('');
+                        toggleKeteranganMasalah();
+                    } else {
+                        $(this).val('Iya');
+                        toggleKeteranganMasalah();
+                    }
+                });
+            } else {
+                if (nilaiSekarang === 'Tidak') {
+                    $('#keteranganMasalahUpdate').val('');
+                }
+                toggleKeteranganMasalah();
+            }
         });
     </script>
 </body>

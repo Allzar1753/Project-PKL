@@ -363,12 +363,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label>No Asset</label>
-            <input type="text" name="no_asset" class="form-control" required>
+            <input type="text" name="no_asset" class="form-control" required placeholder="Wajib diisi!">
         </div>
 
         <div class="col-md-6">
             <label>Serial Number / Service tag</label>
-            <input type="text" name="serial_number" class="form-control" required>
+            <input type="text" name="serial_number" class="form-control" required placeholder="Wajib diisi!">
         </div>
 
         <div class="col-md-6">

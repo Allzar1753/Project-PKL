@@ -2,42 +2,55 @@
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    redirect_to(base_url('auth/login.php'));
-}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $login    = trim((string) ($_POST['login'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
 
-$login = trim($_POST['login'] ?? '');
-$password = (string) ($_POST['password'] ?? '');
+    if ($login === '' || $password === '') {
+        set_flash('error', 'Username/Email dan Password wajib diisi.');
+        redirect_to(base_url('auth/login.php'));
+    }
 
-if ($login === '' || $password === '') {
-    set_flash('error', 'Username/email dan password wajib diisi.');
-    redirect_to(base_url('auth/login.php'));
-}
+    // Cek user berdasarkan username ATAU email
+    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 'ss', $login, $login);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $user   = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
 
-$user = find_user_by_login($koneksi, $login);
+    if (!$user) {
+        set_flash('error', 'Username atau email tidak ditemukan.');
+        redirect_to(base_url('auth/login.php'));
+    }
 
-if (!$user) {
-    set_flash('error', 'Akun tidak ditemukan.');
-    redirect_to(base_url('auth/login.php'));
-}
+    // Verifikasi hash password
+    if (!password_verify($password, $user['password'])) {
+        set_flash('error', 'Password salah.');
+        redirect_to(base_url('auth/login.php'));
+    }
 
-if (!verify_password_and_upgrade($koneksi, $user, $password)) {
-    set_flash('error', 'Password salah.');
-    redirect_to(base_url('auth/login.php'));
-}
+    // Login Sukses! Set data ke session
+    $_SESSION['user'] =[
+        'id'                   => (int) $user['id'],
+        'username'             => $user['username'],
+        'email'                => $user['email'],
+        'role'                 => $user['role'],
+        'id_branch'            => $user['id_branch'],
+        'must_change_password' => (int) $user['must_change_password']
+    ];
 
-login_user($koneksi, $user);
-session_regenerate_id(true);
+    // ============================================================
+    // LOGIC WAJIB GANTI PASSWORD
+    // ============================================================
+    if ((int) $user['must_change_password'] === 1) {
+        // Jika wajib ganti password, arahkan ke force_change_password
+        redirect_to(base_url('auth/force_change_password.php'));
+    }
 
-if (needs_password_change($user)) {
-    set_flash('success', 'Silakan buat password baru Anda terlebih dahulu.');
-    redirect_to(base_url('auth/force_change_password.php'));
-}
-
-set_flash('success', 'Login berhasil. Selamat datang, ' . $user['username'] . '.');
-
-if (($user['role'] ?? '') === 'admin') {
+    // Jika tidak ada tanggungan ganti password, arahkan ke dashboard
+    set_flash('success', 'Selamat datang kembali, ' . $user['username'] . '!');
     redirect_to(base_url('dashboard/index.php'));
 }
 
-redirect_to(base_url('barang/index.php'));
+redirect_to(base_url('auth/login.php'));

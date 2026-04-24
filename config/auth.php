@@ -248,11 +248,28 @@ if (!function_exists('login_user')) {
             'role'        => (string) ($user['role'] ?? 'user'),
             'id_branch'   => isset($user['id_branch']) ? (int) $user['id_branch'] : null,
             'permissions' => [],
+            'must_change_password' => (int) ($user['must_change_password'] ?? 0),
         ];
 
         refresh_permissions($koneksi);
     }
 }
+
+if (!function_exists('check_must_change_password')) {
+    function check_must_change_password(): void 
+    {
+        if (is_logged_in()) return;
+
+        $currentPage = basename($_SERVER['PHP_SELF']);
+        if ($currentPage === 'force_change_password.php') return;
+
+        if (!empty($_SESSION['user']['must_change_password'])) {
+            redirect_to(base_url('dashboard/index.php'));
+        }
+    }
+}
+
+
 
 if (!function_exists('needs_password_change')) {
     function needs_password_change(array $user): bool
@@ -354,6 +371,7 @@ if (!function_exists('require_permission')) {
     function require_permission(mysqli $koneksi, string $permission): void
     {
         require_login();
+        check_must_change_password();
 
         if (empty($_SESSION['user']['permissions'])) {
             refresh_permissions($koneksi);

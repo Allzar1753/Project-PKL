@@ -22,11 +22,45 @@ if (!function_exists('redirect_users_index')) {
     }
 }
 
+if (!function_exists('format_datetime')) {
+    function format_datetime(?string $datetime): string
+    {
+        if (!$datetime) {
+            return 'Belum pernah';
+        }
+
+        $bulan = [
+            1 => 'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'Mei',
+            'Jun',
+            'Jul',
+            'Agu',
+            'Sep',
+            'Okt',
+            'Nov',
+            'Des'
+        ];
+
+        $timestamp = strtotime($datetime);
+
+        $tgl = date('d', $timestamp);
+        $bln = $bulan[(int)date('m', $timestamp)];
+        $thn = date('Y', $timestamp);
+        $jam = date('H:i', $timestamp);
+
+        return "$tgl-$bln-$thn $jam";
+    }
+}
+
+
 function find_user_by_id(mysqli $koneksi, int $id): ?array
 {
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id, username, email, password, role, id_branch
+        "SELECT id, username, email, password, role, id_branch, created_at, password_changed_at
          FROM users
          WHERE id = ?
          LIMIT 1"
@@ -323,6 +357,95 @@ function create_user_field_error(array $errors, int $rowIndex, string $field): s
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    
+    if ($action === 'reset_password_request') {
+        $requestId   = (int) ($_POST['request_id'] ?? 0);
+        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $adminId     = (int) current_user_id();
+
+        if ($requestId <= 0 || $newPassword === '') {
+            set_flash('error', 'Data tidak lengkap.');
+            redirect_users_index();
+        }
+
+        if (strlen($newPassword) < 8) {
+            set_flash('error', 'Password baru minimal 8 karakter.');
+            redirect_users_index();
+        }
+
+        // Ambil data request
+        $stmtReq = mysqli_prepare(
+            $koneksi,
+            "SELECT prr.id, prr.user_id
+         FROM password_reset_requests prr
+         WHERE prr.id = ? AND prr.status = 'pending'
+         LIMIT 1"
+        );
+        mysqli_stmt_bind_param($stmtReq, 'i', $requestId);
+        mysqli_stmt_execute($stmtReq);
+        $resultReq = mysqli_stmt_get_result($stmtReq);
+        $reqData   = mysqli_fetch_assoc($resultReq);
+        mysqli_stmt_close($stmtReq);
+
+        if (!$reqData) {
+            set_flash('error', 'Permintaan tidak ditemukan atau sudah diproses.');
+            redirect_users_index();
+        }
+
+        $targetUserId = (int) $reqData['user_id'];
+        $hash         = password_hash($newPassword, PASSWORD_DEFAULT);
+        $now          = date('Y-m-d H:i:s');
+        $mustChange   = 1;
+
+        mysqli_begin_transaction($koneksi);
+
+        try {
+            // Update password user + set must_change_password = 1
+            $stmtUpdateUser = mysqli_prepare(
+                $koneksi,
+                "UPDATE users
+             SET password = ?,
+                 must_change_password = ?,
+                 password_reset_at = ?,
+                 password_reset_by = ?
+             WHERE id = ?"
+            );
+            mysqli_stmt_bind_param(
+                $stmtUpdateUser,
+                'sisii',
+                $hash,
+                $mustChange,
+                $now,
+                $adminId,
+                $targetUserId
+            );
+            mysqli_stmt_execute($stmtUpdateUser);
+            mysqli_stmt_close($stmtUpdateUser);
+
+            // Update status request → selesai
+            $stmtUpdateReq = mysqli_prepare(
+                $koneksi,
+                "UPDATE password_reset_requests
+             SET status = 'selesai',
+                 processed_by = ?,
+                 processed_at = ?
+             WHERE id = ?"
+            );
+            mysqli_stmt_bind_param($stmtUpdateReq, 'isi', $adminId, $now, $requestId);
+            mysqli_stmt_execute($stmtUpdateReq);
+            mysqli_stmt_close($stmtUpdateReq);
+
+            mysqli_commit($koneksi);
+            set_flash('success', 'Password user berhasil direset. User wajib ganti password saat login.');
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            set_flash('error', 'Gagal memproses reset password.');
+        }
+
+        redirect_users_index();
+    }
+
+    // Ini
 
     if ($action === 'create') {
         $username = trim((string) ($_POST['username'] ?? ''));
@@ -730,7 +853,7 @@ $displayTo = min($offset + $limit, $totalUsers);
 $users = [];
 $usersResult = mysqli_query(
     $koneksi,
-    "SELECT users.id, users.username, users.email, users.role, users.id_branch, tb_branch.nama_branch
+    "SELECT users.id, users.username, users.email, users.role, users.id_branch, users.created_at, users.password_changed_at, tb_branch.nama_branch
      FROM users
      LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
      ORDER BY FIELD(role, 'admin', 'user'), username ASC
@@ -750,6 +873,33 @@ if ($branchesResult) {
         $branches[] = $branchRow;
     }
 }
+
+$resetRequests = [];
+$resetRequestsResult = mysqli_query(
+    $koneksi,
+    "SELECT 
+        prr.id,
+        prr.user_id,
+        prr.status,
+        prr.requested_at,
+        prr.processed_by,
+        prr.processed_at,
+        u.username,
+        u.email,
+        tb_branch.nama_branch
+        FROM password_reset_requests prr 
+        INNER JOIN users u ON u.id = prr.user_id
+        LEFT JOIN tb_branch ON tb_branch.id_branch = u.id_branch
+        WHERE prr.status = 'pending'
+        ORDER BY prr.requested_at ASC"
+);
+
+if ($resetRequestsResult) {
+    while ($row = mysqli_fetch_assoc($resetRequestsResult)) {
+        $resetRequests[] = $row;
+    }
+}
+$totalPendingReset = count($resetRequests);
 
 function role_badge_class(string $role): string
 {
@@ -1502,6 +1652,122 @@ function role_icon(string $role): string
                         </div>
                     </div>
 
+                    <?php if ($totalPendingReset > 0): ?>
+                        <div class="list-shell mb-4">
+                            <div class="shell-header">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div>
+                                        <div class="shell-title">
+                                            <i class="bi bi-envelope-exclamation me-2"></i>
+                                            Permintaan Reset Password
+                                        </div>
+                                        <div class="shell-subtitle">
+                                            <?= $totalPendingReset ?> pengajuan menunggu diproses
+                                        </div>
+                                    </div>
+                                    <span style="
+                display:inline-flex; align-items:center; gap:.4rem;
+                background:#fff3de; color:#8b4f00;
+                border:1px solid rgba(255,152,0,0.22);
+                border-radius:999px; padding:.45rem .9rem;
+                font-size:.82rem; font-weight:800;">
+                                        <i class="bi bi-clock-history"></i> <?= $totalPendingReset ?> Pending
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="shell-body">
+                                <?php foreach ($resetRequests as $req): ?>
+                                    <?php $formId = 'formResetReq' . (int) $req['id']; ?>
+                                    <div class="user-card mb-3">
+                                        <div class="user-top">
+                                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                                                <div class="d-flex align-items-start gap-3">
+
+                                                    <!-- Avatar -->
+                                                    <div class="user-avatar" style="background:linear-gradient(135deg,#c62828,#e53935);">
+                                                        <?= strtoupper(substr($req['username'], 0, 1)) ?>
+                                                    </div>
+
+                                                    <div>
+                                                        <div class="user-name"><?= e($req['username']) ?></div>
+                                                        <div class="user-email"><?= e($req['email']) ?></div>
+                                                        <div class="user-email mt-1">
+                                                            <i class="bi bi-geo-alt me-1"></i>
+                                                            <?= e($req['nama_branch'] ?? 'Belum ditentukan') ?>
+                                                        </div>
+
+                                                        <!-- Status badge -->
+                                                        <div class="mt-2">
+                                                            <span style="
+                                                                display:inline-flex; align-items:center; gap:.35rem;
+                                                                background:#fff3de; color:#8b4f00;
+                                                                border:1px solid rgba(255,152,0,0.18);
+                                                                border-radius:999px; padding:.38rem .72rem;
+                                                                font-size:.76rem; font-weight:800;">
+                                                                <i class="bi bi-clock-history"></i> Pending
+                                                            </span>
+                                                        </div>
+
+                                                        <!-- Alasan & waktu -->
+                                                        <div class="mt-2 d-flex flex-wrap gap-3"
+                                                            style="font-size:.82rem; color:var(--text-soft);">
+                                                            <span>
+                                                                <i class="bi bi-calendar me-1"></i> Diajukan:
+                                                                <strong class="text-dark">
+                                                                    <?= format_datetime($req['requested_at']) ?>
+                                                                </strong>
+                                                            </span>
+                                                        </div>
+
+                                                        <?php if (!empty($req['alasan'])): ?>
+                                                            <div class="mt-2"
+                                                                style="
+                                            background:#fff8ef;
+                                            border:1px solid rgba(255,152,0,0.14);
+                                            border-radius:12px;
+                                            padding:.6rem .85rem;
+                                            font-size:.85rem;
+                                            color:#555;
+                                            max-width:500px;">
+                                                                <i class="bi bi-chat-left-text me-1 text-warning"></i>
+                                                                <?= e($req['alasan']) ?>
+                                                            </div>
+                                                        <?php else: ?>
+                                                            <div class="mt-2"
+                                                                style="font-size:.82rem; color:#aaa; font-style:italic;">
+                                                                Tidak ada alasan yang diisi.
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Tombol proses -->
+                                                <div>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-pill btn-edit btnOpenResetForm"
+                                                        data-request-id="<?= (int) $req['id'] ?>"
+                                                        data-username="<?= e($req['username']) ?>"
+                                                        data-form-id="<?= $formId ?>">
+                                                        <i class="bi bi-key me-2"></i>Proses Reset
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Form reset (tersembunyi, muncul setelah SweetAlert konfirmasi) -->
+                                        <form method="POST" id="<?= $formId ?>" style="display:none;">
+                                            <input type="hidden" name="action" value="reset_password_request">
+                                            <input type="hidden" name="request_id" value="<?= (int) $req['id'] ?>">
+                                            <input type="hidden" name="new_password" id="newPassInput_<?= (int) $req['id'] ?>">
+                                        </form>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="row g-4 mb-4">
                         <div class="col-lg-4">
                             <div class="form-shell h-100">
@@ -2053,6 +2319,21 @@ function role_icon(string $role): string
                                                             <span class="<?= role_badge_class($user['role']) ?>">
                                                                 <i class="bi <?= role_icon($user['role']) ?>"></i>
                                                                 <?= role_label($user['role']) ?>
+                                                            </span>
+                                                        </div>
+
+                                                        <div class="mt-2 d-flex flex-wrap gap-3 align-items-center" style="font-size: .82rem; color: var(--text-soft)">
+                                                            <span>
+                                                                <i class="bi bi-calendar-check" me-1></i> Dibuat:
+                                                                <strong class="text-dark">
+                                                                    <?= format_datetime($user['created_at'] ?? null) ?>
+                                                                </strong>
+                                                            </span>
+                                                            <span>
+                                                                <i class="bi bi-key me-1"></i> Pass Diubah:
+                                                                <strong class="text-dark">
+                                                                    <?= format_datetime($user['password_changed_at'] ?? null) ?>
+                                                                </strong>
                                                             </span>
                                                         </div>
                                                     </div>
@@ -2774,6 +3055,80 @@ function role_icon(string $role): string
 
                 updateRows();
             }
+        });
+        
+        document.querySelectorAll('.btnOpenResetForm').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const requestId = this.dataset.requestId;
+                const username = this.dataset.username;
+                const formId = this.dataset.formId;
+                const form = document.getElementById(formId);
+
+                Swal.fire({
+                    title: 'Reset Password User',
+                    html: `
+                <p style="margin-bottom:12px; color:#555;">
+                    Buat password baru untuk <strong>${username}</strong>.<br>
+                    User akan <strong>wajib ganti password</strong> saat login.
+                </p>
+                <input
+                    type="password"
+                    id="swalNewPassword"
+                    class="swal2-input"
+                    placeholder="Masukkan password baru (min. 8 karakter)"
+                    style="border-radius:12px;">
+                <input
+                    type="password"
+                    id="swalConfirmPassword"
+                    class="swal2-input"
+                    placeholder="Konfirmasi password baru"
+                    style="border-radius:12px; margin-top:8px;">
+            `,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="bi bi-check2-circle"></i> Ya, Reset Password',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#ff9800',
+                    cancelButtonColor: '#6c757d',
+                    focusConfirm: false,
+                    preConfirm: () => {
+                        const newPass = document.getElementById('swalNewPassword').value;
+                        const confirmPass = document.getElementById('swalConfirmPassword').value;
+
+                        if (!newPass || newPass.length < 8) {
+                            Swal.showValidationMessage('Password minimal 8 karakter.');
+                            return false;
+                        }
+
+                        if (newPass !== confirmPass) {
+                            Swal.showValidationMessage('Konfirmasi password tidak cocok.');
+                            return false;
+                        }
+
+                        return newPass;
+                    }
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+
+                    // Konfirmasi akhir
+                    Swal.fire({
+                        title: 'Apakah pembuatan password baru sudah selesai?',
+                        text: `Password baru untuk "${username}" akan disimpan dan status pengajuan menjadi Selesai.`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Selesai!',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#16a34a',
+                        cancelButtonColor: '#6c757d',
+                    }).then((finalResult) => {
+                        if (!finalResult.isConfirmed) return;
+
+                        // Masukkan password ke hidden input lalu submit form
+                        document.getElementById('newPassInput_' + requestId).value = result.value;
+                        form.submit();
+                    });
+                });
+            });
         });
     </script>
 </body>

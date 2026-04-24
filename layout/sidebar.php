@@ -54,6 +54,21 @@ $isAccessPage =
     || strpos($currentPath, '/users/user_permissions.php') !== false;
 
 $adminMenuActive = $isUsersPage || $isAccessPage;
+
+$pendingResetCount = 0;
+
+if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin') {
+    // Pastikan variabel $koneksi tersedia, jika error tambahkan include '../config/koneksi.php'; di sini
+    $stmtBadge = mysqli_prepare($koneksi, "SELECT COUNT(id) as total FROM password_reset_requests WHERE status = 'pending'");
+    if ($stmtBadge) {
+        mysqli_stmt_execute($stmtBadge);
+        $resBadge = mysqli_stmt_get_result($stmtBadge);
+        $rowBadge = mysqli_fetch_assoc($resBadge);
+        $pendingResetCount = (int) ($rowBadge['total'] ?? 0);
+        mysqli_stmt_close($stmtBadge);
+    }
+}
+
 ?>
 
 <style>
@@ -523,6 +538,13 @@ $adminMenuActive = $isUsersPage || $isAccessPage;
                                 <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= $isUsersPage ? 'active' : '' ?>">
                                     <span class="sidebar-icon"><i class="bi bi-people"></i></span>
                                     <span>Kelola User</span>
+
+                                    <?php if ($pendingResetCount > 0): ?>
+                                        <span class="badge bg-danger rounded-pill" style="font-size: 0.75rem;">
+                                            <?= $pendingResetCount ?>
+                                        </span>
+                                    <?php endif; ?>
+
                                 </a>
                             </li>
                         <?php endif; ?>

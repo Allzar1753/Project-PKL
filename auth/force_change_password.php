@@ -2,7 +2,20 @@
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
-if (is_logged_in()) {
+if (!is_logged_in()) {
+    redirect_to(base_url('auth/login.php'));
+}
+
+// Jika user tidak wajib ganti password, redirect ke dashboard
+$userId = (int) current_user_id();
+
+$stmt = mysqli_prepare($koneksi, "SELECT must_change_password FROM users WHERE id = ? LIMIT 1");
+mysqli_stmt_bind_param($stmt, 'i', $userId);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt); 
+$row = mysqli_fetch_assoc($result);
+mysqli_stmt_close($stmt);
+if (!$row || (int) $row['must_change_password'] === 0) {
     redirect_to(base_url('dashboard/index.php'));
 }
 
@@ -10,89 +23,51 @@ $error   = get_flash('error');
 $success = get_flash('success');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim((string) ($_POST['username'] ?? ''));
-    $email    = trim((string) ($_POST['email']    ?? ''));
-    $alasan   = trim((string) ($_POST['alasan']   ?? ''));
+    $newPassword     = (string) ($_POST['new_password']     ?? '');
+    $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
 
-    // Validasi input
-    if ($username === '' || $email === '') {
-        set_flash('error', 'Username dan email wajib diisi.');
-        redirect_to(base_url('auth/forgot_password.php'));
+    if ($newPassword === '' || $confirmPassword === '') {
+        set_flash('error', 'Semua field wajib diisi.');
+        redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        set_flash('error', 'Format email tidak valid.');
-        redirect_to(base_url('auth/forgot_password.php'));
+    if (strlen($newPassword) < 8) {
+        set_flash('error', 'Password baru minimal 8 karakter.');
+        redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    // Cek apakah user dengan username + email tersebut ada
+    if ($newPassword !== $confirmPassword) {
+        set_flash('error', 'Konfirmasi password tidak sama.');
+        redirect_to(base_url('auth/force_change_password.php'));
+    }
+
+    $userId = (int) current_user_id();
+    $hash   = password_hash($newPassword, PASSWORD_DEFAULT);
+    $mustChangePassword = 0;
+
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id FROM users WHERE username = ? AND email = ? LIMIT 1"
+        "UPDATE users
+         SET password = ?, must_change_password = ?, password_changed_at = NOW()
+         WHERE id = ?"
     );
 
     if (!$stmt) {
         set_flash('error', 'Terjadi kesalahan pada sistem.');
-        redirect_to(base_url('auth/forgot_password.php'));
+        redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    mysqli_stmt_bind_param($stmt, 'ss', $username, $email);
+    mysqli_stmt_bind_param($stmt, 'sii', $hash, $mustChangePassword, $userId);
     mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $user   = mysqli_fetch_assoc($result);
     mysqli_stmt_close($stmt);
 
-    if (!$user) {
-        set_flash('error', 'Username dan email tidak cocok. Pastikan data yang dimasukkan benar.');
-        redirect_to(base_url('auth/forgot_password.php'));
+    // Update session agar tidak redirect lagi
+    if (isset($_SESSION['user'])) {
+        $_SESSION['user']['must_change_password'] = 0;
     }
 
-    $userId = (int) $user['id'];
-
-    // Cek apakah sudah ada pengajuan pending dari user ini
-    $stmtCek = mysqli_prepare(
-        $koneksi,
-        "SELECT id FROM password_reset_requests
-         WHERE user_id = ? AND status = 'pending'
-         LIMIT 1"
-    );
-
-    if ($stmtCek) {
-        mysqli_stmt_bind_param($stmtCek, 'i', $userId);
-        mysqli_stmt_execute($stmtCek);
-        $resCek   = mysqli_stmt_get_result($stmtCek);
-        $existing = mysqli_fetch_assoc($resCek);
-        mysqli_stmt_close($stmtCek);
-
-        if ($existing) {
-            set_flash('error', 'Pengajuan reset password Anda masih dalam antrian. Silakan tunggu konfirmasi dari admin.');
-            redirect_to(base_url('auth/forgot_password.php'));
-        }
-    }
-
-    // Simpan pengajuan baru dengan status pending
-    $stmtInsert = mysqli_prepare(
-        $koneksi,
-        "INSERT INTO password_reset_requests (user_id, alasan, status, requested_at)
-         VALUES (?, ?, 'pending', NOW())"
-    );
-
-    if (!$stmtInsert) {
-        set_flash('error', 'Terjadi kesalahan saat menyimpan pengajuan.');
-        redirect_to(base_url('auth/forgot_password.php'));
-    }
-
-    mysqli_stmt_bind_param($stmtInsert, 'is', $userId, $alasan);
-    $ok = mysqli_stmt_execute($stmtInsert);
-    mysqli_stmt_close($stmtInsert);
-
-    if (!$ok) {
-        set_flash('error', 'Gagal menyimpan pengajuan. Coba lagi.');
-        redirect_to(base_url('auth/forgot_password.php'));
-    }
-
-    set_flash('success', 'Pengajuan reset password berhasil dikirim. Silakan tunggu konfirmasi dari administrator.');
-    redirect_to(base_url('auth/forgot_password.php'));
+    set_flash('success', 'Password berhasil diperbarui. Selamat datang!');
+    redirect_to(base_url('dashboard/index.php'));
 }
 ?>
 <!DOCTYPE html>
@@ -101,11 +76,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lupa Password - IT Asset Management</title>
+    <title>Ganti Password - IT Asset Management</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -118,15 +92,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --orange-3: #ffb000;
             --orange-4: #ffd166;
             --orange-5: #fff3e0;
+
             --dark-1: #111111;
             --dark-2: #1f1f1f;
             --dark-3: #2f2f2f;
+
             --text-main: #1e1e1e;
             --text-soft: #6b7280;
             --border-soft: rgba(255, 152, 0, 0.14);
+
             --surface: #ffffff;
+            --surface-soft: #fffaf3;
             --shadow-soft: 0 16px 40px rgba(17, 17, 17, 0.08);
             --shadow-strong: 0 22px 54px rgba(255, 122, 0, 0.16);
+
             --radius-xl: 28px;
             --radius-lg: 22px;
             --radius-md: 16px;
@@ -149,7 +128,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding: 24px;
         }
 
-        .login-wrap { width: 100%; max-width: 1120px; }
+        .login-wrap {
+            width: 100%;
+            max-width: 1120px;
+        }
 
         .login-card {
             background: var(--surface);
@@ -205,6 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 700;
             margin-bottom: 22px;
             border: 1px solid rgba(255,193,7,0.18);
+            backdrop-filter: blur(4px);
         }
 
         .brand-dot {
@@ -246,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 18px;
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.08);
+            backdrop-filter: blur(8px);
         }
 
         .feature-icon {
@@ -363,20 +347,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transition: all .2s ease;
         }
 
-        textarea.form-control {
-            padding-top: .85rem;
-            resize: none;
-        }
-
         .form-control:focus {
             border-color: #f0c63d;
             box-shadow: 0 0 0 0.22rem rgba(255,193,7,0.14);
             background: #fffdfa;
-        }
-
-        /* Textarea tidak perlu padding kiri extra untuk icon */
-        textarea.form-control {
-            padding-left: 1rem;
         }
 
         .btn-login {
@@ -408,72 +382,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             line-height: 1.6;
         }
 
-        /* Status tracker */
-        .status-tracker {
-            display: flex;
-            align-items: center;
-            gap: 0;
-            margin-bottom: 28px;
-        }
-
-        .status-step {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            flex: 1;
-            position: relative;
-        }
-
-        .status-step:not(:last-child)::after {
-            content: "";
-            position: absolute;
-            top: 18px;
-            left: 60%;
-            width: 80%;
-            height: 2px;
-            background: #e9dfd0;
-        }
-
-        .status-dot {
-            width: 36px; height: 36px;
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: .88rem;
-            font-weight: 800;
-            background: #f3ece2;
-            color: #9a8060;
-            border: 2px solid #e4d8c5;
-            margin-bottom: 6px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .status-step.active .status-dot {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            color: #fff;
-            border-color: transparent;
-            box-shadow: 0 8px 18px rgba(255,152,0,0.24);
-        }
-
-        .status-label {
-            font-size: .74rem;
-            font-weight: 700;
-            color: #9a8060;
-            text-align: center;
-        }
-
-        .status-step.active .status-label { color: var(--orange-1); }
-
-        .back-link {
-            color: #c27e12;
-            font-weight: 700;
-            text-decoration: none;
-        }
-
-        .back-link:hover { color: #a96708; }
-
         .note-text {
             color: var(--text-soft);
             font-size: .88rem;
@@ -483,6 +391,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .note-text span { color: #9a640b; }
+
+        .password-shell { position: relative; }
+        .password-shell .form-control { padding-right: 3.2rem; }
+
+        .password-toggle {
+            position: absolute;
+            top: 50%; right: 12px;
+            transform: translateY(-50%);
+            width: 38px; height: 38px;
+            border: none;
+            background: transparent;
+            color: #c27e12;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all .2s ease;
+            z-index: 3;
+        }
+
+        .password-toggle:hover { background: #fff3e0; color: #111; }
+
+        .password-toggle:focus {
+            outline: none;
+            box-shadow: 0 0 0 .2rem rgba(255,193,7,0.14);
+        }
+
+        /* strength bar */
+        .strength-bar {
+            height: 5px;
+            border-radius: 999px;
+            background: #f0ece4;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .strength-fill {
+            height: 100%;
+            border-radius: 999px;
+            width: 0%;
+            transition: width .3s ease, background .3s ease;
+        }
+
+        .strength-label {
+            font-size: .78rem;
+            font-weight: 700;
+            margin-top: 4px;
+            color: var(--text-soft);
+        }
 
         @media (max-width: 991.98px) {
             .login-left  { padding: 34px 28px; }
@@ -496,6 +454,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .login-card { border-radius: 22px; }
             .login-left, .login-right { padding: 26px 22px; }
             .login-title { font-size: 1.5rem; }
+            .brand-badge, .form-badge { font-size: .78rem; }
         }
     </style>
 </head>
@@ -514,36 +473,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
 
                         <div class="login-title">
-                            Lupa Password? Ajukan ke Administrator
+                            Wajib Ganti Password Sebelum Melanjutkan
                         </div>
 
                         <div class="login-desc">
-                            Tidak perlu khawatir. Isi form pengajuan dan administrator akan
-                            membuatkan password baru untuk akun Anda secepatnya.
+                            Akun Anda menggunakan password default dari sistem.
+                            Demi keamanan, harap buat password baru sebelum mengakses dashboard.
                         </div>
 
                         <div class="login-feature">
                             <div class="feature-item">
-                                <div class="feature-icon"><i class="bi bi-send"></i></div>
+                                <div class="feature-icon"><i class="bi bi-shield-lock"></i></div>
                                 <div>
-                                    <div class="feature-title">1. Kirim Pengajuan</div>
-                                    <div class="feature-text">Isi username, email, dan alasan lupa password. Pengajuan akan langsung masuk ke administrator.</div>
-                                </div>
-                            </div>
-
-                            <div class="feature-item">
-                                <div class="feature-icon"><i class="bi bi-shield-check"></i></div>
-                                <div>
-                                    <div class="feature-title">2. Admin Proses</div>
-                                    <div class="feature-text">Administrator akan memverifikasi dan membuatkan password baru untuk akun Anda.</div>
+                                    <div class="feature-title">Keamanan Akun</div>
+                                    <div class="feature-text">Password default bersifat sementara dan harus segera diganti untuk melindungi akun Anda.</div>
                                 </div>
                             </div>
 
                             <div class="feature-item">
                                 <div class="feature-icon"><i class="bi bi-key"></i></div>
                                 <div>
-                                    <div class="feature-title">3. Login & Ganti Password</div>
-                                    <div class="feature-text">Gunakan password baru dari admin untuk login, lalu Anda akan diminta membuat password sendiri.</div>
+                                    <div class="feature-title">Password Kuat</div>
+                                    <div class="feature-text">Gunakan minimal 8 karakter dengan kombinasi huruf dan angka agar akun lebih aman.</div>
+                                </div>
+                            </div>
+
+                            <div class="feature-item">
+                                <div class="feature-icon"><i class="bi bi-check2-circle"></i></div>
+                                <div>
+                                    <div class="feature-title">Akses Dashboard</div>
+                                    <div class="feature-text">Setelah password berhasil diperbarui, Anda langsung diarahkan ke dashboard sistem.</div>
                                 </div>
                             </div>
                         </div>
@@ -560,104 +519,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="col-lg-6">
                 <div class="login-right">
                     <div class="form-badge">
-                        <i class="bi bi-envelope-exclamation"></i>
-                        <span>Pengajuan Reset Password</span>
+                        <i class="bi bi-shield-exclamation"></i>
+                        <span>Ganti Password Wajib</span>
                     </div>
 
-                    <div class="form-title">Ajukan Reset Password</div>
+                    <div class="form-title">Buat Password Baru</div>
                     <div class="form-subtitle">
-                        Isi form berikut. Administrator akan memproses pengajuan Anda dan memberikan password baru.
-                    </div>
-
-                    <!-- Status Tracker -->
-                    <div class="status-tracker">
-                        <div class="status-step active">
-                            <div class="status-dot"><i class="bi bi-send"></i></div>
-                            <div class="status-label">Kirim<br>Pengajuan</div>
-                        </div>
-                        <div class="status-step">
-                            <div class="status-dot"><i class="bi bi-hourglass"></i></div>
-                            <div class="status-label">Tunggu<br>Admin</div>
-                        </div>
-                        <div class="status-step">
-                            <div class="status-dot"><i class="bi bi-key"></i></div>
-                            <div class="status-label">Dapat<br>Password</div>
-                        </div>
-                        <div class="status-step">
-                            <div class="status-dot"><i class="bi bi-check2"></i></div>
-                            <div class="status-label">Ganti<br>Password</div>
-                        </div>
+                        Anda login menggunakan password default. Silakan buat password baru untuk melanjutkan.
                     </div>
 
                     <?php if ($error): ?>
-                        <div class="alert alert-danger">
-                            <i class="bi bi-exclamation-circle me-2"></i><?= e($error) ?>
-                        </div>
+                        <div class="alert alert-danger"><?= e($error) ?></div>
                     <?php endif; ?>
 
                     <?php if ($success): ?>
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-2"></i><?= e($success) ?>
-                        </div>
+                        <div class="alert alert-success"><?= e($success) ?></div>
                     <?php endif; ?>
 
-                    <form method="POST" action="" id="formPengajuan">
+                    <form method="POST" action="">
                         <div class="mb-3">
-                            <label class="form-label">Username <span class="text-danger">*</span></label>
-                            <div class="input-shell">
-                                <span class="input-icon"><i class="bi bi-person"></i></span>
+                            <label class="form-label">Password Baru</label>
+                            <div class="input-shell password-shell">
+                                <span class="input-icon"><i class="bi bi-lock"></i></span>
                                 <input
-                                    type="text"
-                                    name="username"
+                                    type="password"
+                                    name="new_password"
+                                    id="newPassword"
                                     class="form-control"
                                     required
-                                    placeholder="Masukkan username akun Anda"
-                                    autocomplete="username">
+                                    minlength="8"
+                                    placeholder="Masukkan password baru"
+                                    autocomplete="new-password">
+                                <button type="button" class="password-toggle" data-target="newPassword" aria-label="Lihat password baru">
+                                    <i class="bi bi-eye"></i>
+                                </button>
                             </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email <span class="text-danger">*</span></label>
-                            <div class="input-shell">
-                                <span class="input-icon"><i class="bi bi-envelope"></i></span>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    class="form-control"
-                                    required
-                                    placeholder="Masukkan email akun Anda"
-                                    autocomplete="email">
+                            <!-- Strength indicator -->
+                            <div class="strength-bar">
+                                <div class="strength-fill" id="strengthFill"></div>
                             </div>
+                            <div class="strength-label" id="strengthLabel"></div>
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label">Alasan / Keterangan <span style="color:#9a8060; font-weight:600;">(opsional)</span></label>
-                            <textarea
-                                name="alasan"
-                                class="form-control"
-                                rows="3"
-                                placeholder="Ceritakan kendala yang Anda alami (opsional)..."></textarea>
+                            <label class="form-label">Konfirmasi Password Baru</label>
+                            <div class="input-shell password-shell">
+                                <span class="input-icon"><i class="bi bi-lock-fill"></i></span>
+                                <input
+                                    type="password"
+                                    name="confirm_password"
+                                    id="confirmPassword"
+                                    class="form-control"
+                                    required
+                                    minlength="8"
+                                    placeholder="Ulangi password baru"
+                                    autocomplete="new-password">
+                                <button type="button" class="password-toggle" data-target="confirmPassword" aria-label="Lihat konfirmasi password">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                            </div>
+                            <div id="matchMsg" style="font-size:.8rem; margin-top:5px; font-weight:700;"></div>
                         </div>
 
-                        <button type="submit" class="btn btn-login w-100" id="btnKirim">
-                            <i class="bi bi-send me-2"></i>Kirim Pengajuan
+                        <button type="submit" class="btn btn-login w-100">
+                            <i class="bi bi-check2-circle me-2"></i>Simpan Password Baru
                         </button>
                     </form>
 
-                    <div class="text-center mt-3">
-                        <a href="<?= e(base_url('auth/login.php')) ?>" class="back-link">
-                            <i class="bi bi-arrow-left me-1"></i>Kembali ke Login
-                        </a>
-                    </div>
-
-                    <div class="system-note">
+                    <div class="system-note mt-4">
                         <i class="bi bi-info-circle me-1"></i>
-                        Pengajuan hanya dapat diproses oleh <b>Administrator</b>. Pastikan username dan email
-                        yang dimasukkan sesuai dengan data akun terdaftar di sistem.
+                        Halaman ini <b>tidak dapat dilewati</b>. Password wajib diperbarui sebelum Anda dapat mengakses fitur sistem.
                     </div>
 
                     <div class="note-text">
-                        <span>IT Asset Management</span> — Password Reset Request
+                        <span>IT Asset Management</span> — Secure Account Setup
                     </div>
                 </div>
             </div>
@@ -668,65 +603,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
-            // Konfirmasi sebelum kirim pengajuan
-            const form   = document.getElementById('formPengajuan');
-            const btnKirim = document.getElementById('btnKirim');
+            // Toggle password visibility
+            document.querySelectorAll('.password-toggle').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const targetId = this.getAttribute('data-target');
+                    const input    = document.getElementById(targetId);
+                    const icon     = this.querySelector('i');
+                    if (!input) return;
 
-            if (form && btnKirim) {
-                form.addEventListener('submit', function (e) {
-                    e.preventDefault();
+                    const isPassword = input.type === 'password';
+                    input.type = isPassword ? 'text' : 'password';
 
-                    const username = form.querySelector('[name="username"]').value.trim();
-                    const email    = form.querySelector('[name="email"]').value.trim();
-
-                    if (!username || !email) {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Data belum lengkap',
-                            text: 'Username dan email wajib diisi.',
-                            confirmButtonColor: '#ff9800'
-                        });
-                        return;
+                    if (icon) {
+                        icon.classList.toggle('bi-eye',       !isPassword);
+                        icon.classList.toggle('bi-eye-slash',  isPassword);
                     }
-
-                    Swal.fire({
-                        title: 'Kirim Pengajuan?',
-                        html: 'Pengajuan reset password untuk akun <b>' + username + '</b> akan dikirim ke administrator.',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'Ya, kirim',
-                        cancelButtonText: 'Batal',
-                        confirmButtonColor: '#ff9800',
-                        cancelButtonColor: '#6c757d'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            form.submit();
-                        }
-                    });
                 });
+            });
+
+            // Password strength indicator
+            const newPasswordInput = document.getElementById('newPassword');
+            const strengthFill     = document.getElementById('strengthFill');
+            const strengthLabel    = document.getElementById('strengthLabel');
+
+            newPasswordInput.addEventListener('input', function () {
+                const val = this.value;
+                let score = 0;
+
+                if (val.length >= 8)              score++;
+                if (/[A-Z]/.test(val))            score++;
+                if (/[0-9]/.test(val))            score++;
+                if (/[^A-Za-z0-9]/.test(val))     score++;
+
+                const levels = [
+                    { pct: '0%',   color: '',          label: '' },
+                    { pct: '25%',  color: '#e53935',   label: 'Lemah' },
+                    { pct: '50%',  color: '#fb8c00',   label: 'Cukup' },
+                    { pct: '75%',  color: '#fdd835',   label: 'Baik' },
+                    { pct: '100%', color: '#43a047',   label: 'Kuat' },
+                ];
+
+                const level = val.length === 0 ? levels[0] : levels[score];
+                strengthFill.style.width      = level.pct;
+                strengthFill.style.background = level.color;
+                strengthLabel.textContent     = level.label;
+                strengthLabel.style.color     = level.color;
+            });
+
+            // Confirm password match indicator
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            const matchMsg             = document.getElementById('matchMsg');
+
+            function checkMatch() {
+                if (confirmPasswordInput.value === '') {
+                    matchMsg.textContent = '';
+                    return;
+                }
+                if (newPasswordInput.value === confirmPasswordInput.value) {
+                    matchMsg.textContent = '✓ Password cocok';
+                    matchMsg.style.color = '#43a047';
+                } else {
+                    matchMsg.textContent = '✗ Password tidak cocok';
+                    matchMsg.style.color = '#e53935';
+                }
             }
 
-            <?php if ($success): ?>
-            // Tampilkan SweetAlert sukses setelah redirect
-            Swal.fire({
-                icon: 'success',
-                title: 'Pengajuan Terkirim!',
-                html: 'Pengajuan reset password Anda sudah diterima.<br><b>Silakan tunggu konfirmasi dari administrator.</b>',
-                confirmButtonText: 'OK, mengerti',
-                confirmButtonColor: '#ff9800',
-                timer: 6000,
-                timerProgressBar: true
-            });
-            <?php endif; ?>
-
-            <?php if ($error): ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Gagal',
-                text: '<?= addslashes(e($error)) ?>',
-                confirmButtonColor: '#ff9800'
-            });
-            <?php endif; ?>
+            newPasswordInput.addEventListener('input',     checkMatch);
+            confirmPasswordInput.addEventListener('input', checkMatch);
         });
     </script>
 </body>

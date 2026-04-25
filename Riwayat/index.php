@@ -4,6 +4,9 @@ require_once '../config/auth.php';
 
 require_permission($koneksi, 'riwayat.view');
 
+$isAdmin = is_admin();
+$myBranchId = (int) (current_user_branch_id() ?? 0);
+
 function h($value)
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -113,6 +116,14 @@ LEFT JOIN tb_branch bas ON bas.id_branch = bp.branch_asal
 ";
 
 $where = [];
+
+if (!$isAdmin) {
+    if ($myBranchId <= 0) {
+        http_response_code(403);
+        exit('Branch user belum ditentukan.');
+    }
+    $where[] = "b.id_branch = {$myBranchId}";
+}
 
 if ($search_input !== '') {
     $search = mysqli_real_escape_string($koneksi, $search_input);

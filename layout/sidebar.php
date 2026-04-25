@@ -56,6 +56,7 @@ $isAccessPage =
 $adminMenuActive = $isUsersPage || $isAccessPage;
 
 $pendingResetCount = 0;
+$pendingHoShippingCount = 0;
 
 if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin') {
     // Pastikan variabel $koneksi tersedia, jika error tambahkan include '../config/koneksi.php'; di sini
@@ -66,6 +67,16 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         $rowBadge = mysqli_fetch_assoc($resBadge);
         $pendingResetCount = (int) ($rowBadge['total'] ?? 0);
         mysqli_stmt_close($stmtBadge);
+    }
+
+    // Badge: pengiriman cabang -> HO yang menunggu persetujuan
+    $stmtShip = mysqli_prepare($koneksi, "SELECT COUNT(id_pengiriman_ho) as total FROM pengiriman_cabang_ho WHERE COALESCE(status_pengiriman,'') = 'Menunggu persetujuan admin'");
+    if ($stmtShip) {
+        mysqli_stmt_execute($stmtShip);
+        $resShip = mysqli_stmt_get_result($stmtShip);
+        $rowShip = mysqli_fetch_assoc($resShip);
+        $pendingHoShippingCount = (int) ($rowShip['total'] ?? 0);
+        mysqli_stmt_close($stmtShip);
     }
 }
 
@@ -545,6 +556,29 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                                         </span>
                                     <?php endif; ?>
 
+                                </a>
+                            </li>
+                        <?php endif; ?>
+
+                        <?php if (is_admin() && can('barang.kirim')): ?>
+                            <li>
+                                <a href="<?= h(base_url('Barang/pengiriman_approval.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/pengiriman_approval.php') ? 'active' : '' ?>">
+                                    <span class="sidebar-icon"><i class="bi bi-inboxes"></i></span>
+                                    <span>Approval Pengiriman HO</span>
+                                    <?php if ($pendingHoShippingCount > 0): ?>
+                                        <span class="badge bg-danger rounded-pill" style="font-size: 0.75rem;">
+                                            <?= $pendingHoShippingCount ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </a>
+                            </li>
+                        <?php endif; ?>
+
+                        <?php if (can('users.view')): ?>
+                            <li>
+                                <a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= isMenuActive('/users/activity_log.php') ? 'active' : '' ?>">
+                                    <span class="sidebar-icon"><i class="bi bi-activity"></i></span>
+                                    <span>Activity / Online User</span>
                                 </a>
                             </li>
                         <?php endif; ?>

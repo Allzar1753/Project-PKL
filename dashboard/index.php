@@ -266,6 +266,24 @@ $pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
 
 $roleLabel = is_admin() ? 'Administrator' : 'User';
 $branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId);
+$usernameLabel = (string) (current_user()['username'] ?? 'User');
+$heroTitle = $isAdmin
+    ? 'Dashboard IT Asset Management'
+    : ('Selamat datang ' . $usernameLabel . ' dari cabang ' . $branchLabel);
+
+$notifWhere = "target_role = '" . mysqli_real_escape_string($koneksi, (string) current_role()) . "'";
+if (!$isAdmin) {
+    $notifWhere .= " AND (target_branch_id IS NULL OR target_branch_id = " . (int) $myBranchId . ")";
+}
+$qNotifications = mysqli_query($koneksi, "
+    SELECT id, title, message, link, created_at
+    FROM system_notifications
+    WHERE {$notifWhere}
+      AND is_read = 0
+    ORDER BY id DESC
+    LIMIT 3
+");
+$notifications = fetchAllAssoc($qNotifications);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -802,7 +820,7 @@ $branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId
                     <div class="dashboard-hero">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                             <div>
-                                <h1>Dashboard IT Asset Management</h1>
+                                <h1><?= h($heroTitle) ?></h1>
                                 <p>
                                     Ringkasan inventaris, kondisi perangkat, status pengiriman, dan aktivitas aset
                                     dalam tampilan yang lebih modern, lebih mudah dibaca, dan nyaman dipantau.
@@ -814,6 +832,24 @@ $branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId
                             </div>
                         </div>
                     </div>
+
+                    <?php if (!empty($notifications)): ?>
+                        <div class="alert alert-warning border-0 shadow-sm mb-4">
+                            <div class="fw-bold mb-2"><i class="bi bi-bell me-2"></i>Notifikasi Terbaru</div>
+                            <?php foreach ($notifications as $notif): ?>
+                                <?php
+                                    $notifId = (int) ($notif['id'] ?? 0);
+                                    $notifLink = trim((string) ($notif['link'] ?? ''));
+                                    $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
+                                ?>
+                                <div class="mb-2">
+                                    <div class="fw-semibold"><?= h($notif['title'] ?? '-') ?></div>
+                                    <div class="small"><?= h($notif['message'] ?? '-') ?></div>
+                                    <a href="<?= h($notifReadUrl) ?>" class="small">Buka detail</a>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
 
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-sm-6 col-xl">

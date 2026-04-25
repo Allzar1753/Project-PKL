@@ -412,7 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Tanggal Kirim</label>
+            <label>Tanggal Terima</label>
             <input type="date" name="tanggal_kirim" class="form-control" required>
         </div>
 

@@ -979,7 +979,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
 
                                 <?php if (canOpenPengirimanUser()): ?>
                                     <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
-                                        <i class="bi bi-truck me-2"></i>Kirim ke Cabang Jakarta
+                                        <i class="bi bi-truck me-2"></i>Kirim Barang Rusak ke HO Jakarta
                                     </button>
                                 <?php endif; ?>
                             </div>
@@ -1434,7 +1434,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-warning-custom">
-                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Pengiriman Barang ke Cabang Jakarta</h5>
+                    <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Pengiriman Barang Rusak ke HO Jakarta</h5>
                     <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="contentPengirimanUser">
@@ -1473,7 +1473,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
             const $container = $(containerSelector);
             const $modal = $(modalSelector);
 
-            $container.find('select').each(function() {
+            $container.find('select.select2').each(function() {
                 if ($(this).hasClass('select2-hidden-accessible')) {
                     $(this).select2('destroy');
                 }
@@ -1753,7 +1753,7 @@ $btnKeluar = $filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode';
         });
 
         $('#modalPengirimanUser').on('show.bs.modal', function() {
-            loadModalContent('#modalPengirimanUser', '#contentPengirimanUser', 'pengiriman_user.php', 'Gagal memuat form pengiriman ke Cabang Jakarta.');
+            loadModalContent('#modalPengirimanUser', '#contentPengirimanUser', 'pengiriman_user.php', 'Gagal memuat form pengiriman ke HO Jakarta.');
         });
 
         resetModalContent('#modalPengirimanUser', '#contentPengirimanUser');

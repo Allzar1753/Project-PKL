@@ -4,6 +4,13 @@ require_once '../config/auth.php';
 
 require_permission($koneksi, 'laporan.view');
 
+$isAdmin = is_admin();
+$myBranchId = (int) (current_user_branch_id() ?? 0);
+if (!$isAdmin && $myBranchId <= 0) {
+    http_response_code(403);
+    exit('Branch user belum ditentukan.');
+}
+
 function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -195,6 +202,13 @@ $sql = "
     LEFT JOIN tb_branch bpasal ON bpasal.id_branch = bp.branch_asal
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
     WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_kirim)) BETWEEN ? AND ?
+";
+
+if (!$isAdmin) {
+    $sql .= " AND b.id_branch = ? ";
+}
+
+$sql .= "
     ORDER BY b.id DESC, bp.id_pengiriman ASC
 ";
 
@@ -203,7 +217,11 @@ if (!$stmt) {
     die(mysqli_error($koneksi));
 }
 
-mysqli_stmt_bind_param($stmt, 'ss', $range['start'], $range['end']);
+if ($isAdmin) {
+    mysqli_stmt_bind_param($stmt, 'ss', $range['start'], $range['end']);
+} else {
+    mysqli_stmt_bind_param($stmt, 'ssi', $range['start'], $range['end'], $myBranchId);
+}
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 

@@ -373,6 +373,11 @@ if (!function_exists('require_permission')) {
         require_login();
         check_must_change_password();
 
+        // Update online presence (best-effort, non-blocking)
+        if (function_exists('update_user_presence')) {
+            update_user_presence($koneksi);
+        }
+
         if (empty($_SESSION['user']['permissions'])) {
             refresh_permissions($koneksi);
         }
@@ -380,6 +385,90 @@ if (!function_exists('require_permission')) {
         if (!can($permission)) {
             forbidden_response('Anda tidak memiliki izin untuk mengakses halaman ini.');
         }
+    }
+}
+
+if (!function_exists('get_client_ip')) {
+    function get_client_ip(): string
+    {
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
+            if (!empty($_SERVER[$key])) {
+                $raw = (string) $_SERVER[$key];
+                if ($key === 'HTTP_X_FORWARDED_FOR') {
+                    $parts = array_map('trim', explode(',', $raw));
+                    return $parts[0] ?? '';
+                }
+                return $raw;
+            }
+        }
+        return '';
+    }
+}
+
+if (!function_exists('update_user_presence')) {
+    function update_user_presence(mysqli $koneksi): void
+    {
+        if (!is_logged_in()) {
+            return;
+        }
+
+        $userId = current_user_id();
+        if (!$userId) {
+            return;
+        }
+
+        $sessionId = (string) session_id();
+        $ip = get_client_ip();
+        $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250);
+        $now = date('Y-m-d H:i:s');
+
+        $stmt = mysqli_prepare(
+            $koneksi,
+            "INSERT INTO user_presence (user_id, session_id, ip_address, user_agent, last_seen_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                session_id = VALUES(session_id),
+                ip_address = VALUES(ip_address),
+                user_agent = VALUES(user_agent),
+                last_seen_at = VALUES(last_seen_at)"
+        );
+        if (!$stmt) {
+            return;
+        }
+
+        mysqli_stmt_bind_param($stmt, 'issss', $userId, $sessionId, $ip, $ua, $now);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    }
+}
+
+if (!function_exists('log_user_activity')) {
+    function log_user_activity(mysqli $koneksi, string $action, ?string $description): void
+    {
+        if (!is_logged_in()) {
+            return;
+        }
+
+        $userId = current_user_id();
+        $role = current_role();
+        $branchId = current_user_branch_id();
+        $path = substr((string) ($_SERVER['PHP_SELF'] ?? ''), 0, 250);
+        $ip = get_client_ip();
+        $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 250);
+
+        $stmt = mysqli_prepare(
+            $koneksi,
+            "INSERT INTO user_activity_logs (user_id, role, branch_id, action, description, path, ip_address, user_agent)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        if (!$stmt) {
+            return;
+        }
+
+        $desc = $description !== null ? substr($description, 0, 250) : null;
+        mysqli_stmt_bind_param($stmt, 'isisssss', $userId, $role, $branchId, $action, $desc, $path, $ip, $ua);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
     }
 }
 

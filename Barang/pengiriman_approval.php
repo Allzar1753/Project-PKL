@@ -11,8 +11,16 @@ if (!is_admin()) {
 const STATUS_MENUNGGU_PERSETUJUAN = 'Menunggu persetujuan admin';
 const STATUS_SUDAH_DITERIMA = 'Sudah diterima HO';
 
-function h($value): string { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
-function jsonOut(array $payload): void { header('Content-Type: application/json'); echo json_encode($payload); exit; }
+function h($value): string
+{
+    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+}
+function jsonOut(array $payload): void
+{
+    header('Content-Type: application/json');
+    echo json_encode($payload);
+    exit;
+}
 
 function getJakartaBranchId(mysqli $koneksi): ?int
 {
@@ -120,6 +128,8 @@ $q = mysqli_query($koneksi, "
         p.status_pengiriman,
         p.nomor_resi_keluar,
         p.jasa_pengiriman,
+        p.serial_number,
+        p.pemilik_barang,
         asal.nama_branch AS nama_branch_asal,
         tujuan.nama_branch AS nama_branch_tujuan,
         tb_barang.nama_barang
@@ -134,6 +144,7 @@ $q = mysqli_query($koneksi, "
 ?>
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -142,116 +153,133 @@ $q = mysqli_query($koneksi, "
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 </head>
-<body>
-<div class="container-fluid">
-    <div class="row">
-        <?php require_once '../layout/sidebar.php'; ?>
-        <div class="col-md-10 ms-auto">
-            <div class="p-4">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-                    <div>
-                        <h4 class="fw-bold mb-1"><i class="bi bi-inboxes me-2"></i>Approval Pengiriman Cabang → HO Jakarta</h4>
-                        <div class="text-muted">Konfirmasi barang rusak dari cabang yang sudah sampai dan diterima oleh HO Jakarta.</div>
-                    </div>
-                </div>
 
-                <div class="card border-0 shadow-sm">
-                    <div class="table-responsive">
-                        <table class="table align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>#</th>
-                                    <th>Barang</th>
-                                    <th>Asal → Tujuan</th>
-                                    <th>Resi / Jasa</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if ($q && mysqli_num_rows($q) > 0): ?>
-                                    <?php $no = 1; ?>
-                                    <?php while ($row = mysqli_fetch_assoc($q)): ?>
-                                        <?php
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <?php require_once '../layout/sidebar.php'; ?>
+            <div class="col-md-10 ms-auto">
+                <div class="p-4">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                        <div>
+                            <h4 class="fw-bold mb-1"><i class="bi bi-inboxes me-2"></i>Approval Pengiriman Cabang → HO Jakarta</h4>
+                            <div class="text-muted">Konfirmasi barang rusak dari cabang yang sudah sampai dan diterima oleh HO Jakarta.</div>
+                        </div>
+                    </div>
+
+                    <div class="card border-0 shadow-sm">
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Barang</th>
+                                        <th>Asal → Tujuan</th>
+                                        <th>Resi / Jasa</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($q && mysqli_num_rows($q) > 0): ?>
+                                        <?php $no = 1; ?>
+                                        <?php while ($row = mysqli_fetch_assoc($q)): ?>
+                                            <?php
                                             $status = (string) ($row['status_pengiriman'] ?? '');
                                             $canApprove = $status === STATUS_MENUNGGU_PERSETUJUAN;
-                                        ?>
+                                            ?>
+                                            <tr>
+                                                <td><?= $no++ ?></td>
+                                                <td>
+                                                    <div class="fw-bold"><?= h($row['nama_barang'] ?? '-') ?></div>
+                                                    <div class="text-muted small">Kategori barang dari pengajuan user cabang
+                                                        <i class="bi bi-upc-scan me-1"></i> SN: <strong><?= h($row['serial_number'] ?? 'Belum ada SN') ?></strong><br>
+                                                        <i class="bi bi-person me-1"></i> User: <strong><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></strong>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold"><?= h($row['nama_branch_asal'] ?? '-') ?> → <?= h($row['nama_branch_tujuan'] ?? '-') ?></div>
+                                                    <div class="text-muted small">Tgl kirim: <?= h($row['tanggal_keluar'] ?? '-') ?></div>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-semibold"><?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
+                                                    <div class="text-muted small"><?= h($row['jasa_pengiriman'] ?? '-') ?></div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?= $canApprove ? 'bg-warning text-dark' : 'bg-primary' ?> rounded-pill">
+                                                        <?= h($status !== '' ? $status : '-') ?>
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                                        <?php if ($canApprove): ?>
+                                                            <button class="btn btn-success btn-sm btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>">
+                                                                <i class="bi bi-box-arrow-in-down me-1"></i>Approve Barang Sudah Sampai HO
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <button class="btn btn-outline-secondary btn-sm" disabled>
+                                                                <i class="bi bi-check2-circle me-1"></i>Sudah Diproses
+                                                            </button>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php else: ?>
                                         <tr>
-                                            <td><?= $no++ ?></td>
-                                            <td>
-                                                <div class="fw-bold"><?= h($row['nama_barang'] ?? '-') ?></div>
-                                                <div class="text-muted small">Kategori barang dari pengajuan user cabang</div>
-                                            </td>
-                                            <td>
-                                                <div class="fw-semibold"><?= h($row['nama_branch_asal'] ?? '-') ?> → <?= h($row['nama_branch_tujuan'] ?? '-') ?></div>
-                                                <div class="text-muted small">Tgl kirim: <?= h($row['tanggal_keluar'] ?? '-') ?></div>
-                                            </td>
-                                            <td>
-                                                <div class="fw-semibold"><?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
-                                                <div class="text-muted small"><?= h($row['jasa_pengiriman'] ?? '-') ?></div>
-                                            </td>
-                                            <td>
-                                                <span class="badge <?= $canApprove ? 'bg-warning text-dark' : 'bg-primary' ?> rounded-pill">
-                                                    <?= h($status !== '' ? $status : '-') ?>
-                                                </span>
-                                            </td>
-                                            <td class="text-end">
-                                                <div class="d-flex justify-content-end gap-2 flex-wrap">
-                                                    <?php if ($canApprove): ?>
-                                                        <button class="btn btn-success btn-sm btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>">
-                                                            <i class="bi bi-box-arrow-in-down me-1"></i>Approve Barang Sudah Sampai HO
-                                                        </button>
-                                                    <?php else: ?>
-                                                        <button class="btn btn-outline-secondary btn-sm" disabled>
-                                                            <i class="bi bi-check2-circle me-1"></i>Sudah Diproses
-                                                        </button>
-                                                    <?php endif; ?>
-                                                </div>
+                                            <td colspan="6" class="text-center text-muted p-4">
+                                                <i class="bi bi-inbox d-block fs-3 mb-2"></i>
+                                                Tidak ada pengiriman cabang → HO yang perlu diproses.
                                             </td>
                                         </tr>
-                                    <?php endwhile; ?>
-                                <?php else: ?>
-                                    <tr>
-                                        <td colspan="6" class="text-center text-muted p-4">
-                                            <i class="bi bi-inbox d-block fs-3 mb-2"></i>
-                                            Tidak ada pengiriman cabang → HO yang perlu diproses.
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
 
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-document.addEventListener('click', async (e) => {
-  const approveBtn = e.target.closest('.btnApprove');
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('click', async (e) => {
+            const approveBtn = e.target.closest('.btnApprove');
 
-  if (approveBtn) {
-    const id = approveBtn.getAttribute('data-id');
-    const res = await fetch('pengiriman_approval.php', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({id_pengiriman: id, nama_penerima: 'Admin HO Jakarta'})
-    });
-    const data = await res.json();
-    if (data.status === 'success') {
-      await Swal.fire({icon: 'success', title: 'Berhasil', text: data.message});
-      location.reload();
-    } else {
-      Swal.fire({icon: 'error', title: 'Gagal', text: data.message || 'Terjadi kesalahan'});
-    }
-  }
+            if (approveBtn) {
+                const id = approveBtn.getAttribute('data-id');
+                const res = await fetch('pengiriman_approval.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams({
+                        id_pengiriman: id,
+                        nama_penerima: 'Admin HO Jakarta'
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil',
+                        text: data.message
+                    });
+                    location.reload();
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal',
+                        text: data.message || 'Terjadi kesalahan'
+                    });
+                }
+            }
 
-});
-</script>
+        });
+    </script>
 </body>
-</html>
 
+</html>

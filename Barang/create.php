@@ -457,35 +457,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </form> -->
         <div class="col-md-12 text-end">
-            <button type="submit" class="btn btn-warning-custom" id="btnSimpanBarang">
-                <span class="btn-text">Simpan</span>
+            <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark" id="btnSimpanBarang">
+                <span class="btn-text"><i class="bi bi-save me-1"></i> Simpan</span>
                 <span class="btn-loading d-none">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                     Menyimpan...
                 </span>
             </button>
         </div>
+    </div> <!-- Tag penutup row g-3 -->
+</form> <!-- Tag penutup Form -->
 
-        <script>
-            $(document).ready(function() {
-                $('#bermasalahSelect').on('change', function() {
-                    if ($(this).val() === 'Iya') {
-                        $('#keteranganMasalahDiv').slideDown();
-                        $('textarea[name="keterangan_masalah"]').attr('required', true);
-                    } else {
-                        $('#keteranganMasalahDiv').slideUp();
-                        $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-                    }
-                });
-            });
+<script>
+    $(document).ready(function() {
+        $('#bermasalahSelect').on('change', function() {
+            if ($(this).val() === 'Iya') {
+                $('#keteranganMasalahDiv').slideDown();
+                $('textarea[name="keterangan_masalah"]').attr('required', true);
+            } else {
+                $('#keteranganMasalahDiv').slideUp();
+                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+            }
+        });
+    });
 
-            $('#fotoInput').change(function() {
-                if (!this.files || !this.files[0]) return;
-
-                let reader = new FileReader();
-                reader.onload = function(e) {
-                    $('#previewFoto').attr('src', e.target.result).show();
-                };
-                reader.readAsDataURL(this.files[0]);
-            });
-        </script>
+    $('#fotoInput').change(function() {
+        if (!this.files || !this.files[0]) return;
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            $('#previewFoto').attr('src', e.target.result).show();
+        };
+        reader.readAsDataURL(this.files[0]);
+    });
+</script>

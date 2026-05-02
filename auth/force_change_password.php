@@ -6,15 +6,16 @@ if (!is_logged_in()) {
     redirect_to(base_url('auth/login.php'));
 }
 
-// Jika user tidak wajib ganti password, redirect ke dashboard
 $userId = (int) current_user_id();
 
-$stmt = mysqli_prepare($koneksi, "SELECT must_change_password FROM users WHERE id = ? LIMIT 1");
+// Ambil password saat ini dan status wajib ganti password
+$stmt = mysqli_prepare($koneksi, "SELECT password, must_change_password FROM users WHERE id = ? LIMIT 1");
 mysqli_stmt_bind_param($stmt, 'i', $userId);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt); 
 $row = mysqli_fetch_assoc($result);
 mysqli_stmt_close($stmt);
+
 if (!$row || (int) $row['must_change_password'] === 0) {
     redirect_to(base_url('dashboard/index.php'));
 }
@@ -41,25 +42,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    $userId = (int) current_user_id();
-    $hash   = password_hash($newPassword, PASSWORD_DEFAULT);
-    $mustChangePassword = 0;
+    // --- PENGECEKAN PASSWORD LAMA ---
+    $isReused = false;
+    
+    // 1. Cek apakah password sama dengan password saat ini (di tabel users)
+    if (password_verify($newPassword, $row['password'])) {
+        $isReused = true;
+    }
 
-    $stmt = mysqli_prepare(
-        $koneksi,
-        "UPDATE users
-         SET password = ?, must_change_password = ?, password_changed_at = NOW()
-         WHERE id = ?"
-    );
+    // 2. Cek apakah password sama dengan riwayat sebelumnya (ambil 5 password terakhir)
+    if (!$isReused) {
+        $stmtHist = mysqli_prepare($koneksi, "SELECT password_hash FROM user_password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+        mysqli_stmt_bind_param($stmtHist, 'i', $userId);
+        mysqli_stmt_execute($stmtHist);
+        $resHist = mysqli_stmt_get_result($stmtHist);
+        while ($rowHist = mysqli_fetch_assoc($resHist)) {
+            if (password_verify($newPassword, $rowHist['password_hash'])) {
+                $isReused = true;
+                break;
+            }
+        }
+        mysqli_stmt_close($stmtHist);
+    }
 
-    if (!$stmt) {
-        set_flash('error', 'Terjadi kesalahan pada sistem.');
+    // Jika ketahuan menggunakan password lama
+    if ($isReused) {
+        set_flash('error', 'Password ini sebelumnya sudah pernah digunakan. Demi keamanan, silakan gunakan kombinasi password yang baru.');
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    mysqli_stmt_bind_param($stmt, 'sii', $hash, $mustChangePassword, $userId);
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_close($stmt);
+    // --- PROSES SIMPAN PASSWORD BARU ---
+    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+    $mustChangePassword = 0;
+
+    // Update tabel users
+    $stmtUpdate = mysqli_prepare(
+        $koneksi,
+        "UPDATE users SET password = ?, must_change_password = ?, password_changed_at = NOW() WHERE id = ?"
+    );
+
+    if (!$stmtUpdate) {
+        set_flash('error', 'Terjadi kesalahan pada sistem saat update password.');
+        redirect_to(base_url('auth/force_change_password.php'));
+    }
+
+    mysqli_stmt_bind_param($stmtUpdate, 'sii', $hash, $mustChangePassword, $userId);
+    mysqli_stmt_execute($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+
+    // Simpan password baru ke tabel riwayat (agar tidak bisa dipakai lagi kedepannya)
+    $stmtInsertHist = mysqli_prepare($koneksi, "INSERT INTO user_password_history (user_id, password_hash) VALUES (?, ?)");
+    if ($stmtInsertHist) {
+        mysqli_stmt_bind_param($stmtInsertHist, 'is', $userId, $hash);
+        mysqli_stmt_execute($stmtInsertHist);
+        mysqli_stmt_close($stmtInsertHist);
+    }
 
     // Update session agar tidak redirect lagi
     if (isset($_SESSION['user'])) {
@@ -90,25 +127,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --orange-1: #ff7a00;
             --orange-2: #ff9800;
             --orange-3: #ffb000;
-            --orange-4: #ffd166;
-            --orange-5: #fff3e0;
-
             --dark-1: #111111;
-            --dark-2: #1f1f1f;
-            --dark-3: #2f2f2f;
-
             --text-main: #1e1e1e;
             --text-soft: #6b7280;
-            --border-soft: rgba(255, 152, 0, 0.14);
-
             --surface: #ffffff;
-            --surface-soft: #fffaf3;
             --shadow-soft: 0 16px 40px rgba(17, 17, 17, 0.08);
             --shadow-strong: 0 22px 54px rgba(255, 122, 0, 0.16);
-
             --radius-xl: 28px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
         }
 
         * { box-sizing: border-box; }
@@ -128,10 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding: 24px;
         }
 
-        .login-wrap {
-            width: 100%;
-            max-width: 1120px;
-        }
+        .login-wrap { width: 100%; max-width: 1120px; }
 
         .login-card {
             background: var(--surface);
@@ -154,27 +176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             justify-content: space-between;
         }
 
-        .login-left::before {
-            content: "";
-            position: absolute;
-            top: -80px; right: -70px;
-            width: 220px; height: 220px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.08);
-        }
-
-        .login-left::after {
-            content: "";
-            position: absolute;
-            bottom: -70px; left: -60px;
-            width: 180px; height: 180px;
-            border-radius: 50%;
-            background: rgba(255,209,102,0.18);
-        }
-
-        .login-left-content,
-        .login-left-footer { position: relative; z-index: 2; }
-
         .brand-badge {
             display: inline-flex;
             align-items: center;
@@ -187,7 +188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 700;
             margin-bottom: 22px;
             border: 1px solid rgba(255,193,7,0.18);
-            backdrop-filter: blur(4px);
         }
 
         .brand-dot {
@@ -197,265 +197,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-shadow: 0 0 0 4px rgba(255,193,7,0.14);
         }
 
-        .login-title {
-            font-size: 2.1rem;
-            font-weight: 800;
-            line-height: 1.18;
-            margin-bottom: 16px;
-            letter-spacing: -0.03em;
-            max-width: 470px;
-        }
+        .login-title { font-size: 2.1rem; font-weight: 800; line-height: 1.18; margin-bottom: 16px; letter-spacing: -0.03em; max-width: 470px; }
+        .login-desc { color: rgba(255,255,255,0.82); line-height: 1.72; max-width: 460px; font-size: .96rem; margin-bottom: 0; }
 
-        .login-desc {
-            color: rgba(255,255,255,0.82);
-            line-height: 1.72;
-            max-width: 460px;
-            font-size: .96rem;
-            margin-bottom: 0;
-        }
-
-        .login-feature {
-            margin-top: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 13px;
-            padding: 14px 15px;
-            border-radius: 18px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
-            backdrop-filter: blur(8px);
-        }
-
-        .feature-icon {
-            width: 40px; height: 40px;
-            border-radius: 13px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,193,7,0.14);
-            color: #ffd166;
-            flex-shrink: 0;
-            font-size: 1rem;
-            border: 1px solid rgba(255,193,7,0.16);
-        }
-
+        .login-feature { margin-top: 30px; display: flex; flex-direction: column; gap: 14px; }
+        .feature-item { display: flex; align-items: flex-start; gap: 13px; padding: 14px 15px; border-radius: 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+        .feature-icon { width: 40px; height: 40px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,193,7,0.14); color: #ffd166; flex-shrink: 0; font-size: 1rem; border: 1px solid rgba(255,193,7,0.16); }
         .feature-title { font-weight: 700; margin-bottom: 3px; color: #fff; }
+        .feature-text { color: rgba(255,255,255,0.70); font-size: .9rem; line-height: 1.5; }
 
-        .feature-text {
-            color: rgba(255,255,255,0.70);
-            font-size: .9rem;
-            line-height: 1.5;
-        }
-
-        .login-left-footer {
-            margin-top: 28px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: rgba(255,255,255,0.74);
-            font-size: .88rem;
-        }
-
-        .footer-mark {
-            width: 42px; height: 42px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.09);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffd166;
-            font-weight: 800;
-            border: 1px solid rgba(255,255,255,0.10);
-        }
+        .login-left-footer { margin-top: 28px; display: flex; align-items: center; gap: 12px; color: rgba(255,255,255,0.74); font-size: .88rem; }
+        .footer-mark { width: 42px; height: 42px; border-radius: 14px; background: rgba(255,255,255,0.09); display: inline-flex; align-items: center; justify-content: center; color: #ffd166; font-weight: 800; border: 1px solid rgba(255,255,255,0.10); }
 
         /* ── RIGHT PANEL ── */
-        .login-right {
-            padding: 44px 38px;
-            background: linear-gradient(180deg, #ffffff 0%, #fffdf9 100%);
-        }
+        .login-right { padding: 44px 38px; background: linear-gradient(180deg, #ffffff 0%, #fffdf9 100%); }
 
-        .form-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 8px 14px;
-            background: #fff6e8;
-            color: #9a640b;
-            font-size: .82rem;
-            font-weight: 700;
-            border: 1px solid rgba(255,152,0,0.16);
-            margin-bottom: 16px;
-        }
+        .form-badge { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 14px; background: #fff6e8; color: #9a640b; font-size: .82rem; font-weight: 700; border: 1px solid rgba(255,152,0,0.16); margin-bottom: 16px; }
+        .form-title { font-size: 1.75rem; font-weight: 800; color: var(--dark-1); margin-bottom: 8px; letter-spacing: -0.02em; }
+        .form-subtitle { color: var(--text-soft); margin-bottom: 28px; line-height: 1.65; font-size: .94rem; }
 
-        .form-title {
-            font-size: 1.75rem;
-            font-weight: 800;
-            color: var(--dark-1);
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
-        }
+        .alert { border: none; border-radius: 16px; padding: 14px 16px; font-size: .92rem; box-shadow: 0 10px 24px rgba(17,17,17,0.04); }
+        .alert-danger { background: #fff1ef; color: #c2412d; border-left: 4px solid #c2412d; }
+        .alert-success { background: #eefaf0; color: #2f7d43; border-left: 4px solid #2f7d43; }
 
-        .form-subtitle {
-            color: var(--text-soft);
-            margin-bottom: 28px;
-            line-height: 1.65;
-            font-size: .94rem;
-        }
-
-        .alert {
-            border: none;
-            border-radius: 16px;
-            padding: 14px 16px;
-            font-size: .92rem;
-            box-shadow: 0 10px 24px rgba(17,17,17,0.04);
-        }
-
-        .alert-danger  { background: #fff1ef; color: #c2412d; }
-        .alert-success { background: #eefaf0; color: #2f7d43; }
-
-        .form-label {
-            font-weight: 700;
-            color: var(--dark-1);
-            margin-bottom: .55rem;
-        }
+        .form-label { font-weight: 700; color: var(--dark-1); margin-bottom: .55rem; }
 
         .input-shell { position: relative; }
+        .input-icon { position: absolute; top: 50%; left: 15px; transform: translateY(-50%); color: #c27e12; font-size: 1rem; z-index: 2; }
+        .form-control { border-radius: 16px; padding: .95rem 1rem .95rem 2.85rem; border: 1px solid #e6dfd2; background: #fff; box-shadow: none; font-size: .95rem; transition: all .2s ease; }
+        .form-control:focus { border-color: #f0c63d; box-shadow: 0 0 0 0.22rem rgba(255,193,7,0.14); background: #fffdfa; }
 
-        .input-icon {
-            position: absolute;
-            top: 50%; left: 15px;
-            transform: translateY(-50%);
-            color: #c27e12;
-            font-size: 1rem;
-            z-index: 2;
-        }
-
-        .form-control {
-            border-radius: 16px;
-            padding: .95rem 1rem .95rem 2.85rem;
-            border: 1px solid #e6dfd2;
-            background: #fff;
-            box-shadow: none;
-            font-size: .95rem;
-            transition: all .2s ease;
-        }
-
-        .form-control:focus {
-            border-color: #f0c63d;
-            box-shadow: 0 0 0 0.22rem rgba(255,193,7,0.14);
-            background: #fffdfa;
-        }
-
-        .btn-login {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            border: none;
-            color: #fff;
-            font-weight: 800;
-            border-radius: 16px;
-            padding: .95rem 1rem;
-            box-shadow: var(--shadow-strong);
-            transition: all .22s ease;
-            letter-spacing: .01em;
-        }
-
-        .btn-login:hover {
-            color: #fff;
-            transform: translateY(-1px);
-            filter: brightness(.98);
-        }
-
-        .system-note {
-            margin-top: 24px;
-            background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%);
-            border: 1px solid rgba(255,152,0,0.12);
-            border-radius: 18px;
-            padding: 15px 16px;
-            color: var(--text-soft);
-            font-size: .91rem;
-            line-height: 1.6;
-        }
-
-        .note-text {
-            color: var(--text-soft);
-            font-size: .88rem;
-            text-align: center;
-            margin-top: 18px;
-            font-weight: 600;
-        }
-
-        .note-text span { color: #9a640b; }
-
-        .password-shell { position: relative; }
         .password-shell .form-control { padding-right: 3.2rem; }
-
-        .password-toggle {
-            position: absolute;
-            top: 50%; right: 12px;
-            transform: translateY(-50%);
-            width: 38px; height: 38px;
-            border: none;
-            background: transparent;
-            color: #c27e12;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all .2s ease;
-            z-index: 3;
-        }
-
+        .password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); width: 38px; height: 38px; border: none; background: transparent; color: #c27e12; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all .2s ease; z-index: 3; }
         .password-toggle:hover { background: #fff3e0; color: #111; }
 
-        .password-toggle:focus {
-            outline: none;
-            box-shadow: 0 0 0 .2rem rgba(255,193,7,0.14);
+        /* Saran Password Box */
+        .suggestion-box {
+            background: #f8fbff;
+            border: 1px dashed #a8c5ff;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
+        .suggestion-text { font-size: 0.88rem; color: #3b5998; margin-bottom: 4px; font-weight: 600;}
+        .suggestion-pass { font-family: monospace; font-weight: bold; color: #0d6efd; font-size: 1.2rem; letter-spacing: 2px; background: #e9f0ff; padding: 4px 10px; border-radius: 8px; user-select: all; display: inline-block;}
+        .btn-use-suggestion { background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px;}
+        .btn-use-suggestion:hover { background: #0b5ed7; transform: translateY(-1px); }
+
+        .btn-login { background: linear-gradient(135deg, var(--orange-1), var(--orange-3)); border: none; color: #fff; font-weight: 800; border-radius: 16px; padding: .95rem 1rem; box-shadow: var(--shadow-strong); transition: all .22s ease; letter-spacing: .01em; }
+        .btn-login:hover { color: #fff; transform: translateY(-1px); filter: brightness(.98); }
+
+        .system-note { margin-top: 24px; background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%); border: 1px solid rgba(255,152,0,0.12); border-radius: 18px; padding: 15px 16px; color: var(--text-soft); font-size: .91rem; line-height: 1.6; }
 
         /* strength bar */
-        .strength-bar {
-            height: 5px;
-            border-radius: 999px;
-            background: #f0ece4;
-            margin-top: 8px;
-            overflow: hidden;
-        }
+        .strength-bar { height: 5px; border-radius: 999px; background: #f0ece4; margin-top: 8px; overflow: hidden; }
+        .strength-fill { height: 100%; border-radius: 999px; width: 0%; transition: width .3s ease, background .3s ease; }
+        .strength-label { font-size: .78rem; font-weight: 700; margin-top: 4px; color: var(--text-soft); }
 
-        .strength-fill {
-            height: 100%;
-            border-radius: 999px;
-            width: 0%;
-            transition: width .3s ease, background .3s ease;
-        }
-
-        .strength-label {
-            font-size: .78rem;
-            font-weight: 700;
-            margin-top: 4px;
-            color: var(--text-soft);
-        }
-
-        @media (max-width: 991.98px) {
-            .login-left  { padding: 34px 28px; }
-            .login-right { padding: 34px 28px; }
-            .login-title { font-size: 1.75rem; }
-            .form-title  { font-size: 1.45rem; }
-        }
-
-        @media (max-width: 767.98px) {
-            body { padding: 16px; }
-            .login-card { border-radius: 22px; }
-            .login-left, .login-right { padding: 26px 22px; }
-            .login-title { font-size: 1.5rem; }
-            .brand-badge, .form-badge { font-size: .78rem; }
-        }
+        @media (max-width: 991.98px) { .login-left, .login-right { padding: 34px 28px; } .login-title { font-size: 1.75rem; } .form-title { font-size: 1.45rem; } }
+        @media (max-width: 767.98px) { body { padding: 16px; } .login-card { border-radius: 22px; } .login-left, .login-right { padding: 26px 22px; } .suggestion-box { flex-direction: column; gap: 12px; align-items: stretch; text-align: center;} }
     </style>
 </head>
 
@@ -485,8 +288,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="feature-item">
                                 <div class="feature-icon"><i class="bi bi-shield-lock"></i></div>
                                 <div>
-                                    <div class="feature-title">Keamanan Akun</div>
-                                    <div class="feature-text">Password default bersifat sementara dan harus segera diganti untuk melindungi akun Anda.</div>
+                                    <div class="feature-title">Keamanan Ketat</div>
+                                    <div class="feature-text">Password Anda tidak boleh sama dengan password yang pernah digunakan sebelumnya.</div>
                                 </div>
                             </div>
 
@@ -494,15 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="feature-icon"><i class="bi bi-key"></i></div>
                                 <div>
                                     <div class="feature-title">Password Kuat</div>
-                                    <div class="feature-text">Gunakan minimal 8 karakter dengan kombinasi huruf dan angka agar akun lebih aman.</div>
-                                </div>
-                            </div>
-
-                            <div class="feature-item">
-                                <div class="feature-icon"><i class="bi bi-check2-circle"></i></div>
-                                <div>
-                                    <div class="feature-title">Akses Dashboard</div>
-                                    <div class="feature-text">Setelah password berhasil diperbarui, Anda langsung diarahkan ke dashboard sistem.</div>
+                                    <div class="feature-text">Gunakan kombinasi yang disarankan sistem agar akun Anda lebih aman dan sulit ditebak.</div>
                                 </div>
                             </div>
                         </div>
@@ -525,16 +320,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="form-title">Buat Password Baru</div>
                     <div class="form-subtitle">
-                        Anda login menggunakan password default. Silakan buat password baru untuk melanjutkan.
+                        Buat password baru. Password lama tidak dapat digunakan kembali.
                     </div>
 
                     <?php if ($error): ?>
-                        <div class="alert alert-danger"><?= e($error) ?></div>
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i><?= e($error) ?>
+                        </div>
                     <?php endif; ?>
 
                     <?php if ($success): ?>
-                        <div class="alert alert-success"><?= e($success) ?></div>
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill me-2"></i><?= e($success) ?>
+                        </div>
                     <?php endif; ?>
+
+                    <!-- Kotak Saran Password Profesional -->
+                    <div class="suggestion-box">
+                        <div>
+                            <div class="suggestion-text">Saran Password Sangat Kuat:</div>
+                            <div class="suggestion-pass" id="suggestedPasswordTxt">Memuat...</div>
+                        </div>
+                        <button type="button" class="btn-use-suggestion" id="btnUseSuggestion">
+                            <i class="bi bi-magic"></i> Gunakan Password Ini
+                        </button>
+                    </div>
 
                     <form method="POST" action="">
                         <div class="mb-3">
@@ -588,11 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="system-note mt-4">
                         <i class="bi bi-info-circle me-1"></i>
-                        Halaman ini <b>tidak dapat dilewati</b>. Password wajib diperbarui sebelum Anda dapat mengakses fitur sistem.
-                    </div>
-
-                    <div class="note-text">
-                        <span>IT Asset Management</span> — Secure Account Setup
+                        Halaman ini <b>tidak dapat dilewati</b>. Anda harus menyimpan password baru sebelum mengakses sistem.
                     </div>
                 </div>
             </div>
@@ -603,7 +409,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
-            // Toggle password visibility
+            // --- 1. Fungsi Membuat Password Acak Kuat ---
+            function generateStrongPassword() {
+                const uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                const lowers = "abcdefghijklmnopqrstuvwxyz";
+                const numbers = "0123456789";
+                const symbols = "!@#$%^&*";
+                
+                let pass = "";
+                // Paksa agar ada minimal 1 huruf besar, kecil, angka, dan simbol
+                pass += uppers[Math.floor(Math.random() * uppers.length)];
+                pass += lowers[Math.floor(Math.random() * lowers.length)];
+                pass += numbers[Math.floor(Math.random() * numbers.length)];
+                pass += symbols[Math.floor(Math.random() * symbols.length)];
+                
+                // Tambahkan 8 karakter sisanya secara acak (Total 12 Karakter)
+                const all = uppers + lowers + numbers + symbols;
+                for(let i=0; i<8; i++) {
+                    pass += all[Math.floor(Math.random() * all.length)];
+                }
+                
+                // Acak urutan stringnya
+                return pass.split('').sort(() => 0.5 - Math.random()).join('');
+            }
+
+            // Tampilkan saran password di kotak UI
+            const suggestedPass = generateStrongPassword();
+            document.getElementById('suggestedPasswordTxt').textContent = suggestedPass;
+
+            // Tombol "Gunakan Password Ini"
+            document.getElementById('btnUseSuggestion').addEventListener('click', function() {
+                const newPassInput = document.getElementById('newPassword');
+                const confPassInput = document.getElementById('confirmPassword');
+                
+                // Jadikan type text agar kelihatan saat diisi otomatis
+                newPassInput.type = 'text';
+                confPassInput.type = 'text';
+
+                // Isi form otomatis
+                newPassInput.value = suggestedPass;
+                confPassInput.value = suggestedPass;
+
+                // Update icon mata jadi dicoret
+                document.querySelectorAll('.password-toggle i').forEach(icon => {
+                    icon.classList.remove('bi-eye');
+                    icon.classList.add('bi-eye-slash');
+                });
+
+                // Trigger input event agar bar warna dan tulisan "cocok" muncul
+                newPassInput.dispatchEvent(new Event('input'));
+                confPassInput.dispatchEvent(new Event('input'));
+            });
+
+
+            // --- 2. Toggle password visibility (Mata) ---
             document.querySelectorAll('.password-toggle').forEach(function (button) {
                 button.addEventListener('click', function () {
                     const targetId = this.getAttribute('data-target');
@@ -621,7 +480,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 });
             });
 
-            // Password strength indicator
+            // --- 3. Password strength indicator ---
             const newPasswordInput = document.getElementById('newPassword');
             const strengthFill     = document.getElementById('strengthFill');
             const strengthLabel    = document.getElementById('strengthLabel');
@@ -635,12 +494,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (/[0-9]/.test(val))            score++;
                 if (/[^A-Za-z0-9]/.test(val))     score++;
 
-                const levels = [
+                const levels =[
                     { pct: '0%',   color: '',          label: '' },
-                    { pct: '25%',  color: '#e53935',   label: 'Lemah' },
-                    { pct: '50%',  color: '#fb8c00',   label: 'Cukup' },
-                    { pct: '75%',  color: '#fdd835',   label: 'Baik' },
-                    { pct: '100%', color: '#43a047',   label: 'Kuat' },
+                    { pct: '25%',  color: '#e53935',   label: 'Lemah (Minimal 8 Karakter)' },
+                    { pct: '50%',  color: '#fb8c00',   label: 'Cukup (Tambahkan Angka / Huruf Besar)' },
+                    { pct: '75%',  color: '#fdd835',   label: 'Baik (Tambahkan Simbol Spesial)' },
+                    { pct: '100%', color: '#43a047',   label: 'Sangat Kuat' },
                 ];
 
                 const level = val.length === 0 ? levels[0] : levels[score];
@@ -650,7 +509,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 strengthLabel.style.color     = level.color;
             });
 
-            // Confirm password match indicator
+            // --- 4. Confirm password match indicator ---
             const confirmPasswordInput = document.getElementById('confirmPassword');
             const matchMsg             = document.getElementById('matchMsg');
 

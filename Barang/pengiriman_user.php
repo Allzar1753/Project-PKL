@@ -10,8 +10,12 @@ if (!is_user_role()) {
 
 const STATUS_MENUNGGU_PERSETUJUAN = 'Menunggu persetujuan admin';
 
-function h($v): string { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); }
-function jsonResponse(string $status, string $message): void {
+function h($v): string
+{
+    return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+}
+function jsonResponse(string $status, string $message): void
+{
     header('Content-Type: application/json');
     echo json_encode(['status' => $status, 'message' => $message]);
     exit;
@@ -65,12 +69,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tanggal = trim((string) ($_POST['tanggal_keluar'] ?? ''));
     $jasa = trim((string) ($_POST['jasa_pengiriman'] ?? ''));
     $resi = trim((string) ($_POST['nomor_resi_keluar'] ?? ''));
+    $serial_number = mysqli_real_escape_string($koneksi, trim((string) ($_POST['serial_number'] ?? '')));
+    $pemilik_barang = mysqli_real_escape_string($koneksi, trim((string) ($_POST['pemilik_barang'] ?? '')));
+
+    $cekSN_pengiriman = mysqli_query($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE serial_number = '$serial_number'");
+    if (mysqli_num_rows($cekSN_pengiriman) > 0) {
+        echo json_encode([
+            'status' => 'error', 
+            'message' => 'Serial number sudah pernah diajukan untuk pengiriman.'
+        ]);
+        exit;
+    }
 
     if ($idBarang <= 0) jsonResponse('error', 'Jenis barang wajib dipilih');
     if ($tanggal === '') jsonResponse('error', 'Tanggal wajib diisi');
     if ($resi === '') jsonResponse('error', 'Resi wajib diisi');
     if ($jasa === '') jsonResponse('error', 'Jasa pengiriman wajib dipilih');
-
+    if ($serial_number === '') jsonResponse('error', 'Serial number wajib diisi');
     // Hanya 1 pengajuan pending per jenis barang per cabang (mencegah dobel)
     $stmtPending = mysqli_prepare($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE id_barang = ? AND branch_asal = ? AND COALESCE(status_pengiriman,'') = ? LIMIT 1");
     if ($stmtPending) {
@@ -89,8 +104,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = mysqli_prepare($koneksi, "
         INSERT INTO pengiriman_cabang_ho
-        (id_barang, branch_asal, branch_tujuan, tanggal_pengajuan, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, dibuat_oleh)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id_barang, serial_number, pemilik_barang, branch_asal, branch_tujuan, tanggal_pengajuan, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, dibuat_oleh)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     if (!$stmt) jsonResponse('error', 'Gagal menyiapkan penyimpanan pengiriman.');
 
@@ -99,8 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $statusPengiriman = STATUS_MENUNGGU_PERSETUJUAN;
     mysqli_stmt_bind_param(
         $stmt,
-        'iiisssssi',
+        'issiisssssi',
         $idBarang,
+        $serial_number,
+        $pemilik_barang,
         $myBranchId,
         $branchTujuan,
         $tanggal,
@@ -159,6 +176,17 @@ $barangList = getBarangMasterOptions($koneksi);
         <div class="col-md-6">
             <label class="form-label">Tujuan</label>
             <input type="text" class="form-control" value="<?= h($jakartaBranch['nama_branch']) ?>" readonly>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label>Serial Number / Service Tag <span class="text-danger">*</span></label>
+            <input type="text" name="serial_number" class="form-control" required placeholder="Masukkan Serial Number">
+            <small class="text-muted">Pastikan SN benar, sistem akan mengecek duplikasi.</small>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <label>Pemilik Barang (User) <span class="text-danger">*</span></label>
+            <input type="text" name="pemilik_barang" class="form-control" required placeholder="Nama User / Pemilik">
         </div>
 
         <div class="col-md-6">

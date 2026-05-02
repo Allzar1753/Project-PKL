@@ -460,7 +460,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <label class="form-label">Jasa Pengiriman</label>
                         <select name="jasa_pengiriman" class="form-control select2" required>
                             <option value="">Pilih...</option>
-                            <option value="SAP Express">SAP Express</option>
+                            <option value="SAPX Express">SAPX Express</option>
                             <option value="Ekspedisi 2">Ekspedisi 2 (Menyusul)</option>
                             <option value="Ekspedisi 3">Ekspedisi 3 (Menyusul)</option>
                         </select>
@@ -698,7 +698,7 @@ elseif ($formType === 'logistik') {
     $tanggalKeluar = normalizeNullableString($_POST['tanggal_keluar'] ?? '');
     $tujuan = isset($_POST['tujuan']) && trim((string) $_POST['tujuan']) !== '' ? (int) $_POST['tujuan'] : 0;
     $jasaPengiriman = normalizeNullableString($_POST['jasa_pengiriman'] ?? '');
-    $allowedJasa = ['SAP Express', 'Ekspedisi 2', 'Ekspedisi 3'];
+    $allowedJasa = ['SAPX Express', 'Ekspedisi 2', 'Ekspedisi 3'];
     if (!in_array($jasaPengiriman, $allowedJasa, true)) {
         jsonError("Jasa pengiriman belum dipilih.");
     }

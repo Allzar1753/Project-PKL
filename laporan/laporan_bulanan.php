@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
@@ -1440,17 +1441,21 @@ $documentNumber = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['sta
                                     </p>
                                 </div>
 
-                                <div class="d-flex flex-wrap gap-2">
+                                <div class="d-flex flex-wrap-gap-2">
                                     <button type="button" class="hero-action" onclick="printAllReport()">
-                                        <i class="bi bi-printer me-2"></i>Cetak Semua
+                                        <i class="bi bi-printer me-2"></i>Cetak PDF
                                     </button>
-                                    <a href="<?= h(build_url()) ?>" class="hero-action">
+
+                                    <button type="button" class="hero-action" text-success onclick="exportToExcel()">
+                                        <i class="bi bi-file-earmark-excel me-2"></i>Export Excel
+                                    </button>
+
+                                    <a href="<?=  h(build_url()) ?>>" class="hero-action">
                                         <i class="bi bi-arrow-counterclockwise me-2"></i>Reset
                                     </a>
                                 </div>
                             </div>
                         </div>
-
                         <div class="panel-card mb-4 no-print">
                             <div class="card-head">
                                 <div class="card-head-title">Filter Laporan</div>
@@ -1776,67 +1781,73 @@ $documentNumber = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['sta
     </div>
 
     <script>
-        function clearPrintTarget() {
-            document.body.classList.remove('print-single-asset');
-            document.querySelectorAll('.asset-card').forEach(function(card) {
-                card.classList.remove('print-target');
-            });
-        }
-
-        function printAllReport() {
-            clearPrintTarget();
-            window.print();
-        }
-
-        function printSingleAsset(assetId) {
-            clearPrintTarget();
-
-            const target = document.getElementById('asset-card-' + assetId);
-            if (!target) {
-                window.print();
-                return;
-            }
-
-            document.body.classList.add('print-single-asset');
-            target.classList.add('print-target');
-
-            window.print();
-        }
-
-        window.addEventListener('afterprint', function() {
-            clearPrintTarget();
+    // FUNGSI UNTUK CETAK PDF
+    function clearPrintTarget() {
+        document.body.classList.remove('print-single-asset');
+        document.querySelectorAll('.asset-card').forEach(function(card) {
+            card.classList.remove('print-target');
         });
+    }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const periodeSelect = document.getElementById('periodeFilter');
-            const bulanFields = document.querySelectorAll('.filter-bulan');
-            const bulanTahunFields = document.querySelectorAll('.filter-bulan-tahun');
-            const mingguFields = document.querySelectorAll('.filter-minggu');
-            const customFields = document.querySelectorAll('.filter-custom');
+    function printAllReport() {
+        clearPrintTarget();
+        window.print();
+    }
 
-            function toggleFilterFields() {
-                const value = periodeSelect.value;
+    function printSingleAsset(assetId) {
+        clearPrintTarget();
+        const target = document.getElementById('asset-card-' + assetId);
+        if (!target) {
+            window.print();
+            return;
+        }
+        document.body.classList.add('print-single-asset');
+        target.classList.add('print-target');
+        window.print();
+    }
 
-                bulanFields.forEach(el => el.style.display = 'none');
-                bulanTahunFields.forEach(el => el.style.display = 'none');
-                mingguFields.forEach(el => el.style.display = 'none');
-                customFields.forEach(el => el.style.display = 'none');
+    window.addEventListener('afterprint', function() {
+        clearPrintTarget();
+    });
 
-                if (value === 'bulan') {
-                    bulanTahunFields.forEach(el => el.style.display = '');
-                    bulanFields.forEach(el => el.style.display = '');
-                } else if (value === 'tahun') {
-                    bulanTahunFields.forEach(el => el.style.display = '');
-                } else if (value === 'minggu') {
-                    mingguFields.forEach(el => el.style.display = '');
-                } else if (value === 'custom') {
-                    customFields.forEach(el => el.style.display = '');
-                }
+    // FUNGSI FILTER PERIODE
+    document.addEventListener('DOMContentLoaded', function() {
+        const periodeSelect = document.getElementById('periodeFilter');
+        const bulanFields = document.querySelectorAll('.filter-bulan');
+        const bulanTahunFields = document.querySelectorAll('.filter-bulan-tahun');
+        const mingguFields = document.querySelectorAll('.filter-minggu');
+        const customFields = document.querySelectorAll('.filter-custom');
+
+        function toggleFilterFields() {
+            const value = periodeSelect.value;
+            bulanFields.forEach(el => el.style.display = 'none');
+            bulanTahunFields.forEach(el => el.style.display = 'none');
+            mingguFields.forEach(el => el.style.display = 'none');
+            customFields.forEach(el => el.style.display = 'none');
+
+            if (value === 'bulan') {
+                bulanTahunFields.forEach(el => el.style.display = '');
+                bulanFields.forEach(el => el.style.display = '');
+            } else if (value === 'tahun') {
+                bulanTahunFields.forEach(el => el.style.display = '');
+            } else if (value === 'minggu') {
+                mingguFields.forEach(el => el.style.display = '');
+            } else if (value === 'custom') {
+                customFields.forEach(el => el.style.display = '');
             }
+        }
+        toggleFilterFields();
+        periodeSelect.addEventListener('change', toggleFilterFields);
+    });
 
-            toggleFilterFields();
-            periodeSelect.addEventListener('change', toggleFilterFields);
-        });
-    </script>
+    // FUNGSI BARU UNTUK EXPORT EXCEL
+    function exportToExcel() {
+        // Ambil filter tanggal dari URL yang sedang aktif
+        const currentParams = window.location.search;
+        
+        // Arahkan ke file export_excel.php dengan membawa data filter
+        window.location.href = 'export_excel.php' + currentParams;
+    }
+</script>
 </body>
 </html>

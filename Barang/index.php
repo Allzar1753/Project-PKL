@@ -1,5 +1,6 @@
 <?php
 include '../config/koneksi.php';
+/** @var mysqli $koneksi */ //
 require_once '../config/auth.php';
 
 // Proteksi Halaman
@@ -7,7 +8,7 @@ require_permission($koneksi, 'barang.view');
 
 $isAdmin = is_admin();
 $myBranchId = current_user_branch_id();
-
+ 
 if (!$isAdmin && (!$myBranchId || $myBranchId <= 0)) {
     http_response_code(403);
     exit('Branch user belum ditentukan. Hubungi Administrator.');
@@ -563,7 +564,8 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 <div class="modal fade" id="modalTerimaCabang" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content border-0 rounded-4 overflow-hidden">
-            <div class="modal-header bg-success text-white">
+            <!-- Warna hijau (bg-success) diubah jadi Gradient Orange -->
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #ff7a00, #ffb000); border-bottom: none;">
                 <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i>Konfirmasi Penerimaan</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>

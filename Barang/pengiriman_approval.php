@@ -149,35 +149,175 @@ $q = mysqli_query($koneksi, "
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Approval Pengiriman HO - IT Asset Management</title>
+    
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
+    <style>
+        :root {
+            --orange-1: #ff7a00; 
+            --orange-2: #ff9800; 
+            --orange-3: #ffb000;
+            --dark-1: #111111; 
+            --text-main: #1e1e1e; 
+            --text-soft: #6b7280;
+            --surface: #ffffff; 
+            --border-soft: rgba(255, 152, 0, 0.14);
+            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07); 
+            --radius-xl: 28px;
+        }
+
+        body {
+            background: radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
+                        linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            color: var(--text-main); 
+            min-height: 100vh;
+        }
+
+        .page-shell { padding: 25px; }
+
+        /* Style Card Header Gradient */
+        .page-hero {
+            position: relative; 
+            overflow: hidden; 
+            border-radius: var(--radius-xl);
+            background: linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(255, 122, 0, 0.96) 100%);
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20); 
+            padding: 1.8rem 2rem; 
+            margin-bottom: 1.5rem;
+        }
+
+        .page-title { 
+            color: #fff; 
+            font-size: 1.8rem; 
+            font-weight: 800; 
+            letter-spacing: -0.02em; 
+            margin-bottom: 0.3rem;
+        }
+
+        .page-desc { 
+            color: rgba(255, 255, 255, 0.84); 
+            font-size: .95rem; 
+            max-width: 800px; 
+            margin-bottom: 0;
+        }
+
+        /* Style Card Table Putih */
+        .ui-card { 
+            background: var(--surface); 
+            border: 1px solid var(--border-soft); 
+            border-radius: 22px; 
+            box-shadow: var(--shadow-soft); 
+            overflow: hidden;
+        }
+
+        /* Styling Table Modern */
+        .table-custom { margin-bottom: 0; }
+        .table-custom thead th {
+            background-color: #fcfcfc;
+            color: #555;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+            padding: 1rem 1.5rem;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .table-custom tbody td {
+            padding: 1.2rem 1.5rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        /* Badge and Meta Line Customization */
+        .meta-line { display: block; font-size: 0.88rem; margin-bottom: 3px; color: var(--text-soft); }
+        .meta-strong { color: var(--dark-1); font-weight: 700; }
+        
+        .badge-custom {
+            padding: 0.55em 1em;
+            font-weight: 700;
+            font-size: 0.8rem;
+            border-radius: 999px;
+            background-color: #fff4e6;
+            color: #d97706;
+            border: 1px solid rgba(255, 152, 0, 0.2);
+        }
+
+        /* Custom Modern Button */
+        .btn-modern {
+            background: linear-gradient(135deg, var(--dark-1), #333);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0.6rem 1.2rem;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .btn-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(0,0,0,0.25);
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-2));
+            color: white;
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+        .empty-state i {
+            font-size: 3.5rem;
+            color: #ffd8a8;
+            margin-bottom: 1rem;
+            display: block;
+        }
+        .empty-state-title {
+            font-weight: 800;
+            color: var(--dark-1);
+            font-size: 1.2rem;
+        }
+        .empty-state-desc {
+            color: var(--text-soft);
+        }
+    </style>
 </head>
 
 <body>
     <div class="container-fluid">
         <div class="row">
             <?php require_once '../layout/sidebar.php'; ?>
-            <div class="col-md-10 ms-auto">
-                <div class="p-4">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-                        <div>
-                            <h4 class="fw-bold mb-1"><i class="bi bi-inboxes me-2"></i>Approval Pengiriman Cabang → HO Jakarta</h4>
-                            <div class="text-muted">Konfirmasi barang rusak dari cabang yang sudah sampai dan diterima oleh HO Jakarta.</div>
+            
+            <div class="col-md-10">
+                <div class="page-shell">
+                    
+                    <!-- Header Hero Gradient -->
+                    <div class="page-hero">
+                        <div class="hero-content">
+                            <h1 class="page-title"><i class="bi bi-inboxes-fill me-2 text-warning"></i>Approval Pengiriman ke HO</h1>
+                            <p class="page-desc">Konfirmasi penerimaan barang rusak dari cabang yang sudah tiba secara fisik di Head Office Jakarta.</p>
                         </div>
                     </div>
 
-                    <div class="card border-0 shadow-sm">
+                    <!-- Container Table -->
+                    <div class="ui-card">
                         <div class="table-responsive">
-                            <table class="table align-middle mb-0">
-                                <thead class="table-light">
+                            <table class="table table-custom">
+                                <thead>
                                     <tr>
-                                        <th>#</th>
-                                        <th>Barang</th>
-                                        <th>Asal → Tujuan</th>
-                                        <th>Resi / Jasa</th>
-                                        <th>Status</th>
-                                        <th class="text-end">Aksi</th>
+                                        <th>No</th>
+                                        <th>Informasi Barang & User</th>
+                                        <th>Rute & Tanggal</th>
+                                        <th>Jasa Logistik</th>
+                                        <th>Status Pengajuan</th>
+                                        <th class="text-end">Tindakan</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -189,47 +329,48 @@ $q = mysqli_query($koneksi, "
                                             $canApprove = $status === STATUS_MENUNGGU_PERSETUJUAN;
                                             ?>
                                             <tr>
-                                                <td><?= $no++ ?></td>
+                                                <td class="text-muted fw-bold"><?= $no++ ?></td>
                                                 <td>
-                                                    <div class="fw-bold"><?= h($row['nama_barang'] ?? '-') ?></div>
-                                                    <div class="text-muted small">Kategori barang dari pengajuan user cabang
-                                                        <i class="bi bi-upc-scan me-1"></i> SN: <strong><?= h($row['serial_number'] ?? 'Belum ada SN') ?></strong><br>
-                                                        <i class="bi bi-person me-1"></i> User: <strong><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></strong>
+                                                    <div class="fw-bold fs-6 text-dark mb-1"><?= h($row['nama_barang'] ?? '-') ?></div>
+                                                    <span class="meta-line"><i class="bi bi-upc-scan me-1"></i> SN: <span class="meta-strong"><?= h($row['serial_number'] ?? 'Belum ada SN') ?></span></span>
+                                                    <span class="meta-line"><i class="bi bi-person-badge me-1"></i> User: <span class="meta-strong"><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></span></span>
+                                                </td>
+                                                <td>
+                                                    <div class="fw-bold text-dark mb-1">
+                                                        <?= h($row['nama_branch_asal'] ?? '-') ?> <i class="bi bi-arrow-right mx-1 text-warning"></i> <?= h($row['nama_branch_tujuan'] ?? '-') ?>
                                                     </div>
+                                                    <span class="meta-line"><i class="bi bi-calendar-event me-1"></i> Tgl kirim: <?= h($row['tanggal_keluar'] ?? '-') ?></span>
                                                 </td>
                                                 <td>
-                                                    <div class="fw-semibold"><?= h($row['nama_branch_asal'] ?? '-') ?> → <?= h($row['nama_branch_tujuan'] ?? '-') ?></div>
-                                                    <div class="text-muted small">Tgl kirim: <?= h($row['tanggal_keluar'] ?? '-') ?></div>
+                                                    <div class="fw-bold text-dark mb-1"><?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
+                                                    <span class="meta-line"><i class="bi bi-truck me-1"></i> <?= h($row['jasa_pengiriman'] ?? '-') ?></span>
                                                 </td>
                                                 <td>
-                                                    <div class="fw-semibold"><?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
-                                                    <div class="text-muted small"><?= h($row['jasa_pengiriman'] ?? '-') ?></div>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?= $canApprove ? 'bg-warning text-dark' : 'bg-primary' ?> rounded-pill">
-                                                        <?= h($status !== '' ? $status : '-') ?>
+                                                    <span class="badge-custom">
+                                                        <i class="bi bi-clock-history me-1"></i><?= h($status !== '' ? $status : '-') ?>
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
-                                                    <div class="d-flex justify-content-end gap-2 flex-wrap">
-                                                        <?php if ($canApprove): ?>
-                                                            <button class="btn btn-success btn-sm btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>">
-                                                                <i class="bi bi-box-arrow-in-down me-1"></i>Approve Barang Sudah Sampai HO
-                                                            </button>
-                                                        <?php else: ?>
-                                                            <button class="btn btn-outline-secondary btn-sm" disabled>
-                                                                <i class="bi bi-check2-circle me-1"></i>Sudah Diproses
-                                                            </button>
-                                                        <?php endif; ?>
-                                                    </div>
+                                                    <?php if ($canApprove): ?>
+                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>">
+                                                            <i class="bi bi-check2-all me-1"></i> Terima Barang
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button class="btn btn-light rounded-pill fw-bold text-muted btn-sm" disabled>
+                                                            <i class="bi bi-check-circle-fill text-success me-1"></i>Selesai
+                                                        </button>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endwhile; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="text-center text-muted p-4">
-                                                <i class="bi bi-inbox d-block fs-3 mb-2"></i>
-                                                Tidak ada pengiriman cabang → HO yang perlu diproses.
+                                            <td colspan="6" class="border-0">
+                                                <div class="empty-state">
+                                                    <i class="bi bi-box2-heart"></i>
+                                                    <div class="empty-state-title">Tidak ada pengiriman tertunda</div>
+                                                    <div class="empty-state-desc">Saat ini tidak ada barang dari cabang yang menunggu persetujuan penerimaan di HO Jakarta.</div>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -251,33 +392,51 @@ $q = mysqli_query($koneksi, "
 
             if (approveBtn) {
                 const id = approveBtn.getAttribute('data-id');
-                const res = await fetch('pengiriman_approval.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: new URLSearchParams({
-                        id_pengiriman: id,
-                        nama_penerima: 'Admin HO Jakarta'
-                    })
+                
+                // Tambahkan konfirmasi SweetAlert yang modern sebelum mengeksekusi
+                const confirmResult = await Swal.fire({
+                    title: 'Konfirmasi Penerimaan',
+                    text: "Pastikan fisik barang sudah tiba dan sesuai.",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff7a00',
+                    cancelButtonColor: '#111111',
+                    confirmButtonText: 'Ya, Terima Barang',
+                    cancelButtonText: 'Batal'
                 });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Berhasil',
-                        text: data.message
+
+                if (confirmResult.isConfirmed) {
+                    const res = await fetch('pengiriman_approval.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams({
+                            id_pengiriman: id,
+                            nama_penerima: 'Admin HO Jakarta'
+                        })
                     });
-                    location.reload();
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Gagal',
-                        text: data.message || 'Terjadi kesalahan'
-                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.status === 'success') {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Berhasil Diterima!',
+                            text: data.message,
+                            confirmButtonColor: '#111111'
+                        });
+                        location.reload();
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Gagal',
+                            text: data.message || 'Terjadi kesalahan',
+                            confirmButtonColor: '#111111'
+                        });
+                    }
                 }
             }
-
         });
     </script>
 </body>

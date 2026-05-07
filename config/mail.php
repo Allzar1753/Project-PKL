@@ -9,12 +9,12 @@ const MAILTRAP_HOST = 'sandbox.smtp.mailtrap.io';
 const MAILTRAP_PORT = 587;
 
 // Laptop Asus 
-// const MAILTRAP_USERNAME = '952078ef4bf7c9';
-// const MAILTRAP_PASSWORD = '0786349e6f8e62';
+const MAILTRAP_USERNAME = '952078ef4bf7c9';
+const MAILTRAP_PASSWORD = '0786349e6f8e62';
 
-// Laptop Magang 
-const MAILTRAP_USERNAME = '09448579e2b7ca';
-const MAILTRAP_PASSWORD = 'e64014c4fbb9e1';
+// // Laptop Magang 
+// const MAILTRAP_USERNAME = '09448579e2b7ca';
+// const MAILTRAP_PASSWORD = 'e64014c4fbb9e1';
 
 const EMAIL_BRANCH_INTI = 'branch.Jakarta@ithexindo.test';
 const NAMA_BRANCH_INTI  = 'Jakarta';

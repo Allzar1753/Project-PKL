@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 require_once '../config/mail.php';

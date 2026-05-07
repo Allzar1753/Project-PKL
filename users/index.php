@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -804,6 +806,194 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+if (isset($_GET['export'])) {
+    $exportType = $_GET['export'];
+
+    $exportQuery = mysqli_query(
+        $koneksi,
+        "SELECT users.username, users.email, users.role, tb_branch.nama_branch, users.created_at
+         FROM users
+         LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
+         ORDER BY FIELD(role, 'admin', 'user'), username ASC"
+    );
+
+    $tanggalCetak = date('d F Y H:i');
+    $periodeBulan = date('F Y');
+
+    if ($exportType === 'excel') {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheet->setCellValue('B1', 'PT HEXINDO ADIPEKARSA TBK');
+        $sheet->getStyle('B1')->getFont()->setBold(true)->setSize(14);
+        
+        $sheet->setCellValue('B2', 'Data Akun User IT System');
+        $sheet->getStyle('B2')->getFont()->setBold(true)->setSize(12);
+        
+        $sheet->setCellValue('B3', 'Periode: Bulan ' . $periodeBulan);
+        $sheet->setCellValue('B4', 'Tanggal Cetak: ' . $tanggalCetak);
+
+        $sheet->setCellValue('A6', 'No');
+        $sheet->setCellValue('B6', 'Username');
+        $sheet->setCellValue('C6', 'Email');
+        $sheet->setCellValue('D6', 'Role');
+        $sheet->setCellValue('E6', 'Cabang');
+        $sheet->setCellValue('F6', 'Tanggal Dibuat');
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F39C12']], // Oranye
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]
+        ];
+        $sheet->getStyle('A6:F6')->applyFromArray($headerStyle);
+
+        $rowNum = 7;
+        $no = 1;
+        while ($row = mysqli_fetch_assoc($exportQuery)) {
+            $sheet->setCellValue('A' . $rowNum, $no++);
+            $sheet->setCellValue('B' . $rowNum, $row['username']);
+            $sheet->setCellValue('C' . $rowNum, $row['email']);
+            $sheet->setCellValue('D' . $rowNum, $row['role'] === 'admin' ? 'Administrator' : 'User');
+            $sheet->setCellValue('E' . $rowNum, $row['nama_branch'] ?? 'Belum ditentukan');
+            $sheet->setCellValue('F' . $rowNum, format_datetime($row['created_at']));
+            $rowNum++;
+        }
+
+        $dataStyle = ['borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]];
+        $sheet->getStyle('A7:F' . ($rowNum - 1))->applyFromArray($dataStyle);
+
+        foreach (range('A', 'F') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="Data_User_' . date('Y-m-d') . '.xlsx"');
+        header('Cache-Control: max-age=0');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
+
+    if ($exportType === 'pdf') {
+        echo '<!DOCTYPE html>
+        <html lang="id">
+        <head>
+            <meta charset="UTF-8">
+            <title>Dokumen Valid - Laporan User</title>
+            <style>
+                @import url("https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;700&display=swap");
+                body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 12px; color: #222; padding: 20px; background: #fff; }
+                
+                /* Box Kop Surat Kiri & Kanan */
+                .doc-header { display: flex; border: 1px solid #e8dbc9; margin-bottom: 20px; background: #fffcf8; }
+                .doc-left { width: 65%; padding: 25px; border-right: 1px solid #e8dbc9; }
+                .doc-right { width: 35%; padding: 25px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+                
+                .doc-title { font-family: "Times New Roman", serif; font-size: 32px; font-weight: bold; color: #111; margin: 0 0 5px 0; letter-spacing: -0.5px; }
+                .doc-ref { font-size: 11px; color: #888; margin-bottom: 25px; }
+                .report-name { font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #111; }
+                .report-desc { font-size: 12px; color: #444; line-height: 1.6; }
+                
+                /* Logo Hexindo Buatan */
+                .logo-hx { width: 85px; height: 85px; background: #f39c12; color: #fff; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 900; margin-bottom: 12px; font-family: Arial; }
+                .company-name { font-size: 16px; font-weight: 900; color: #111; margin-bottom: 3px; }
+                .unit-name { font-size: 12px; font-weight: bold; color: #6b7280; }
+
+                /* Kotak Info (Periode, Tgl, Status) */
+                .info-grid { display: flex; border: 1px solid #e8dbc9; margin-bottom: 30px; background: #fffcf8; }
+                .info-col { flex: 1; padding: 15px 20px; border-right: 1px solid #e8dbc9; }
+                .info-col:last-child { border-right: none; }
+                .info-label { font-size: 10px; color: #c66000; font-weight: 800; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+                .info-value { font-size: 14px; font-weight: bold; color: #111; }
+
+                /* Tabel Data */
+                table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+                th { background-color: #f39c12; color: #ffffff; padding: 12px; text-align: left; font-size: 12px; border: 1px solid #d68910; }
+                td { border: 1px solid #e5e7eb; padding: 10px 12px; font-size: 12px; vertical-align: middle; }
+                tr:nth-child(even) { background-color: #fafafa; }
+                
+                /* Footer Bawah */
+                .footer { text-align: center; border-top: 1px dotted #ccc; padding-top: 15px; font-size: 10px; color: #888; }
+            </style>
+        </head>
+        <body>
+
+            <!-- BAGIAN KOP DOKUMEN -->
+            <div class="doc-header">
+                <div class="doc-left">
+                    <h1 class="doc-title">IT SYSTEM</h1>
+                    <div class="doc-ref">No File: ITS/USER/'.date('Ymd').'/'.strtoupper(substr(md5(time()), 0, 4)).'</div>
+                    
+                    <div class="report-name">Internal Report:</div>
+                    <div class="report-desc">
+                        PT HEXINDO ADIPEKARSA TBK<br>
+                        Unit: IT System<br>
+                        Dokumen: Data Akun User Operasional
+                    </div>
+                </div>
+                <div class="doc-right">
+                    <div class="logo-hx">HX</div>
+                    <div class="company-name">PT HEXINDO</div>
+                    <div class="unit-name">IT System</div>
+                </div>
+            </div>
+
+            <!-- BAGIAN INFO DOKUMEN -->
+            <div class="info-grid">
+                <div class="info-col">
+                    <div class="info-label">PERIODE LAPORAN</div>
+                    <div class="info-value">'.$periodeBulan.'</div>
+                </div>
+                <div class="info-col">
+                    <div class="info-label">TANGGAL CETAK</div>
+                    <div class="info-value">'.$tanggalCetak.'</div>
+                </div>
+                <div class="info-col">
+                    <div class="info-label">STATUS DOKUMEN</div>
+                    <div class="info-value">Valid / Rahasia Internal</div>
+                </div>
+            </div>
+
+            <!-- TABEL DATA -->
+            <table>
+                <tr>
+                    <th style="width: 5%;">No</th>
+                    <th style="width: 20%;">Username</th>
+                    <th style="width: 25%;">Email</th>
+                    <th style="width: 15%;">Role</th>
+                    <th style="width: 20%;">Cabang</th>
+                    <th style="width: 15%;">Tanggal Dibuat</th>
+                </tr>';
+        $no = 1;
+        while ($row = mysqli_fetch_assoc($exportQuery)) {
+            echo '<tr>
+                    <td style="text-align:center;">' . $no++ . '</td>
+                    <td><strong>' . htmlspecialchars($row['username']) . '</strong></td>
+                    <td>' . htmlspecialchars($row['email']) . '</td>
+                    <td>' . ($row['role'] === 'admin' ? 'Administrator' : 'User') . '</td>
+                    <td>' . htmlspecialchars($row['nama_branch'] ?? 'Belum ditentukan') . '</td>
+                    <td>' . format_datetime($row['created_at']) . '</td>
+                  </tr>';
+        }
+        echo '</table>
+            
+            <!-- FOOTER BAWAH -->
+            <div class="footer">
+                PT HEXINDO ADIPEKARSA TBK &middot; IT System User Management &middot; Dokumen Valid Tanpa Tanda Tangan Fisik.
+            </div>
+
+            <script>
+                // Otomatis print saat dibuka
+                window.onload = function() { window.print(); }
+            </script>
+        </body>
+        </html>';
+        exit;
+    }
+}
+
 $alertError = get_flash('error');
 $alertSuccess = get_flash('success');
 
@@ -1600,7 +1790,8 @@ function role_icon(string $role): string
                 <div class="page-shell">
 
                     <div class="hero-card">
-                        <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
+                        <div class="hero-content d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            
                             <div>
                                 <h1 class="page-title">Kelola User</h1>
                                 <p class="page-subtitle">
@@ -1608,9 +1799,23 @@ function role_icon(string $role): string
                                 </p>
                             </div>
 
-                            <a href="<?= e(base_url('users/role_permissions.php')) ?>" class="hero-action">
-                                <i class="bi bi-shield-check me-2"></i>Hak Akses Role
-                            </a>
+                            <div class="d-flex align-items-center flex-wrap gap-3">
+                                
+                                <a href="<?= e(base_url('users/role_permissions.php')) ?>" class="hero-action m-0">
+                                    <i class="bi bi-shield-check me-2"></i>Hak Akses Role
+                                </a>
+
+                                <div class="d-flex gap-2">
+                                    <a href="?export=excel" class="btn" style="background: #e6f4ea; color: #1e7e34; border: 1px solid #c3e6cb; border-radius: 999px; padding: .65rem 1.1rem; font-size: .85rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: inline-flex; align-items: center;">
+                                        <i class="bi bi-file-earmark-excel-fill me-1"></i> Excel
+                                    </a>
+                                    <a href="?export=pdf" target="_blank" class="btn" style="background: #fdeaea; color: #c62828; border: 1px solid #f8c9c9; border-radius: 999px; padding: .65rem 1.1rem; font-size: .85rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: inline-flex; align-items: center;">
+                                        <i class="bi bi-file-earmark-pdf-fill me-1"></i> PDF
+                                    </a>
+                                </div>
+
+                            </div>
+
                         </div>
                     </div>
 

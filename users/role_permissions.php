@@ -1,4 +1,5 @@
 <?php
+
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -227,8 +228,18 @@ $success = get_flash('success');
             color: var(--text-main);
         }
 
-        .page-wrap {
+        * {
+            box-sizing: border-box;
+        }
+
+        .page-shell {
             padding: 28px;
+        }
+
+        @media (max-width: 991.98px) {
+            .page-shell {
+                padding: 18px;
+            }
         }
 
         .hero-card {
@@ -632,12 +643,16 @@ $success = get_flash('success');
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <?php require_once '../layout/sidebar.php'; ?>
+    <div class="container-fluid p-0">
+        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
+        <div class="d-flex flex-nowrap w-100 overflow-hidden">
 
-            <div class="col-md-9 col-lg-10">
-                <div class="page-wrap">
+            <?php include '../layout/sidebar.php'; ?>
+
+            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
+            <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+
+                <div class="page-shell">
 
                     <div class="hero-card">
                         <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
@@ -724,7 +739,7 @@ $success = get_flash('success');
                             <div class="col-lg-4">
                                 <div class="role-switch justify-content-lg-end">
                                     <a href="<?= e(base_url('users/role_permissions.php')) ?>"
-                                       class="<?= role_button_class('user', $currentRole) ?>">
+                                        class="<?= role_button_class('user', $currentRole) ?>">
                                         Role User
                                     </a>
                                 </div>
@@ -803,19 +818,19 @@ $success = get_flash('success');
     </div>
 
     <script>
-        document.getElementById('btnCheckAll').addEventListener('click', function () {
-            document.querySelectorAll('#formRolePermissions input[type="checkbox"]').forEach(function (checkbox) {
+        document.getElementById('btnCheckAll').addEventListener('click', function() {
+            document.querySelectorAll('#formRolePermissions input[type="checkbox"]').forEach(function(checkbox) {
                 checkbox.checked = true;
             });
         });
 
-        document.getElementById('btnUncheckAll').addEventListener('click', function () {
-            document.querySelectorAll('#formRolePermissions input[type="checkbox"]').forEach(function (checkbox) {
+        document.getElementById('btnUncheckAll').addEventListener('click', function() {
+            document.querySelectorAll('#formRolePermissions input[type="checkbox"]').forEach(function(checkbox) {
                 checkbox.checked = false;
             });
         });
 
-        document.getElementById('formRolePermissions').addEventListener('submit', function (e) {
+        document.getElementById('formRolePermissions').addEventListener('submit', function(e) {
             e.preventDefault();
 
             const role = document.querySelector('input[name="role"]').value;

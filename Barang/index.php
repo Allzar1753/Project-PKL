@@ -182,6 +182,11 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
+        .container{
+            width: 100%; padding: 0 15px; margin: 0 auto;
+            max-width: 1200px;
+        }
+
         :root {
             --orange-1: #ff7a00; --orange-2: #ff9800; --orange-3: #ffb000;
             --dark-1: #111111; --text-main: #1e1e1e; --text-soft: #6b7280;
@@ -245,11 +250,17 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 </head>
 <body>
 
-<div class="container-fluid">
-    <div class="row">
+<body>
+
+<div class="container-fluid p-0">
+    <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
+    <div class="d-flex flex-nowrap w-100 overflow-hidden">
+        
         <?php include '../layout/sidebar.php'; ?>
 
-        <div class="col-md-10">
+        <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
+        <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+            
             <div class="page-shell">
 
                 <!-- Header Hero -->
@@ -267,7 +278,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                             <?php endif; ?>
                             <?php if (canOpenPengirimanUser()): ?>
                                 <button class="btn btn-add-item bg-dark text-white" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
-                                    <i class="bi bi-truck me-2"></i>Kirim Rusak ke HO
+                                    <i class="bi bi-truck me-2"></i>Kirim Barang Rusak
                                 </button>
                             <?php endif; ?>
                         </div>

@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
@@ -343,12 +344,18 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <?php include '../layout/sidebar.php'; ?>
+<body>
 
-            <div class="col-md-10">
-                <div class="page-shell">
+<div class="container-fluid p-0">
+    <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
+    <div class="d-flex flex-nowrap w-100 overflow-hidden">
+        
+        <?php include '../layout/sidebar.php'; ?>
+
+        <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
+        <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+            
+            <div class="page-shell">
 
                     <div class="page-hero">
                         <div class="hero-content">

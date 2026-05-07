@@ -1,4 +1,5 @@
 <?php
+
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -358,7 +359,7 @@ function create_user_field_error(array $errors, int $rowIndex, string $field): s
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    
+
     if ($action === 'reset_password_request') {
         $requestId   = (int) ($_POST['request_id'] ?? 0);
         $newPassword = (string) ($_POST['new_password'] ?? '');
@@ -973,8 +974,18 @@ function role_icon(string $role): string
             color: var(--text-main);
         }
 
-        .page-wrap {
+        * {
+            box-sizing: border-box;
+        }
+
+        .page-shell {
             padding: 28px;
+        }
+
+        @media (max-width: 991.98px) {
+            .page-shell {
+                padding: 18px;
+            }
         }
 
         .hero-card {
@@ -1576,12 +1587,17 @@ function role_icon(string $role): string
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <?php require_once '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10">
-                <div class="page-wrap">
+    <div class="container-fluid p-0">
+        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
+        <div class="d-flex flex-nowrap w-100 overflow-hidden">
+
+            <?php include '../layout/sidebar.php'; ?>
+
+            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
+            <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+
+                <div class="page-shell">
 
                     <div class="hero-card">
                         <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
@@ -3057,7 +3073,7 @@ function role_icon(string $role): string
                 updateRows();
             }
         });
-        
+
         document.querySelectorAll('.btnOpenResetForm').forEach(function(button) {
             button.addEventListener('click', function() {
                 const requestId = this.dataset.requestId;

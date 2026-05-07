@@ -199,8 +199,9 @@ $barangList = getBarangMasterOptions($koneksi);
             <label class="form-label">Jasa Pengiriman</label>
             <select name="jasa_pengiriman" class="form-control select2" required>
                 <option value="">Pilih Jasa Pengiriman...</option>
-                <option value="SAPX Express">SAPX Express</option>
-                <option value="JNE">JNE</option>
+                <option value="SAP Express">SAP Express</option>
+                <option value="PCP Express">PCP Express</option>
+                <!-- <option value="-">Lainnya</option> -->
             </select>
         </div>
 

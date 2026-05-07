@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
@@ -460,9 +461,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <label class="form-label">Jasa Pengiriman</label>
                         <select name="jasa_pengiriman" class="form-control select2" required>
                             <option value="">Pilih...</option>
-                            <option value="SAPX Express">SAPX Express</option>
-                            <option value="Ekspedisi 2">Ekspedisi 2 (Menyusul)</option>
-                            <option value="Ekspedisi 3">Ekspedisi 3 (Menyusul)</option>
+                            <option value="SAP Express">SAP Express</option>
+                            <option value="PCP Express">PCP Express</option>
+                            <!-- <option value="-">Lainnya</option> -->
                         </select>
                     </div>
                     <div class="col-md-6">

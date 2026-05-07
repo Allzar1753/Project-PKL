@@ -1,4 +1,5 @@
 <?php
+/** @var mysqli $koneksi */ //
 require_once __DIR__ . '/../config/auth.php';
 
 if (!function_exists('h')) {
@@ -113,12 +114,14 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
 
     .content-with-sidebar {
         transition: all .28s ease;
+        flex: 1;
     }
 
     .content-with-sidebar.content-expanded {
         flex: 0 0 100% !important;
-        max-width: 100% !important;
+        max-width: 100% !important; 
         width: 100% !important;
+        margin-left: 0 !important;
     }
 
     .sidebar-expand-btn {
@@ -613,11 +616,15 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         const toggleBtn = document.getElementById('sidebarToggleBtn');
         const expandBtn = document.getElementById('sidebarExpandBtn');
         const logoutButton = document.getElementById('btnLogoutConfirm');
+        
+        // KUNCI PERBAIKAN: Gunakan ID langsung, jangan nextElementSibling
+        // Pastikan di file dashboard/index Anda, div pembungkus konten diberi id="mainContent"
+        const content = document.getElementById('mainContent'); 
+
         const storageSidebar = 'itasset-sidebar-hidden';
         const storageMain = 'itasset-menu-main';
         const storageAdmin = 'itasset-menu-admin';
 
-        const content = sidebar ? sidebar.nextElementSibling : null;
         if (content) {
             content.classList.add('content-with-sidebar');
         }

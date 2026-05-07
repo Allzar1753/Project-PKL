@@ -348,11 +348,15 @@ $notifications = fetchAllAssoc($qNotifications);
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
+    <div class="container-fluid p-0">
+        <!-- 1. Gunakan d-flex dan flex-nowrap agar layout mengunci ke samping dan tidak jatuh ke bawah -->
+        <div class="d-flex flex-nowrap w-100 overflow-hidden">
+            
             <?php require_once '../layout/sidebar.php'; ?>
 
-            <div class="col-md-10 ms-auto">
+            <!-- 2. Tambahkan id="mainContent" dan ganti class col-md dengan flex-grow-1 -->
+            <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+                
                 <div class="page-content">
 
                     <!-- Header Hero -->

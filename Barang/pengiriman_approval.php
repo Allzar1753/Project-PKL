@@ -1,4 +1,5 @@
 <?php
+
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -150,7 +151,7 @@ $q = mysqli_query($koneksi, "
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Approval Pengiriman HO - IT Asset Management</title>
-    
+
     <!-- Fonts & Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -159,65 +160,70 @@ $q = mysqli_query($koneksi, "
 
     <style>
         :root {
-            --orange-1: #ff7a00; 
-            --orange-2: #ff9800; 
+            --orange-1: #ff7a00;
+            --orange-2: #ff9800;
             --orange-3: #ffb000;
-            --dark-1: #111111; 
-            --text-main: #1e1e1e; 
+            --dark-1: #111111;
+            --text-main: #1e1e1e;
             --text-soft: #6b7280;
-            --surface: #ffffff; 
+            --surface: #ffffff;
             --border-soft: rgba(255, 152, 0, 0.14);
-            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07); 
+            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07);
             --radius-xl: 28px;
         }
 
         body {
             background: radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
-                        linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            color: var(--text-main); 
+                linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
             min-height: 100vh;
         }
 
-        .page-shell { padding: 25px; }
+        .page-shell {
+            padding: 25px;
+        }
 
         /* Style Card Header Gradient */
         .page-hero {
-            position: relative; 
-            overflow: hidden; 
+            position: relative;
+            overflow: hidden;
             border-radius: var(--radius-xl);
             background: linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(255, 122, 0, 0.96) 100%);
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20); 
-            padding: 1.8rem 2rem; 
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
+            padding: 1.8rem 2rem;
             margin-bottom: 1.5rem;
         }
 
-        .page-title { 
-            color: #fff; 
-            font-size: 1.8rem; 
-            font-weight: 800; 
-            letter-spacing: -0.02em; 
+        .page-title {
+            color: #fff;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
             margin-bottom: 0.3rem;
         }
 
-        .page-desc { 
-            color: rgba(255, 255, 255, 0.84); 
-            font-size: .95rem; 
-            max-width: 800px; 
+        .page-desc {
+            color: rgba(255, 255, 255, 0.84);
+            font-size: .95rem;
+            max-width: 800px;
             margin-bottom: 0;
         }
 
         /* Style Card Table Putih */
-        .ui-card { 
-            background: var(--surface); 
-            border: 1px solid var(--border-soft); 
-            border-radius: 22px; 
-            box-shadow: var(--shadow-soft); 
+        .ui-card {
+            background: var(--surface);
+            border: 1px solid var(--border-soft);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
             overflow: hidden;
         }
 
         /* Styling Table Modern */
-        .table-custom { margin-bottom: 0; }
+        .table-custom {
+            margin-bottom: 0;
+        }
+
         .table-custom thead th {
             background-color: #fcfcfc;
             color: #555;
@@ -228,7 +234,7 @@ $q = mysqli_query($koneksi, "
             padding: 1rem 1.5rem;
             border-bottom: 2px solid #eee;
         }
-        
+
         .table-custom tbody td {
             padding: 1.2rem 1.5rem;
             vertical-align: middle;
@@ -236,9 +242,18 @@ $q = mysqli_query($koneksi, "
         }
 
         /* Badge and Meta Line Customization */
-        .meta-line { display: block; font-size: 0.88rem; margin-bottom: 3px; color: var(--text-soft); }
-        .meta-strong { color: var(--dark-1); font-weight: 700; }
-        
+        .meta-line {
+            display: block;
+            font-size: 0.88rem;
+            margin-bottom: 3px;
+            color: var(--text-soft);
+        }
+
+        .meta-strong {
+            color: var(--dark-1);
+            font-weight: 700;
+        }
+
         .badge-custom {
             padding: 0.55em 1em;
             font-weight: 700;
@@ -259,12 +274,12 @@ $q = mysqli_query($koneksi, "
             font-weight: 700;
             font-size: 0.85rem;
             transition: all 0.3s ease;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
 
         .btn-modern:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(0,0,0,0.25);
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
             background: linear-gradient(135deg, var(--orange-1), var(--orange-2));
             color: white;
         }
@@ -274,17 +289,20 @@ $q = mysqli_query($koneksi, "
             padding: 4rem 2rem;
             text-align: center;
         }
+
         .empty-state i {
             font-size: 3.5rem;
             color: #ffd8a8;
             margin-bottom: 1rem;
             display: block;
         }
+
         .empty-state-title {
             font-weight: 800;
             color: var(--dark-1);
             font-size: 1.2rem;
         }
+
         .empty-state-desc {
             color: var(--text-soft);
         }
@@ -292,13 +310,18 @@ $q = mysqli_query($koneksi, "
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <?php require_once '../layout/sidebar.php'; ?>
-            
-            <div class="col-md-10">
+
+    <div class="container-fluid p-0">
+        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
+        <div class="d-flex flex-nowrap w-100 overflow-hidden">
+
+            <?php include '../layout/sidebar.php'; ?>
+
+            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
+            <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+
                 <div class="page-shell">
-                    
+
                     <!-- Header Hero Gradient -->
                     <div class="page-hero">
                         <div class="hero-content">
@@ -393,7 +416,7 @@ $q = mysqli_query($koneksi, "
 
             if (approveBtn) {
                 const id = approveBtn.getAttribute('data-id');
-                
+
                 // Tambahkan konfirmasi SweetAlert yang modern sebelum mengeksekusi
                 const confirmResult = await Swal.fire({
                     title: 'Konfirmasi Penerimaan',
@@ -417,9 +440,9 @@ $q = mysqli_query($koneksi, "
                             nama_penerima: 'Admin HO Jakarta'
                         })
                     });
-                    
+
                     const data = await res.json();
-                    
+
                     if (data.status === 'success') {
                         await Swal.fire({
                             icon: 'success',

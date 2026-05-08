@@ -1,17 +1,15 @@
 <?php
-/** @var mysqli $koneksi */ //
+/** @var mysqli $koneksi */ 
 require_once __DIR__ . '/../config/auth.php';
 
 if (!function_exists('h')) {
-    function h($value)
-    {
+    function h($value) {
         return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
     }
 }
 
 if (!function_exists('isMenuActive')) {
-    function isMenuActive($keyword)
-    {
+    function isMenuActive($keyword) {
         $path = $_SERVER['PHP_SELF'] ?? '';
         return strpos($path, $keyword) !== false;
     }
@@ -38,22 +36,9 @@ if (!empty($user['id_branch'])) {
     }
 }
 
-$mainMenuActive = isMenuActive('/dashboard/')
-    || isMenuActive('/Barang/')
-    || isMenuActive('/Riwayat/')
-    || isMenuActive('/laporan/');
-
-$currentPath = $_SERVER['PHP_SELF'] ?? '';
-
-$isUsersPage =
-    strpos($currentPath, '/users/index.php') !== false
-    || strpos($currentPath, '/users/create.php') !== false
-    || strpos($currentPath, '/users/edit.php') !== false;
-
-$isAccessPage =
-    strpos($currentPath, '/users/role_permissions.php') !== false
-    || strpos($currentPath, '/users/user_permissions.php') !== false;
-
+$mainMenuActive = isMenuActive('/dashboard/') || isMenuActive('/Barang/') || isMenuActive('/Riwayat/') || isMenuActive('/laporan/');
+$isUsersPage = strpos($currentPath, '/users/index.php') !== false || strpos($currentPath, '/users/create.php') !== false || strpos($currentPath, '/users/edit.php') !== false;
+$isAccessPage = strpos($currentPath, '/users/role_permissions.php') !== false || strpos($currentPath, '/users/user_permissions.php') !== false;
 $adminMenuActive = $isUsersPage || $isAccessPage;
 
 $pendingResetCount = 0;
@@ -81,58 +66,86 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
 ?>
 
 <style>
-    /* ========================================================
-       PERBAIKAN ANIMASI SIDEBAR ALA WEBSITE PROFESIONAL
-       ======================================================== */
+    :root {
+        --sb-width: 280px;
+        --sb-transition: 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    /* SIDEBAR BASE */
     .sidebar-shell {
-        width: 280px; /* Fix lebar sidebar */
-        min-width: 280px; 
+        width: var(--sb-width);
+        min-width: var(--sb-width);
         min-height: 100vh;
-        background:
-            radial-gradient(circle at top left, rgba(255, 193, 7, 0.08), transparent 26%),
-            linear-gradient(180deg, #343940 0%, #3d434b 45%, #464d56 100%);
+        background: radial-gradient(circle at top left, rgba(255, 193, 7, 0.08), transparent 26%),
+                    linear-gradient(180deg, #343940 0%, #3d434b 45%, #464d56 100%);
         color: #fff;
         box-shadow: 8px 0 28px rgba(0, 0, 0, 0.08);
         position: sticky;
         top: 0;
-        z-index: 20;
+        z-index: 1040;
         border-right: 1px solid rgba(255, 255, 255, 0.06);
-        /* Transisi meluncur (slide) yang smooth */
-        transition: margin-left 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        transition: margin-left var(--sb-transition), transform var(--sb-transition);
         overflow-y: auto;
         overflow-x: hidden;
     }
 
-    /* Scrollbar elegan untuk sidebar */
-    .sidebar-shell::-webkit-scrollbar {
-        width: 5px;
-    }
-    .sidebar-shell::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.15);
-        border-radius: 10px;
-    }
-    .sidebar-shell::-webkit-scrollbar-track {
-        background: transparent;
-    }
+    .sidebar-shell::-webkit-scrollbar { width: 5px; }
+    .sidebar-shell::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
 
-    /* THE MAGIC: Sidebar meluncur keluar ke kiri layaknya laci */
+    /* DESKTOP HIDE */
     .sidebar-shell.sidebar-hidden {
-        margin-left: -280px !important; /* Nilai minus sesuai lebarnya */
+        margin-left: calc(var(--sb-width) * -1);
     }
 
+    /* CONTENT WRAPPER */
     .content-with-sidebar {
-        /* Transisi pada main content agar mengikuti dorongan sidebar dengan mulus */
-        transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        transition: margin-left var(--sb-transition);
         flex: 1;
         min-width: 0;
     }
 
-    /* Animasi Tombol Expand yang melayang */
+    /* MOBILE ADJUSTMENTS */
+    @media (max-width: 991.98px) {
+        .sidebar-shell {
+            position: fixed;
+            left: 0;
+            top: 0;
+            margin-left: 0 !important;
+            transform: translateX(-100%); /* Sembunyi ke kiri di HP */
+        }
+        .sidebar-shell.show-mobile {
+            transform: translateX(0); /* Muncul di HP */
+        }
+        .sidebar-shell.sidebar-hidden {
+            transform: translateX(-100%);
+        }
+        .content-with-sidebar {
+            margin-left: 0 !important;
+        }
+    }
+
+    /* BACKDROP (Layar gelap saat sidebar buka di HP) */
+    .sidebar-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(2px);
+        z-index: 1035;
+        display: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .sidebar-backdrop.active {
+        display: block;
+        opacity: 1;
+    }
+
+    /* FLOATING EXPAND BUTTON */
     .sidebar-expand-btn {
         position: fixed;
         top: 18px;
         left: 18px;
-        z-index: 1055;
+        z-index: 1030;
         width: 46px;
         height: 46px;
         border: none;
@@ -144,150 +157,73 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         align-items: center;
         justify-content: center;
         font-size: 1.15rem;
-        
-        /* Animasi pop-up mulus */
         opacity: 0;
         visibility: hidden;
-        transform: scale(0.8) translateY(10px);
+        transform: scale(0.8);
         transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         cursor: pointer;
     }
-
     .sidebar-expand-btn.show {
         opacity: 1;
         visibility: visible;
-        transform: scale(1) translateY(0);
+        transform: scale(1);
     }
 
-    .sidebar-expand-btn:hover {
-        transform: scale(1.05) translateY(-2px);
-        box-shadow: 0 16px 32px rgba(255, 143, 0, 0.25);
-    }
-
-    .sidebar-brand {
-        padding: 1.15rem 1rem 1rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(6px);
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .sidebar-brand-row {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: .75rem;
-    }
-
-    .sidebar-brand-title {
-        font-weight: 800;
-        font-size: 1.1rem;
-        color: #fff;
-        display: flex;
-        align-items: center;
-        gap: .6rem;
-        margin-bottom: .15rem;
-        letter-spacing: -.01em;
-    }
-
-    .sidebar-brand-title i {
-        color: #ffc107;
-        font-size: 1.25rem;
-        background: rgba(255, 193, 7, 0.1);
-        padding: 6px;
-        border-radius: 8px;
-    }
-
-    .sidebar-brand-subtitle {
-        font-size: 0.78rem;
-        color: rgba(255, 255, 255, 0.64);
-        margin-left: 2px;
-    }
-
-    .sidebar-toggle-btn {
-        width: 38px;
-        height: 38px;
-        border: none;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.05);
-        color: rgba(255, 255, 255, 0.7);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        transition: all .2s ease;
-        cursor: pointer;
-    }
-
-    .sidebar-toggle-btn:hover {
-        background: rgba(255, 255, 255, 0.15);
-        color: #fff;
-        transform: translateX(-2px);
-    }
-
-    /* Sisa styling sidebar tetap sama ... */
-    .sidebar-user { margin: 1rem .85rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 1rem; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03); }
-    .sidebar-user-avatar { width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 193, 7, 0.22), rgba(255, 193, 7, 0.10)); color: #ffd54f; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; border: 1px solid rgba(255, 193, 7, 0.18); }
-    .sidebar-user-name { font-weight: 700; font-size: .95rem; color: #fff; margin-bottom: 0.12rem; line-height: 1.25; word-break: break-word; }
-    .sidebar-user-email { color: rgba(255, 255, 255, 0.58); font-size: .78rem; line-height: 1.35; word-break: break-word; }
-    .sidebar-user-role { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: #ffe082; background: rgba(255, 193, 7, 0.10); border: 1px solid rgba(255, 193, 7, 0.18); border-radius: 999px; padding: .34rem .62rem; margin-top: .55rem; max-width: 100%; white-space: normal; line-height: 1.2; }
+    /* BRAND & USER SECTION (Keep your original styles) */
+    .sidebar-brand { padding: 1.15rem 1rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(6px); position: sticky; top: 0; z-index: 10; }
+    .sidebar-brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+    .sidebar-brand-title { font-weight: 800; font-size: 1.1rem; color: #fff; display: flex; align-items: center; gap: .6rem; }
+    .sidebar-brand-title i { color: #ffc107; font-size: 1.25rem; background: rgba(255, 193, 7, 0.1); padding: 6px; border-radius: 8px; }
+    .sidebar-brand-subtitle { font-size: 0.78rem; color: rgba(255, 255, 255, 0.64); }
+    .sidebar-toggle-btn { width: 38px; height: 38px; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .sidebar-user { margin: 1rem .85rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 1rem; }
+    .sidebar-user-avatar { width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 193, 7, 0.22), rgba(255, 193, 7, 0.10)); color: #ffd54f; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border: 1px solid rgba(255, 193, 7, 0.18); }
+    .sidebar-user-name { font-weight: 700; font-size: .95rem; color: #fff; line-height: 1.25; }
+    .sidebar-user-email { color: rgba(255, 255, 255, 0.58); font-size: .78rem; }
+    .sidebar-user-role { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: #ffe082; background: rgba(255, 193, 7, 0.10); border: 1px solid rgba(255, 193, 7, 0.18); border-radius: 999px; padding: .34rem .62rem; margin-top: .55rem; }
+    
+    /* NAV & MENU (Keep your original styles) */
     .sidebar-nav-wrap { padding: 1rem .85rem 1rem; }
     .sidebar-group { margin-bottom: .85rem; }
-    .sidebar-group-button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .8rem; border: none; border-radius: 16px; background: rgba(255, 255, 255, 0.05); color: #fff; padding: .88rem .95rem; font-size: .9rem; font-weight: 800; transition: all .2s ease; border: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer; }
-    .sidebar-group-button:hover { background: rgba(255, 255, 255, 0.09); }
-    .sidebar-group-button.is-open { background: linear-gradient(135deg, rgba(255, 193, 7, 0.16), rgba(255, 193, 7, 0.08)); color: #fff6d1; border-color: rgba(255, 193, 7, 0.16); }
-    .sidebar-group-button-left { display: flex; align-items: center; gap: .75rem; text-align: left; }
-    .sidebar-group-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.07); color: #ffc107; font-size: 1rem; flex-shrink: 0; }
-    .sidebar-group-arrow { transition: transform .3s cubic-bezier(0.25, 0.8, 0.25, 1); color: rgba(255, 255, 255, 0.72); }
-    .sidebar-group-button.is-open .sidebar-group-arrow { transform: rotate(180deg); color: #fff3cd; }
-    .sidebar-submenu { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+    .sidebar-group-button { width: 100%; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; background: rgba(255, 255, 255, 0.05); color: #fff; padding: .88rem .95rem; cursor: pointer; }
+    .sidebar-group-button.is-open { background: linear-gradient(135deg, rgba(255, 193, 7, 0.16), rgba(255, 193, 7, 0.08)); color: #fff6d1; }
+    .sidebar-group-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.07); color: #ffc107; }
+    .sidebar-group-arrow { transition: transform .3s ease; }
+    .sidebar-group-button.is-open .sidebar-group-arrow { transform: rotate(180deg); }
+    .sidebar-submenu { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
     .sidebar-submenu.show { grid-template-rows: 1fr; }
-    .sidebar-submenu-inner { overflow: hidden; padding-top: 0.5rem;}
-    .sidebar-menu { list-style: none; margin: 0; padding: 0; }
-    .sidebar-menu li { margin-bottom: .42rem; }
-    .sidebar-link { display: flex; align-items: center; gap: .82rem; text-decoration: none; color: rgba(255, 255, 255, 0.86); padding: .82rem .9rem; border-radius: 14px; transition: all .2s ease; font-weight: 600; font-size: .94rem; position: relative; }
-    .sidebar-link:hover { color: #fff; background: rgba(255, 255, 255, 0.07); transform: translateX(4px); }
-    .sidebar-link.active { background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); color: #212529; box-shadow: 0 12px 24px rgba(255, 193, 7, 0.18); }
-    .sidebar-link.active .sidebar-icon { background: rgba(33, 37, 41, 0.08); color: #212529; }
-    .sidebar-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.06); color: #ffc107; font-size: 1rem; flex-shrink: 0; transition: all .2s ease; border: 1px solid rgba(255, 255, 255, 0.04); }
-    .sidebar-link:hover .sidebar-icon { background: rgba(255, 255, 255, 0.12); color: #fff3cd; }
-    .sidebar-footer { margin-top: auto; padding: .9rem .85rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.06); background: rgba(0, 0, 0, 0.1); position: sticky; bottom: 0; z-index: 10;}
-    .sidebar-logout { display: flex; align-items: center; gap: .8rem; text-decoration: none; color: #ffd1d1; padding: .84rem .9rem; border-radius: 16px; font-weight: 700; font-size: .94rem; background: rgba(220, 53, 69, 0.10); border: 1px solid rgba(220, 53, 69, 0.16); transition: all .2s ease; }
-    .sidebar-logout:hover { color: #fff; background: rgba(220, 53, 69, 0.18); transform: translateY(-2px); box-shadow: 0 8px 15px rgba(220, 53, 69, 0.1); }
-    .sidebar-logout .sidebar-icon { background: rgba(220, 53, 69, 0.12); color: #ffb3b3; }
+    .sidebar-submenu-inner { overflow: hidden; padding-top: 0.5rem; }
+    .sidebar-menu { list-style: none; padding: 0; margin: 0; }
+    .sidebar-link { display: flex; align-items: center; gap: .82rem; text-decoration: none; color: rgba(255, 255, 255, 0.86); padding: .82rem .9rem; border-radius: 14px; font-weight: 600; transition: 0.2s; }
+    .sidebar-link:hover { background: rgba(255, 255, 255, 0.07); transform: translateX(4px); color: #fff; }
+    .sidebar-link.active { background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); color: #212529; }
+    .sidebar-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.06); color: #ffc107; }
+    .sidebar-link.active .sidebar-icon { background: rgba(0,0,0,0.1); color: #212529; }
 
-    @media (max-width: 767.98px) {
-        .sidebar-shell {
-            position: fixed;
-            z-index: 1050;
-            left: 0;
-            top: 0;
-            height: 100vh;
-        }
-        .sidebar-expand-btn {
-            top: 14px;
-            left: 14px;
-        }
-    }
+    /* FOOTER */
+    .sidebar-footer { margin-top: auto; padding: .9rem .85rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.06); background: rgba(0, 0, 0, 0.1); position: sticky; bottom: 0; }
+    .sidebar-logout { display: flex; align-items: center; gap: .8rem; text-decoration: none; color: #ffd1d1; padding: .84rem .9rem; border-radius: 16px; font-weight: 700; background: rgba(220, 53, 69, 0.10); border: 1px solid rgba(220, 53, 69, 0.16); transition: 0.2s; }
+    .sidebar-logout:hover { background: rgba(220, 53, 69, 0.18); transform: translateY(-2px); color: #fff; }
 </style>
 
+<!-- Tombol Expand (Muncul saat sidebar sembunyi) -->
 <button type="button" id="sidebarExpandBtn" class="sidebar-expand-btn" title="Buka Sidebar">
     <i class="bi bi-list"></i>
 </button>
+
+<!-- Backdrop untuk Mobile -->
+<div id="sidebarBackdrop" class="sidebar-backdrop"></div>
 
 <div id="appSidebar" class="d-flex flex-column sidebar-shell">
     <div class="sidebar-brand">
         <div class="sidebar-brand-row">
             <div>
                 <div class="sidebar-brand-title">
-                    <!-- LOGO BARU YANG LEBIH MODERN -->
                     <i class="bi bi-layers-fill"></i>
                     <span>IT Asset</span>
                 </div>
                 <div class="sidebar-brand-subtitle">Management System</div>
             </div>
-
             <button type="button" id="sidebarToggleBtn" class="sidebar-toggle-btn" title="Tutup Sidebar">
                 <i class="bi bi-list-nested"></i>
             </button>
@@ -300,12 +236,8 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                 <i class="bi bi-person-bounding-box"></i>
             </div>
             <div class="flex-grow-1">
-                <div class="sidebar-user-name">
-                    <?= h($user['username'] ?? 'User') ?>
-                </div>
-                <div class="sidebar-user-email">
-                    <?= h($user['email'] ?? '-') ?>
-                </div>
+                <div class="sidebar-user-name"><?= h($user['username'] ?? 'User') ?></div>
+                <div class="sidebar-user-email"><?= h($user['email'] ?? '-') ?></div>
                 <div class="sidebar-user-email mt-1">
                     <i class="bi bi-geo-alt-fill text-warning me-1"></i><?= h($branchName) ?>
                 </div>
@@ -318,135 +250,89 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
     </div>
 
     <div class="sidebar-nav-wrap flex-grow-1">
-
+        <!-- Main Menu Group -->
         <div class="sidebar-group">
-            <button type="button"
-                class="sidebar-group-button <?= $mainMenuActive ? 'is-open' : '' ?>"
-                data-menu-target="mainMenu">
+            <button type="button" class="sidebar-group-button <?= $mainMenuActive ? 'is-open' : '' ?>" data-menu-target="mainMenu">
                 <span class="sidebar-group-button-left">
                     <span class="sidebar-group-icon"><i class="bi bi-grid-fill"></i></span>
-                    <span>Main Menu</span>
+                    <span class="ms-2">Main Menu</span>
                 </span>
                 <i class="bi bi-chevron-down sidebar-group-arrow"></i>
             </button>
-
             <div id="mainMenu" class="sidebar-submenu <?= $mainMenuActive ? 'show' : '' ?>">
                 <div class="sidebar-submenu-inner">
                     <ul class="sidebar-menu">
                         <?php if (can('dashboard.view')): ?>
-                            <li>
-                                <a href="<?= h(base_url('dashboard/index.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/') ? 'active' : '' ?>">
-                                    <span class="sidebar-icon"><i class="bi bi-house-door"></i></span>
-                                    <span>Dashboard</span>
-                                </a>
-                            </li>
+                        <li><a href="<?= h(base_url('dashboard/index.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-house-door"></i></span><span>Dashboard</span></a>
+                        </li>
                         <?php endif; ?>
-
                         <?php if (can('barang.view')): ?>
-                            <li>
-                                <a href="<?= h(base_url('Barang/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/') ? 'active' : '' ?>">
-                                    <span class="sidebar-icon"><i class="bi bi-box-seam"></i></span>
-                                    <span>Barang</span>
-                                </a>
-                            </li>
+                        <li><a href="<?= h(base_url('Barang/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-box-seam"></i></span><span>Barang</span></a>
+                        </li>
                         <?php endif; ?>
-
                         <?php if (can('riwayat.view')): ?>
-                            <li>
-                                <a href="<?= h(base_url('Riwayat/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Riwayat/') ? 'active' : '' ?>">
-                                    <span class="sidebar-icon"><i class="bi bi-clock-history"></i></span>
-                                    <span>Riwayat</span>
-                                </a>
-                            </li>
+                        <li><a href="<?= h(base_url('Riwayat/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Riwayat/') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-clock-history"></i></span><span>Riwayat</span></a>
+                        </li>
                         <?php endif; ?>
-
                         <?php if (can('laporan.view')): ?>
-                            <li>
-                                <a href="<?= h(base_url('laporan/index.php')) ?>" class="sidebar-link <?= isMenuActive('/laporan/') ? 'active' : '' ?>">
-                                    <span class="sidebar-icon"><i class="bi bi-file-earmark-bar-graph"></i></span>
-                                    <span>Laporan</span>
-                                </a>
-                            </li>
+                        <li><a href="<?= h(base_url('laporan/index.php')) ?>" class="sidebar-link <?= isMenuActive('/laporan/') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-file-earmark-bar-graph"></i></span><span>Laporan</span></a>
+                        </li>
                         <?php endif; ?>
                     </ul>
                 </div>
             </div>
         </div>
 
+        <!-- Administrator Group -->
         <?php if (can('users.view') || can('role_permissions.manage')): ?>
-            <div class="sidebar-group mt-3">
-                <button type="button"
-                    class="sidebar-group-button <?= $adminMenuActive ? 'is-open' : '' ?>"
-                    data-menu-target="adminMenu">
-                    <span class="sidebar-group-button-left">
-                        <span class="sidebar-group-icon"><i class="bi bi-shield-check"></i></span>
-                        <span>Administrator</span>
-                    </span>
-                    <i class="bi bi-chevron-down sidebar-group-arrow"></i>
-                </button>
-
-                <div id="adminMenu" class="sidebar-submenu <?= $adminMenuActive ? 'show' : '' ?>">
-                    <div class="sidebar-submenu-inner">
-                        <ul class="sidebar-menu">
-                            <?php if (can('users.view')): ?>
-                                <li>
-                                    <a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= $isUsersPage ? 'active' : '' ?>">
-                                        <span class="sidebar-icon"><i class="bi bi-people"></i></span>
-                                        <span>Kelola User</span>
-
-                                        <?php if ($pendingResetCount > 0): ?>
-                                            <span class="badge bg-danger rounded-pill" style="font-size: 0.75rem;">
-                                                <?= $pendingResetCount ?>
-                                            </span>
-                                        <?php endif; ?>
-
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-
-                            <?php if (is_admin() && can('barang.kirim')): ?>
-                                <li>
-                                    <a href="<?= h(base_url('Barang/pengiriman_approval.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/pengiriman_approval.php') ? 'active' : '' ?>">
-                                        <span class="sidebar-icon"><i class="bi bi-inboxes"></i></span>
-                                        <span>Approval Pengiriman</span>
-                                        <?php if ($pendingHoShippingCount > 0): ?>
-                                            <span class="badge bg-danger rounded-pill" style="font-size: 0.75rem;">
-                                                <?= $pendingHoShippingCount ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-
-                            <?php if (can('users.view')): ?>
-                                <li>
-                                    <a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= isMenuActive('/users/activity_log.php') ? 'active' : '' ?>">
-                                        <span class="sidebar-icon"><i class="bi bi-activity"></i></span>
-                                        <span>Activity Log</span>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-
-                            <?php if (can('role_permissions.manage')): ?>
-                                <li>
-                                    <a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= $isAccessPage ? 'active' : '' ?>">
-                                        <span class="sidebar-icon"><i class="bi bi-key"></i></span>
-                                        <span>Hak Akses</span>
-                                    </a>
-                                </li>
-                            <?php endif; ?>
-                        </ul>
-                    </div>
+        <div class="sidebar-group mt-3">
+            <button type="button" class="sidebar-group-button <?= $adminMenuActive ? 'is-open' : '' ?>" data-menu-target="adminMenu">
+                <span class="sidebar-group-button-left">
+                    <span class="sidebar-group-icon"><i class="bi bi-shield-check"></i></span>
+                    <span class="ms-2">Administrator</span>
+                </span>
+                <i class="bi bi-chevron-down sidebar-group-arrow"></i>
+            </button>
+            <div id="adminMenu" class="sidebar-submenu <?= $adminMenuActive ? 'show' : '' ?>">
+                <div class="sidebar-submenu-inner">
+                    <ul class="sidebar-menu">
+                        <?php if (can('users.view')): ?>
+                        <li><a href="<?= h(base_url('users/index.php')) ?>" class="sidebar-link <?= $isUsersPage ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-people"></i></span><span>Kelola User</span>
+                            <?php if ($pendingResetCount > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $pendingResetCount ?></span><?php endif; ?>
+                        </a></li>
+                        <?php endif; ?>
+                        <?php if (is_admin() && can('barang.kirim')): ?>
+                        <li><a href="<?= h(base_url('Barang/pengiriman_approval.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/pengiriman_approval.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-inboxes"></i></span><span>Approval Pengiriman</span>
+                            <?php if ($pendingHoShippingCount > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $pendingHoShippingCount ?></span><?php endif; ?>
+                        </a></li>
+                        <?php endif; ?>
+                        <?php if (can('users.view')): ?>
+                        <li><a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= isMenuActive('/users/activity_log.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-activity"></i></span><span>Activity Log</span></a>
+                        </li>
+                        <?php endif; ?>
+                        <?php if (can('role_permissions.manage')): ?>
+                        <li><a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= $isAccessPage ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-key"></i></span><span>Hak Akses</span></a>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
                 </div>
             </div>
+        </div>
         <?php endif; ?>
-
     </div>
 
     <div class="sidebar-footer">
         <a href="#" id="btnLogoutConfirm" class="sidebar-logout">
             <span class="sidebar-icon"><i class="bi bi-power"></i></span>
-            <span>Logout dari Sistem</span>
+            <span>Logout</span>
         </a>
     </div>
 </div>
@@ -457,83 +343,73 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         const sidebar = document.getElementById('appSidebar');
         const toggleBtn = document.getElementById('sidebarToggleBtn');
         const expandBtn = document.getElementById('sidebarExpandBtn');
-        const logoutButton = document.getElementById('btnLogoutConfirm');
-        const content = document.getElementById('mainContent'); 
+        const backdrop = document.getElementById('sidebarBackdrop');
+        const content = document.getElementById('mainContent');
 
         const storageSidebar = 'itasset-sidebar-hidden';
         const storageMain = 'itasset-menu-main';
         const storageAdmin = 'itasset-menu-admin';
 
-        if (content) {
-            content.classList.add('content-with-sidebar');
-        }
+        if (content) content.classList.add('content-with-sidebar');
 
-        // FUNGSI ANIMASI YANG SUDAH DIPERBAIKI (Tidak pakai display: none, tapi geser margin)
+        function isMobile() { return window.innerWidth <= 991.98; }
+
         function hideSidebar() {
-            if (!sidebar) return;
-            sidebar.classList.add('sidebar-hidden');
-            if (expandBtn) {
-                expandBtn.classList.add('show');
+            if (isMobile()) {
+                sidebar.classList.remove('show-mobile');
+                backdrop.classList.remove('active');
+            } else {
+                sidebar.classList.add('sidebar-hidden');
+                localStorage.setItem(storageSidebar, 'hidden');
             }
-            localStorage.setItem(storageSidebar, 'hidden');
+            expandBtn.classList.add('show');
         }
 
         function showSidebar() {
-            if (!sidebar) return;
-            sidebar.classList.remove('sidebar-hidden');
-            if (expandBtn) {
-                expandBtn.classList.remove('show');
+            if (isMobile()) {
+                sidebar.classList.add('show-mobile');
+                backdrop.classList.add('active');
+            } else {
+                sidebar.classList.remove('sidebar-hidden');
+                localStorage.setItem(storageSidebar, 'shown');
             }
-            localStorage.setItem(storageSidebar, 'shown');
+            expandBtn.classList.remove('show');
         }
 
-        if (localStorage.getItem(storageSidebar) === 'hidden') {
+        // Init State
+        if (!isMobile() && localStorage.getItem(storageSidebar) === 'hidden') {
             hideSidebar();
+        } else if (isMobile()) {
+            expandBtn.classList.add('show');
         }
 
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', hideSidebar);
-        }
+        toggleBtn.addEventListener('click', hideSidebar);
+        expandBtn.addEventListener('click', showSidebar);
+        backdrop.addEventListener('click', hideSidebar);
 
-        if (expandBtn) {
-            expandBtn.addEventListener('click', showSidebar);
-        }
-
-        // Submenu buka tutup smooth
-        document.querySelectorAll('.sidebar-group-button').forEach(function(button) {
-            const targetId = button.getAttribute('data-menu-target');
+        // Submenu Logic
+        document.querySelectorAll('.sidebar-group-button').forEach(btn => {
+            const targetId = btn.getAttribute('data-menu-target');
             const submenu = document.getElementById(targetId);
-            if (!submenu) return;
-
             const storageKey = targetId === 'mainMenu' ? storageMain : storageAdmin;
-            const savedState = localStorage.getItem(storageKey);
 
-            if (savedState === 'open') {
+            if (localStorage.getItem(storageKey) === 'open') {
                 submenu.classList.add('show');
-                button.classList.add('is-open');
-            } else if (savedState === 'closed') {
-                submenu.classList.remove('show');
-                button.classList.remove('is-open');
+                btn.classList.add('is-open');
             }
 
-            button.addEventListener('click', function() {
-                const isOpen = submenu.classList.contains('show');
-                submenu.classList.toggle('show');
-                button.classList.toggle('is-open');
-                localStorage.setItem(storageKey, isOpen ? 'closed' : 'open');
+            btn.addEventListener('click', () => {
+                const isOpen = submenu.classList.toggle('show');
+                btn.classList.toggle('is-open');
+                localStorage.setItem(storageKey, isOpen ? 'open' : 'closed');
             });
         });
 
+        // Logout Logic
+        const logoutButton = document.getElementById('btnLogoutConfirm');
         if (logoutButton) {
             logoutButton.addEventListener('click', function(e) {
                 e.preventDefault();
-                if (typeof Swal === 'undefined') {
-                    if (confirm('Apakah Anda ingin logout?')) {
-                        window.location.href = '<?= h(base_url('auth/logout.php')) ?>';
-                    }
-                    return;
-                }
-
                 Swal.fire({
                     title: 'Keluar Sistem?',
                     text: 'Sesi Anda akan diakhiri.',
@@ -542,11 +418,8 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                     confirmButtonText: 'Ya, Logout',
                     cancelButtonText: 'Batal',
                     confirmButtonColor: '#dc3545',
-                    cancelButtonColor: '#6c757d',
                     reverseButtons: true,
-                    customClass: {
-                        popup: 'rounded-4'
-                    }
+                    customClass: { popup: 'rounded-4' }
                 }).then((result) => {
                     if (result.isConfirmed) {
                         window.location.href = '<?= h(base_url('auth/logout.php')) ?>';

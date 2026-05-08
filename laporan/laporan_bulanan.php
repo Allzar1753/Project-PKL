@@ -13,6 +13,9 @@ if (!$isAdmin && $myBranchId <= 0) {
     exit('Branch user belum ditentukan.');
 }
 
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
 function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -40,6 +43,17 @@ function status_badge(string $status): string
 function get_iso_week_default(): string
 {
     return date('o') . '-W' . date('W');
+}
+
+// Fungsi penerjemah Bulan ke Bahasa Indonesia
+function get_bulan_indo(int $num): string 
+{
+    $bulan = [
+        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+        5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+        9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+    ];
+    return $bulan[$num] ?? '';
 }
 
 function resolve_period_range(string $periode, string $tahun, string $bulan, string $minggu, string $customAwal, string $customAkhir): array
@@ -76,12 +90,16 @@ function resolve_period_range(string $periode, string $tahun, string $bulan, str
             $startDate = $endDate;
             $endDate = $temp;
         }
-        $label = 'Custom: ' . $startDate->format('d M Y') . ' s/d ' . $endDate->format('d M Y');
+        // Format Custom Tanggal Indo: 01 Mei 2026 s/d 31 Mei 2026
+        $label = 'Custom: ' . $startDate->format('d') . ' ' . get_bulan_indo((int)$startDate->format('n')) . ' ' . $startDate->format('Y') . 
+                 ' s/d ' . $endDate->format('d') . ' ' . get_bulan_indo((int)$endDate->format('n')) . ' ' . $endDate->format('Y');
     } else {
         $startDate = new DateTime($tahun . '-' . $bulan . '-01');
         $endDate = new DateTime($tahun . '-' . $bulan . '-01');
         $endDate->modify('last day of this month');
-        $label = 'Bulan ' . $startDate->format('F Y');
+        
+        // Format Bulan Indo: Mei 2026
+        $label = 'Bulan ' . get_bulan_indo((int)$startDate->format('n')) . ' ' . $startDate->format('Y');
         $periode = 'bulan';
     }
     return ['periode' => $periode, 'start' => $startDate->format('Y-m-d'), 'end' => $endDate->format('Y-m-d'), 'label' => $label];
@@ -105,6 +123,9 @@ function build_penerimaan_note(array $step): string
     return implode('. ', $parts) . '.';
 }
 
+// ==========================================
+// TANGKAP INPUT FILTER
+// ==========================================
 $periode     = trim((string) ($_GET['periode'] ?? 'bulan'));
 $tahun       = trim((string) ($_GET['tahun'] ?? date('Y')));
 $bulan       = trim((string) ($_GET['bulan'] ?? date('m')));
@@ -115,8 +136,14 @@ $customAkhir = trim((string) ($_GET['custom_akhir'] ?? ''));
 if (!in_array($periode, ['minggu', 'bulan', 'tahun', 'custom'], true)) {
     $periode = 'bulan';
 }
-$range = resolve_period_range($periode, $tahun, $bulan, $minggu, $customAwal, $customAkhir);
 
+// Tentukan range tanggal dan label Bahasa Indonesia
+$range = resolve_period_range($periode, $tahun, $bulan, $minggu, $customAwal, $customAkhir);
+$periodeLabel = $range['label'];
+
+// ==========================================
+// QUERY DATABASE
+// ==========================================
 $sql = "
     SELECT b.id, b.no_asset, b.serial_number, b.tanggal_kirim, b.user, b.bermasalah, b.keterangan_masalah,
            tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
@@ -147,6 +174,7 @@ if ($isAdmin) {
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
+// Grouping hasil query
 $groupedAssets = [];
 $totalPengiriman = 0;
 $totalDiterima = 0;
@@ -166,23 +194,15 @@ while ($row = mysqli_fetch_assoc($result)) {
 mysqli_stmt_close($stmt);
 
 $totalAsset = count($groupedAssets);
-$periodeLabel = $range['label'];
 
+// Options untuk dropdown select Bulan
 $bulanOptions = [
-    '01' => 'Januari',
-    '02' => 'Februari',
-    '03' => 'Maret',
-    '04' => 'April',
-    '05' => 'Mei',
-    '06' => 'Juni',
-    '07' => 'Juli',
-    '08' => 'Agustus',
-    '09' => 'September',
-    '10' => 'Oktober',
-    '11' => 'November',
-    '12' => 'Desember'
+    '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+    '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+    '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
 ];
 ?>
+
 <!doctype html>
 <html lang="id">
 
@@ -194,7 +214,6 @@ $bulanOptions = [
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- INI ADALAH CSS ASLI ANDA, TANPA DIKURANGI SAMA SEKALI -->
     <style>
         :root {
             --accent-1: #f59e0b;
@@ -685,12 +704,10 @@ $bulanOptions = [
 <body>
 
     <div class="container-fluid p-0">
-        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
         <div class="d-flex flex-nowrap w-100 overflow-hidden">
 
             <?php include '../layout/sidebar.php'; ?>
 
-            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
 
                 <div class="page-shell">
@@ -705,7 +722,7 @@ $bulanOptions = [
                             </div>
 
                             <div class="d-flex flex-wrap gap-2">
-                                <!-- TOMBOL CETAK PDF (MEMICU JAVASCRIPT POP UP) -->
+                                <!-- TOMBOL CETAK PDF -->
                                 <?php if (can('laporan.pdf')): ?>
                                     <button type="button" class="hero-action" onclick="prosesCetak(this, 'lengkap')">
                                         <i class="bi bi-printer me-2"></i> Cetak PDF
@@ -774,7 +791,7 @@ $bulanOptions = [
                                     </div>
                                 </div>
                             </form>
-                            <div class="mt-4"><span class="period-chip"><i class="bi bi-calendar3"></i><?= h($periodeLabel) ?></span></div>
+                            <div class="mt-4"><span class="period-chip"><i class="bi bi-calendar3"></i> <?= h($periodeLabel) ?></span></div>
                         </div>
                     </div>
 
@@ -997,41 +1014,32 @@ $bulanOptions = [
         // SISTEM POP-UP PRINT TANPA PINDAH HALAMAN
         // ==========================================
         function prosesCetak(btnElement, tipe, idAsset = null) {
-            // 1. Ambil teks/icon asli tombol & ubah jadi loading
             let originalHtml = btnElement.innerHTML;
             btnElement.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyiapkan...';
             btnElement.disabled = true;
 
-            // 2. Siapkan URL target ke file cetak_pdf.php
             let currentParams = new URLSearchParams(window.location.search);
             if (tipe === 'tunggal' && idAsset !== null) {
-                currentParams.set('id', idAsset); // Jika hanya cetak 1 asset
+                currentParams.set('id', idAsset); 
             }
             let targetUrl = 'cetak_pdf.php?' + currentParams.toString();
 
-            // 3. Buat iframe rahasia (tidak terlihat) di layar
             let iframe = document.getElementById('rahasiaPrintFrame');
             if (!iframe) {
                 iframe = document.createElement('iframe');
                 iframe.id = 'rahasiaPrintFrame';
-                iframe.style.display = 'none'; // Sembunyikan iframe
+                iframe.style.display = 'none'; 
                 document.body.appendChild(iframe);
             }
 
-            // 4. Jika iframe selesai memuat file cetak_pdf.php
             iframe.onload = function() {
-                // Kembalikan tombol seperti semula
                 btnElement.innerHTML = originalHtml;
                 btnElement.disabled = false;
-
-                // Memicu perintah print dari dalam iframe (Pop-up muncul!)
                 iframe.contentWindow.print();
             };
 
-            // 5. Eksekusi pemanggilan URL
             iframe.src = targetUrl;
         }
     </script>
 </body>
-
 </html>

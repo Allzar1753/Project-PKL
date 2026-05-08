@@ -699,7 +699,7 @@ elseif ($formType === 'logistik') {
     $tanggalKeluar = normalizeNullableString($_POST['tanggal_keluar'] ?? '');
     $tujuan = isset($_POST['tujuan']) && trim((string) $_POST['tujuan']) !== '' ? (int) $_POST['tujuan'] : 0;
     $jasaPengiriman = normalizeNullableString($_POST['jasa_pengiriman'] ?? '');
-    $allowedJasa = ['SAPX Express', 'Ekspedisi 2', 'Ekspedisi 3'];
+    $allowedJasa = ['SAP Express', 'PCP Express'];
     if (!in_array($jasaPengiriman, $allowedJasa, true)) {
         jsonError("Jasa pengiriman belum dipilih.");
     }

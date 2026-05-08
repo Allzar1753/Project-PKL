@@ -87,7 +87,16 @@ if ($searchInput !== '') {
 // =========================================================================
 // LOGIKA SUMMARY CARD & QUERY DATA
 // =========================================================================
-$excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+
+// [REVISI ALUR]: Pengecualian Stok Tersedia
+// Admin: Sembunyikan barang dari tampilan Stok Tersedia jika statusnya sedang dikirim / sudah diterima cabang.
+// Barang ini sekarang menjadi "Riwayat Abadi" yang hanya tampil di tab Logistik Keluar.
+if ($isAdmin) {
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman IN ('Sedang perjalanan', 'Sudah diterima')) ";
+} else {
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+}
+
 $stokAktifSql = " AND barang.status = 'Tersedia' ";
 
 if ($isAdmin) {
@@ -103,8 +112,9 @@ if ($isAdmin) {
 // Menentukan Query Berdasarkan Filter
 if ($filter === 'keluar') {
     if ($isAdmin) {
+        // [REVISI ALUR]: Tambahkan b.id AS id_barang & b.bermasalah agar tombol Pop-up Logistik bisa melempar ID dengan benar di tabel ini
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
+                            b.id AS id_barang, b.bermasalah, b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
                      FROM barang_pengiriman p
                      JOIN barang b ON p.id_barang = b.id
                      JOIN tb_barang ON b.id_barang = tb_barang.id_barang
@@ -248,17 +258,14 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         .modal-header .btn-close { filter: invert(1); }
     </style>
 </head>
-<body>
 
 <body>
 
 <div class="container-fluid p-0">
-    <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
     <div class="d-flex flex-nowrap w-100 overflow-hidden">
         
         <?php include '../layout/sidebar.php'; ?>
 
-        <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
         <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
             
             <div class="page-shell">
@@ -445,7 +452,14 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                 <img src="../assets/images/<?= h($data['foto_resi_keluar']) ?>" class="thumb-img previewFoto" data-foto="../assets/images/<?= h($data['foto_resi_keluar']) ?>">
                                             <?php else: ?><div class="thumb-placeholder"><i class="bi bi-receipt"></i></div><?php endif; ?>
                                         </td>
-                                        <td class="text-center pe-4"><i class="bi bi-lock-fill text-muted"></i></td>
+                                        <td class="text-center pe-4">
+                                            <!-- [REVISI ALUR]: Menampilkan tombol biru icon truk di tab Logistik Keluar agar pop up info bisa dipanggil -->
+                                            <?php if ($isAdmin): ?>
+                                                <button class="btn btn-info btn-sm text-white btnLogistik" data-id="<?= $data['id_barang'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Detail Status Logistik"><i class="bi bi-truck"></i></button>
+                                            <?php else: ?>
+                                                <i class="bi bi-lock-fill text-muted"></i>
+                                            <?php endif; ?>
+                                        </td>
 
                                     <?php else: ?>
                                         <td>
@@ -575,7 +589,6 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 <div class="modal fade" id="modalTerimaCabang" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content border-0 rounded-4 overflow-hidden">
-            <!-- Warna hijau (bg-success) diubah jadi Gradient Orange -->
             <div class="modal-header text-white" style="background: linear-gradient(135deg, #ff7a00, #ffb000); border-bottom: none;">
                 <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i>Konfirmasi Penerimaan</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>

@@ -301,15 +301,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">No Asset</label>
+                    <label class="form-label">No Asset<span class="text-danger">*</span></label>
                     <input type="text" name="no_asset" class="form-control" value="<?= h($barang['no_asset'] ?? '') ?>" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Serial Number</label>
+                    <label class="form-label">Serial Number<span class="text-danger">*</span></label>
                     <input type="text" name="serial_number" class="form-control" value="<?= h($barang['serial_number'] ?? '') ?>" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Merk</label>
+                    <label class="form-label">Merk<span class="text-danger">*</span></label>
                     <select name="id_merk" class="form-control select2">
                         <?php foreach ($merkOptions as $m): ?>
                             <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= h($m['nama_merk']) ?></option>
@@ -317,7 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Tipe</label>
+                    <label class="form-label">Tipe<span class="text-danger">*</span></label>
                     <select name="id_tipe" class="form-control select2">
                         <?php foreach ($tipeOptions as $t): ?>
                             <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= h($t['nama_tipe']) ?></option>
@@ -325,7 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Jenis</label>
+                    <label class="form-label">Jenis<span class="text-danger">*</span></label>
                     <select name="id_jenis" class="form-control select2">
                         <?php foreach ($jenisOptions as $j): ?>
                             <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= h($j['nama_jenis']) ?></option>
@@ -341,11 +341,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">User Pengguna</label>
+                    <label class="form-label">User Pengguna<span class="text-danger">*</span></label>
                     <input type="text" name="user" class="form-control" value="<?= h($barang['user'] ?? '') ?>">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Status Bermasalah</label>
+                    <label class="form-label">Status Bermasalah<span class="text-danger">*</span></label>
                     <select name="bermasalah" id="bermasalahUpdate" class="form-control">
                         <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>Tidak</option>
                         <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>Iya</option>
@@ -356,7 +356,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <textarea name="keterangan_masalah" id="keteranganMasalahUpdate" class="form-control"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Tanggal Input/Kirim Master</label>
+                    <label class="form-label">Tanggal Input/Kirim Master<span class="text-danger">*</span></label>
                     <input type="date" name="tanggal_kirim" class="form-control" value="<?= h($barang['tanggal_kirim'] ?? '') ?>">
                 </div>
                 <div class="col-md-6">
@@ -443,11 +443,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 <div class="row g-3">
                     <!-- Baris 1 -->
                     <div class="col-md-6">
-                        <label class="form-label">Tanggal Keluar</label>
+                        <label class="form-label">Tanggal Keluar<span class="text-danger">*</span></label>
                         <input type="date" name="tanggal_keluar" class="form-control" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Tujuan Pengiriman</label>
+                        <label class="form-label">Tujuan Pengiriman<span class="text-danger">*</span></label>
                         <select name="tujuan" class="form-control select2" required>
                             <option value="">-- Pilih Tujuan --</option>
                             <?php foreach ($tujuanOptions as $bt): ?>
@@ -458,7 +458,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                     <!-- Baris 2 -->
                     <div class="col-md-6">
-                        <label class="form-label">Jasa Pengiriman</label>
+                        <label class="form-label">Jasa Pengiriman<span class="text-danger">*</span></label>
                         <select name="jasa_pengiriman" class="form-control select2" required>
                             <option value="">Pilih...</option>
                             <option value="SAP Express">SAP Express</option>
@@ -467,7 +467,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Nomor Resi Keluar</label>
+                        <label class="form-label">Nomor Resi Keluar<span class="text-danger">*</span></label>
                         <input type="text" name="nomor_resi" class="form-control" placeholder="Masukkan nomor resi keluar" required>
                     </div>
 
@@ -478,7 +478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <input type="text" class="form-control bg-light" value="<?= STATUS_SEDANG_PERJALANAN ?>" readonly>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Foto Resi Keluar / Bukti Kirim</label>
+                        <label class="form-label">Foto Resi Keluar / Bukti Kirim<span class="text-danger">*</span></label>
                         <input type="file" name="foto_resi" class="form-control">
                     </div>
                 </div>
@@ -505,11 +505,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <input type="text" class="form-control bg-light" value="<?= STATUS_SUDAH_DITERIMA ?>" readonly>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Tanggal Diterima</label>
+                        <label class="form-label">Tanggal Diterima<span class="text-danger">*</span></label>
                         <input type="date" name="tanggal_diterima" class="form-control" value="<?= h($pengirimanTerakhir['tanggal_diterima'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Nama Penerima</label>
+                        <label class="form-label">Nama Penerima<span class="text-danger">*</span></label>
                         <input type="text" name="nama_penerima" class="form-control" placeholder="Nama penerima barang" value="<?= h($pengirimanTerakhir['nama_penerima'] ?? '') ?>">
                     </div>
                     <div class="col-md-6">
@@ -517,12 +517,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <input type="text" name="nomor_resi_masuk" class="form-control" readonly value="<?= h($pengirimanTerakhir['nomor_resi_masuk'] ?? ($pengirimanTerakhir['nomor_resi_keluar'] ?? '')) ?>">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Upload Foto Barang Diterima</label>
+                        <label class="form-label">Upload Foto Barang Diterima<span class="text-danger">*</span></label>
                         <input type="file" name="foto_barang_diterima" class="form-control">
                     </div>
                     <?php if (!empty($pengirimanTerakhir['foto_barang_diterima'])): ?>
                         <div class="col-md-6">
-                            <label class="form-label">Foto Bukti Penerimaan Saat Ini</label>
+                            <label class="form-label">Foto Bukti Penerimaan Saat Ini<span class="text-danger">*</span></label>
                             <div>
                                 <button type="button" class="btn btn-outline-secondary previewFoto" data-foto="../assets/images/<?= h($pengirimanTerakhir['foto_barang_diterima']) ?>">
                                     <i class="bi bi-image"></i> Lihat Foto
@@ -539,7 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Tanggal Keluar</label>
+                        <label class="form-label">Tanggal Keluar<span class="text-danger">*</span></label>
                         <input type="text" class="form-control" value="<?= h($pengirimanTerakhir['tanggal_keluar'] ?? '') ?>" readonly>
                     </div>
                     <div class="col-md-6">
@@ -547,11 +547,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <input type="text" class="form-control" value="<?= h($pengirimanTerakhir['status_pengiriman'] ?? '') ?>" readonly>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Tanggal Diterima</label>
+                        <label class="form-label">Tanggal Diterima<span class="text-danger">*</span></label>
                         <input type="text" class="form-control" value="<?= h($pengirimanTerakhir['tanggal_diterima'] ?? '') ?>" readonly>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Nama Penerima</label>
+                        <label class="form-label">Nama Penerima<span class="text-danger">*</span></label>
                         <input type="text" class="form-control" value="<?= h($pengirimanTerakhir['nama_penerima'] ?? '') ?>" readonly>
                     </div>
                 </div>

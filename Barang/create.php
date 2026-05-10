@@ -218,12 +218,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Serial Number / Service tag</label>
+            <label>Serial Number / Service tag <span class="text-danger">*</span></label>
             <input type="text" name="serial_number" class="form-control" required placeholder="Wajib diisi!">
         </div>
 
         <div class="col-md-6">
-            <label>Barang</label>
+            <label>Barang <span class="text-danger">*</span></label>
             <select name="id_barang" class="form-control select2" required>
                 <option value="">Pilih Barang...</option>
                 <?php mysqli_data_seek($barang, 0); while ($row = mysqli_fetch_assoc($barang)): ?>
@@ -233,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Merk</label>
+            <label>Merk <span class="text-danger">*</span></label>
             <select name="id_merk" class="form-control select2" required>
                 <option value="">Pilih Merk...</option>
                 <?php mysqli_data_seek($merk, 0); while ($row = mysqli_fetch_assoc($merk)): ?>
@@ -243,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Tipe</label>
+            <label>Tipe <span class="text-danger">*</span></label>
             <select name="id_tipe" class="form-control select2" required>
                 <option value="">Pilih Tipe...</option>
                 <?php mysqli_data_seek($tipe, 0); while ($row = mysqli_fetch_assoc($tipe)): ?>
@@ -253,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Jenis</label>
+            <label>Jenis <span class="text-danger">*</span></label>
             <select name="id_jenis" class="form-control select2" required>
                 <option value="">Pilih Jenis...</option>
                 <?php mysqli_data_seek($jenis, 0); while ($row = mysqli_fetch_assoc($jenis)): ?>
@@ -263,12 +263,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Tanggal Terima</label>
+            <label>Tanggal Terima <span class="text-danger">*</span></label>
             <input type="date" name="tanggal_kirim" class="form-control" required>
         </div>
 
         <div class="col-md-6">
-            <label>Branch</label>
+            <label>Branch <span class="text-danger">*</span></label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
                 <?php mysqli_data_seek($branch, 0); while ($row = mysqli_fetch_assoc($branch)): ?>
@@ -278,12 +278,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>User</label>
+            <label>User <span class="text-danger">*</span></label>
             <input type="text" name="user" class="form-control" required placeholder="User pengguna">
         </div>
 
         <div class="col-md-6">
-            <label>Bermasalah</label>
+            <label>Bermasalah <span class="text-danger">*</span></label>
             <select name="bermasalah" class="form-control select2" id="bermasalahSelect" required>
                 <option value="">Pilih...</option>
                 <option value="Tidak">Tidak</option>
@@ -297,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Foto Barang</label>
+            <label>Foto Barang <span class="text-danger">*</span></label>
             <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
             <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
         </div>

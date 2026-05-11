@@ -811,14 +811,33 @@ if (isset($_GET['export'])) {
 
     $exportQuery = mysqli_query(
         $koneksi,
-        "SELECT users.username, users.email, users.role, tb_branch.nama_branch, users.created_at
+        "SELECT users.username, users.email, users.role, tb_branch.nama_branch, users.created_at, users.password_changed_at
          FROM users
          LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
          ORDER BY FIELD(role, 'admin', 'user'), username ASC"
     );
 
-    $tanggalCetak = date('d F Y H:i');
-    $periodeBulan = date('F Y');
+    $bulanIndo = [
+        1 => 'Januari',
+        2 => 'Februari',
+        3 => 'Maret',
+        4 => 'April',
+        5 => 'Mei',
+        6 => 'Juni',
+        7 => 'Juli',
+        8 => 'Agustus',
+        9 => 'September',
+        10 => 'Oktober',
+        11 => 'November',
+        12 => 'Desember'
+    ];
+
+    $bulanBulanIni = $bulanIndo[(int)date('m')];
+    $tahunBulanIni = date('Y');
+
+    $periodeBulan = $bulanBulanIni . ' ' . $tahunBulanIni;
+
+    $tanggalCetak = date('d') . ' ' . $bulanBulanIni . ' ' . date('Y H:i');
 
     if ($exportType === 'excel') {
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -839,6 +858,7 @@ if (isset($_GET['export'])) {
         $sheet->setCellValue('D6', 'Role');
         $sheet->setCellValue('E6', 'Cabang');
         $sheet->setCellValue('F6', 'Tanggal Dibuat');
+        $sheet->setCellValue('G6', 'Tanggal Password Diubah');
 
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
@@ -846,7 +866,7 @@ if (isset($_GET['export'])) {
             'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]
         ];
-        $sheet->getStyle('A6:F6')->applyFromArray($headerStyle);
+        $sheet->getStyle('A6:G6')->applyFromArray($headerStyle);
 
         $rowNum = 7;
         $no = 1;
@@ -857,13 +877,14 @@ if (isset($_GET['export'])) {
             $sheet->setCellValue('D' . $rowNum, $row['role'] === 'admin' ? 'Administrator' : 'User');
             $sheet->setCellValue('E' . $rowNum, $row['nama_branch'] ?? 'Belum ditentukan');
             $sheet->setCellValue('F' . $rowNum, format_datetime($row['created_at']));
+            $sheet->setCellValue('G' . $rowNum, format_datetime($row['password_changed_at']));
             $rowNum++;
         }
 
         $dataStyle = ['borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]];
-        $sheet->getStyle('A7:F' . ($rowNum - 1))->applyFromArray($dataStyle);
+        $sheet->getStyle('A7:G' . ($rowNum - 1))->applyFromArray($dataStyle);
 
-        foreach (range('A', 'F') as $col) {
+        foreach (range('A', 'G') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -960,11 +981,12 @@ if (isset($_GET['export'])) {
             <table>
                 <tr>
                     <th style="width: 5%;">No</th>
-                    <th style="width: 20%;">Username</th>
-                    <th style="width: 25%;">Email</th>
-                    <th style="width: 15%;">Role</th>
-                    <th style="width: 20%;">Cabang</th>
-                    <th style="width: 15%;">Tanggal Dibuat</th>
+                    <th style="width: 16%;">Username</th>
+                    <th style="width: 21%;">Email</th>
+                    <th style="width: 10%;">Role</th>
+                    <th style="width: 16%;">Cabang</th>
+                    <th style="width: 16%;">Tanggal Dibuat</th>
+                    <th style="width: 16%;">Tanggal Password Diubah</th>
                 </tr>';
         $no = 1;
         while ($row = mysqli_fetch_assoc($exportQuery)) {
@@ -975,6 +997,7 @@ if (isset($_GET['export'])) {
                     <td>' . ($row['role'] === 'admin' ? 'Administrator' : 'User') . '</td>
                     <td>' . htmlspecialchars($row['nama_branch'] ?? 'Belum ditentukan') . '</td>
                     <td>' . format_datetime($row['created_at']) . '</td>
+                    <td>' . format_datetime($row['password_changed_at']) . '</td>
                   </tr>';
         }
         echo '</table>

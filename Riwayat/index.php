@@ -77,7 +77,7 @@ $page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 */
 $activityDateExpr = "
 CASE
-    WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_kirim)
+    WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_terima)
     ELSE DATE(bp.tanggal_keluar)
 END
 ";
@@ -202,13 +202,13 @@ $totalKeluar = (int) (mysqli_fetch_assoc($totalKeluarQuery)['total'] ?? 0);
 // Eksekusi Data Utama
 $query = mysqli_query($koneksi, "
     SELECT DISTINCT
-        b.id, b.no_asset, b.serial_number, b.tanggal_kirim, b.bermasalah, b.keterangan_masalah, b.user, b.foto,
+        b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.bermasalah, b.keterangan_masalah, b.user, b.foto,
         tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
         bas.id_branch AS id_branch_asal, bas.nama_branch AS branch_asal_pengiriman,
         bt.id_branch AS id_branch_tujuan, bt.nama_branch AS branch_tujuan,
         bp.id_pengiriman, bp.tanggal_keluar, bp.tanggal_diterima, bp.status_pengiriman, bp.nomor_resi_keluar, bp.nama_penerima, bp.jasa_pengiriman,
         CASE
-            WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_kirim)
+            WHEN bp.id_pengiriman IS NULL THEN DATE(b.tanggal_terima)
             ELSE DATE(bp.tanggal_keluar)
         END AS tanggal_aktivitas
     $baseFrom
@@ -564,8 +564,8 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
                                                 <td><span class="meta-line"><i class="bi bi-send"></i> <?= h($tujuan) ?></span></td>
                                                 <td>
                                                     <span class="meta-line"><i class="bi bi-calendar-event"></i> <?= h($d['tanggal_aktivitas'] ?? '-') ?></span>
-                                                    <?php if (!empty($d['tanggal_kirim']) && $jenisRiwayat === 'Masuk'): ?>
-                                                        <span class="meta-muted">Masuk awal: <?= h($d['tanggal_kirim']) ?></span>
+                                                    <?php if (!empty($d['tanggal_terima']) && $jenisRiwayat === 'Masuk'): ?>
+                                                        <span class="meta-muted">Masuk awal: <?= h($d['tanggal_terima']) ?></span>
                                                     <?php endif; ?>
                                                     <?php if (!empty($d['tanggal_keluar']) && $jenisRiwayat === 'Keluar'): ?>
                                                         <span class="meta-muted">Keluar: <?= h($d['tanggal_keluar']) ?></span>

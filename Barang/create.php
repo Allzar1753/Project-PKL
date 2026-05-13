@@ -51,7 +51,7 @@ function ambilDetailBarangUntukEmail(mysqli $koneksi, int $idBarangBaru): ?array
 {
     $query = mysqli_query($koneksi, "
         SELECT
-            b.id, b.no_asset, b.serial_number, b.tanggal_kirim, b.bermasalah, b.keterangan_masalah,
+            b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.bermasalah, b.keterangan_masalah,
             b.foto, b.`user`, tb.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch
         FROM barang b
         LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'serial_number',
         'id_tipe',
         'id_jenis',
-        'tanggal_kirim',
+        'tanggal_terima',
         'bermasalah',
         'id_branch',
         'user'
@@ -94,7 +94,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $serial_number = esc($koneksi, $_POST['serial_number']);
     $id_tipe       = (int) $_POST['id_tipe'];
     $id_jenis      = (int) $_POST['id_jenis'];
-    $tanggal_kirim = esc($koneksi, $_POST['tanggal_kirim']);
+    $tanggal_terima = esc($koneksi, $_POST['tanggal_terima']);
+    $today = date('Y-m-d');
+    if ($tanggal_terima < $today) {
+        echo json_encode(['status' => 'error', 'message' => 'Tanggal terima tidak boleh tanggal yang lampau']);
+        exit;
+    }
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
     $user          = esc($koneksi, $_POST['user']);
@@ -172,8 +177,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $foto = ($uploadFoto['status'] === 'success') ? $uploadFoto['filename'] : null;
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
 
-    $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_kirim, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`) 
-                    VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_kirim', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user')";
+    $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`) 
+                    VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user')";
 
     mysqli_begin_transaction($koneksi);
     try {
@@ -188,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             kirimEmailKeBranchInti([
                 'branch' => $detailBarang['nama_branch'], 'no_asset' => $detailBarang['no_asset'] ?: '-', 'serial_number' => $detailBarang['serial_number'],
                 'nama_barang' => $detailBarang['nama_barang'], 'merk' => $detailBarang['nama_merk'], 'tipe' => $detailBarang['nama_tipe'],
-                'jenis' => $detailBarang['nama_jenis'], 'tanggal_kirim' => $detailBarang['tanggal_kirim'], 'user' => $detailBarang['user'],
+                'jenis' => $detailBarang['nama_jenis'], 'tanggal_terima' => $detailBarang['tanggal_terima'], 'user' => $detailBarang['user'],
                 'bermasalah' => $detailBarang['bermasalah'], 'foto_path' => $fotoPath
             ]);
         }
@@ -264,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label>Tanggal Terima <span class="text-danger">*</span></label>
-            <input type="date" name="tanggal_kirim" class="form-control" required>
+            <input type="date" name="tanggal_terima" class="form-control" required min="<?= date('Y-m-d') ?>">
         </div>
 
         <div class="col-md-6">

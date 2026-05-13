@@ -1,4 +1,5 @@
 <?php
+
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -36,7 +37,7 @@ function shippingBadge(string $status): string
         $icon  = 'bi-check-circle';
     }
 
-    return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
+    return '<span class="badge rounded-pill text-wrap text-start ' . $class . '" style="line-height: 1.4;"><i class="bi ' . $icon . ' me-1 mb-1"></i>' . h($status) . '</span>';
 }
 
 function barangBadge(string $bermasalah): string
@@ -49,7 +50,7 @@ function barangBadge(string $bermasalah): string
 
 function fetchAllAssoc($query): array
 {
-    $rows =[];
+    $rows = [];
     if ($query) {
         while ($row = mysqli_fetch_assoc($query)) {
             $rows[] = $row;
@@ -132,12 +133,12 @@ $barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
 // --- KOTAK BARANG KELUAR ---
 if ($isAdmin) {
     $qBarangKeluarTerbaru = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
+        SELECT p.id_pengiriman, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
                tb.nama_barang, tujuan.nama_branch AS nama_branch_tujuan
         FROM barang_pengiriman p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch
-        ORDER BY p.id_pengiriman DESC LIMIT 15
+        INNER JOIN barang b ON p.id_barang = b.id 
+        INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang 
+        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch ORDER BY p.id_pengiriman DESC LIMIT 15
     ");
 } else {
     $qBarangKeluarTerbaru = mysqli_query($koneksi, "
@@ -256,7 +257,9 @@ $notifications = fetchAllAssoc($qNotifications);
             --radius-md: 16px;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             background:
@@ -268,8 +271,13 @@ $notifications = fetchAllAssoc($qNotifications);
             min-height: 100vh;
         }
 
-        .page-content { padding: 30px; }
-        .text-warning-custom { color: var(--orange-2) !important; }
+        .page-content {
+            padding: 30px;
+        }
+
+        .text-warning-custom {
+            color: var(--orange-2) !important;
+        }
 
         .dashboard-hero {
             position: relative;
@@ -283,67 +291,299 @@ $notifications = fetchAllAssoc($qNotifications);
         }
 
         .dashboard-hero::before {
-            content: ""; position: absolute; width: 280px; height: 280px; border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08); top: -100px; right: -60px;
+            content: "";
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            top: -100px;
+            right: -60px;
         }
 
         .dashboard-hero::after {
-            content: ""; position: absolute; width: 180px; height: 180px; border-radius: 50%;
-            background: rgba(255, 208, 102, 0.18); bottom: -70px; left: -50px;
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255, 208, 102, 0.18);
+            bottom: -70px;
+            left: -50px;
         }
 
-        .dashboard-hero h1 { position: relative; z-index: 2; font-size: 1.85rem; font-weight: 800; color: #fff; margin-bottom: .45rem; letter-spacing: -0.02em; }
-        .dashboard-hero p { position: relative; z-index: 2; color: rgba(255, 255, 255, 0.86); margin-bottom: 0; max-width: 760px; line-height: 1.7; font-size: .95rem; }
+        .dashboard-hero h1 {
+            position: relative;
+            z-index: 2;
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: .45rem;
+            letter-spacing: -0.02em;
+        }
+
+        .dashboard-hero p {
+            position: relative;
+            z-index: 2;
+            color: rgba(255, 255, 255, 0.86);
+            margin-bottom: 0;
+            max-width: 760px;
+            line-height: 1.7;
+            font-size: .95rem;
+        }
 
         .role-badge {
-            position: relative; z-index: 2; background: rgba(255, 255, 255, 0.14); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 999px; padding: .65rem 1rem; font-weight: 700; font-size: .86rem; white-space: nowrap; backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            padding: .65rem 1rem;
+            font-weight: 700;
+            font-size: .86rem;
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
         }
 
         .summary-card {
-            position: relative; overflow: hidden; background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%); border: 1px solid rgba(255, 176, 0, 0.15);
-            border-radius: 22px; box-shadow: var(--shadow-soft); height: 100%; padding: 1.15rem 1.1rem; transition: all .25s ease;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+            border: 1px solid rgba(255, 176, 0, 0.15);
+            border-radius: 22px;
+            box-shadow: var(--shadow-soft);
+            height: 100%;
+            padding: 1.15rem 1.1rem;
+            transition: all .25s ease;
         }
 
-        .summary-card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 6px; background: linear-gradient(90deg, var(--orange-1), var(--orange-3)); }
-        .summary-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+        .summary-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 6px;
+            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
+        }
 
-        .summary-label { font-size: .84rem; color: var(--text-soft); margin-bottom: .45rem; font-weight: 600; }
-        .summary-value { font-size: 2rem; line-height: 1; font-weight: 800; margin-bottom: .45rem; color: var(--dark-1); letter-spacing: -0.03em; }
-        .summary-note { font-size: .83rem; color: #7b7b7b; line-height: 1.5; }
-        .summary-icon { width: 54px; height: 54px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.28rem; flex-shrink: 0; color: #fff !important; background: linear-gradient(135deg, var(--orange-1), var(--orange-3)) !important; }
+        .summary-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+        }
 
-        .panel-card { overflow: hidden; background: #ffffff; border: 1px solid rgba(255, 176, 0, 0.13); border-radius: var(--radius-xl); box-shadow: var(--shadow-soft); height: 100%; display: flex; flex-direction: column; }
-        .panel-header { padding: 1.15rem 1.25rem; border-bottom: 1px solid rgba(255, 176, 0, 0.16); background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%); position: relative; overflow: hidden; }
-        .panel-title { position: relative; z-index: 1; font-size: 1.02rem; font-weight: 800; margin-bottom: .22rem; color: #fff; letter-spacing: -0.02em; }
-        .panel-subtitle { position: relative; z-index: 1; font-size: .84rem; color: rgba(255, 255, 255, 0.80); line-height: 1.5; }
-        .panel-body { padding: 1.15rem 1.2rem; background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%); flex: 1; display: flex; flex-direction: column; }
+        .summary-label {
+            font-size: .84rem;
+            color: var(--text-soft);
+            margin-bottom: .45rem;
+            font-weight: 600;
+        }
 
-        .activity-list { display: flex; flex-direction: column; gap: .9rem; }
-        .activity-item { position: relative; border: 1px solid rgba(255, 176, 0, 0.14); border-left: 5px solid var(--orange-2); border-radius: 18px; padding: 1rem; background: #ffffff; box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04); transition: all .22s ease; }
-        .activity-item:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(255, 122, 0, 0.14); border-color: rgba(255, 152, 0, 0.28); }
-        .activity-title { font-weight: 800; margin-bottom: .38rem; color: var(--dark-1); letter-spacing: -0.01em; }
-        
-        .meta-grid { display: grid; gap: .28rem; margin-top: .6rem; }
-        .meta-line { font-size: .88rem; color: #4b5563; line-height: 1.5; }
-        .meta-line strong { color: #111827; font-weight: 700; }
-        .meta-muted { font-size: .84rem; color: #6b7280; line-height: 1.5; }
-        .meta-muted i { width: 16px; color: var(--orange-2); }
+        .summary-value {
+            font-size: 2rem;
+            line-height: 1;
+            font-weight: 800;
+            margin-bottom: .45rem;
+            color: var(--dark-1);
+            letter-spacing: -0.03em;
+        }
 
-        .empty-state { text-align: center; color: var(--text-soft); padding: 1.8rem 1rem; border: 1px dashed rgba(255, 152, 0, 0.28); border-radius: 18px; background: linear-gradient(180deg, #fffaf2 0%, #fff5e8 100%); }
-        .empty-state i { display: block; font-size: 1.9rem; margin-bottom: .5rem; color: var(--orange-2); }
-        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .summary-note {
+            font-size: .83rem;
+            color: #7b7b7b;
+            line-height: 1.5;
+        }
 
-        .section-action { margin-top: 1rem; text-align: center; }
-        .btn-toggle-list { border: none; border-radius: 999px; padding: .7rem 1.1rem; font-size: .85rem; font-weight: 700; background: linear-gradient(135deg, #111111 0%, #ff8f00 100%); color: #fff; box-shadow: 0 10px 24px rgba(255, 143, 0, 0.18); transition: all .25s ease; }
-        .btn-toggle-list:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(255, 143, 0, 0.25); }
+        .summary-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.28rem;
+            flex-shrink: 0;
+            color: #fff !important;
+            background: linear-gradient(135deg, var(--orange-1), var(--orange-3)) !important;
+        }
 
-        .extra-item.d-none { display: none !important; }
-        .badge.rounded-pill { padding: .5rem .8rem; font-size: .75rem; font-weight: 700; letter-spacing: .1px; }
+        .panel-card {
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(255, 176, 0, 0.13);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-soft);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
 
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ff9800, #ffb000); border-radius: 999px; }
-        ::-webkit-scrollbar-track { background: #fff4e3; }
+        .panel-header {
+            padding: 1.15rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 176, 0, 0.16);
+            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel-title {
+            position: relative;
+            z-index: 1;
+            font-size: 1.02rem;
+            font-weight: 800;
+            margin-bottom: .22rem;
+            color: #fff;
+            letter-spacing: -0.02em;
+        }
+
+        .panel-subtitle {
+            position: relative;
+            z-index: 1;
+            font-size: .84rem;
+            color: rgba(255, 255, 255, 0.80);
+            line-height: 1.5;
+        }
+
+        .panel-body {
+            padding: 1.15rem 1.2rem;
+            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: .9rem;
+        }
+
+        .activity-item {
+            position: relative;
+            border: 1px solid rgba(255, 176, 0, 0.14);
+            border-left: 5px solid var(--orange-2);
+            border-radius: 18px;
+            padding: 1rem;
+            background: #ffffff;
+            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04);
+            transition: all .22s ease;
+        }
+
+        .activity-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 14px 30px rgba(255, 122, 0, 0.14);
+            border-color: rgba(255, 152, 0, 0.28);
+        }
+
+        .activity-title {
+            font-weight: 800;
+            margin-bottom: .38rem;
+            color: var(--dark-1);
+            letter-spacing: -0.01em;
+        }
+
+        .meta-grid {
+            display: grid;
+            gap: .28rem;
+            margin-top: .6rem;
+        }
+
+        .meta-line {
+            font-size: .88rem;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+
+        .meta-line strong {
+            color: #111827;
+            font-weight: 700;
+        }
+
+        .meta-muted {
+            font-size: .84rem;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .meta-muted i {
+            width: 16px;
+            color: var(--orange-2);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-soft);
+            padding: 1.8rem 1rem;
+            border: 1px dashed rgba(255, 152, 0, 0.28);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #fffaf2 0%, #fff5e8 100%);
+        }
+
+        .empty-state i {
+            display: block;
+            font-size: 1.9rem;
+            margin-bottom: .5rem;
+            color: var(--orange-2);
+        }
+
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .section-action {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .btn-toggle-list {
+            border: none;
+            border-radius: 999px;
+            padding: .7rem 1.1rem;
+            font-size: .85rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #111111 0%, #ff8f00 100%);
+            color: #fff;
+            box-shadow: 0 10px 24px rgba(255, 143, 0, 0.18);
+            transition: all .25s ease;
+        }
+
+        .btn-toggle-list:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(255, 143, 0, 0.25);
+        }
+
+        .extra-item.d-none {
+            display: none !important;
+        }
+
+        .badge.rounded-pill {
+            padding: .5rem .8rem;
+            font-size: .75rem;
+            font-weight: 700;
+            letter-spacing: .1px;
+            white-space: normal;
+            text-align: left;
+            line-height: 1.4;
+            display: inline-block;
+            max-width: 100%;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #ff9800, #ffb000);
+            border-radius: 999px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #fff4e3;
+        }
     </style>
 </head>
 
@@ -351,12 +591,12 @@ $notifications = fetchAllAssoc($qNotifications);
     <div class="container-fluid p-0">
         <!-- 1. Gunakan d-flex dan flex-nowrap agar layout mengunci ke samping dan tidak jatuh ke bawah -->
         <div class="d-flex flex-nowrap w-100 overflow-hidden">
-            
+
             <?php require_once '../layout/sidebar.php'; ?>
 
             <!-- 2. Tambahkan id="mainContent" dan ganti class col-md dengan flex-grow-1 -->
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
-                
+
                 <div class="page-content">
 
                     <!-- Header Hero -->
@@ -378,9 +618,9 @@ $notifications = fetchAllAssoc($qNotifications);
                             <div class="fw-bold mb-2"><i class="bi bi-bell me-2"></i>Notifikasi Terbaru</div>
                             <?php foreach ($notifications as $notif): ?>
                                 <?php
-                                    $notifId = (int) ($notif['id'] ?? 0);
-                                    $notifLink = trim((string) ($notif['link'] ?? ''));
-                                    $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
+                                $notifId = (int) ($notif['id'] ?? 0);
+                                $notifLink = trim((string) ($notif['link'] ?? ''));
+                                $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
                                 ?>
                                 <div class="mb-2">
                                     <div class="fw-semibold"><?= h($notif['title'] ?? '-') ?></div>
@@ -472,21 +712,19 @@ $notifications = fetchAllAssoc($qNotifications);
                                     <?php if (!empty($barangMasukTerbaru)): ?>
                                         <div class="activity-list" id="barangMasukList">
                                             <?php foreach ($barangMasukTerbaru as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
-                                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                        <div class="flex-grow-1">
-                                                            <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                            <div class="meta-grid">
-                                                                <?php if(isset($item['serial_number'])): ?>
-                                                                    <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number']) ?></div>
-                                                                <?php endif; ?>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_aktif'] ?? '-') ?></div>
-                                                            </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
+                                                    <div class="flex-grow-1">
+                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="meta-grid">
+                                                            <?php if (isset($item['serial_number'])): ?>
+                                                                <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number']) ?></div>
+                                                            <?php endif; ?>
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_aktif'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_kirim'] ?? '-') ?></div>
                                                         </div>
-                                                        <div class="text-end">
-                                                            <span class="badge rounded-pill bg-success">Masuk</span>
-                                                            <div class="meta-muted mt-2"><?= h($item['tanggal_kirim'] ?? '-') ?></div>
-                                                        </div>
+                                                    </div>
+                                                    <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">
+                                                        <span class="badge rounded-pill bg-success"><i class="bi bi-box-arrow-in-down me-1"></i>Masuk</span>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -514,19 +752,17 @@ $notifications = fetchAllAssoc($qNotifications);
                                     <?php if (!empty($barangKeluarTerbaru)): ?>
                                         <div class="activity-list" id="barangKeluarList">
                                             <?php foreach ($barangKeluarTerbaru as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
-                                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                        <div class="flex-grow-1">
-                                                            <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                            <div class="meta-grid">
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
-                                                            </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
+                                                    <div class="flex-grow-1">
+                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="meta-grid">
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_keluar'] ?? '-') ?></div>
                                                         </div>
-                                                        <div class="text-end">
-                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? '-') ?></div>
-                                                            <div class="meta-muted mt-2"><?= h($item['tanggal_keluar'] ?? '-') ?></div>
-                                                        </div>
+                                                    </div>
+                                                    <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">
+                                                        <?= shippingBadge($item['status_pengiriman'] ?? '-') ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -554,17 +790,17 @@ $notifications = fetchAllAssoc($qNotifications);
                                     <?php if (!empty($barangBermasalah)): ?>
                                         <div class="activity-list" id="barangBermasalahList">
                                             <?php foreach ($barangBermasalah as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
-                                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                        <div class="flex-grow-1">
-                                                            <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                            <div class="meta-grid">
-                                                                <div class="meta-line"><strong>Asset:</strong> <?= h($item['no_asset'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_aktif'] ?? '-') ?></div>
-                                                                <div class="meta-line text-danger line-clamp-2"><strong>Kendala:</strong> <?= h($item['keterangan_masalah'] ?? '-') ?></div>
-                                                            </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
+                                                    <div class="flex-grow-1">
+                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="meta-grid">
+                                                            <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_aktif'] ?? '-') ?></div>
+                                                            <div class="meta-line text-danger line-clamp-2"><strong>Kendala:</strong> <?= h($item['keterangan_masalah'] ?? '-') ?></div>
                                                         </div>
-                                                        <div><?= barangBadge('Iya') ?></div>
+                                                    </div>
+                                                    <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">
+                                                        <?= barangBadge('Iya') ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -592,20 +828,18 @@ $notifications = fetchAllAssoc($qNotifications);
                                     <?php if (!empty($pengirimanBelumDiterima)): ?>
                                         <div class="activity-list" id="pengirimanBelumDiterimaList">
                                             <?php foreach ($pengirimanBelumDiterima as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
-                                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                                        <div class="flex-grow-1">
-                                                            <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                            <div class="meta-grid">
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_asal'] ?? '-') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
-                                                                <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
-                                                            </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
+                                                    <div class="flex-grow-1">
+                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="meta-grid">
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_asal'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_keluar'] ?? '-') ?></div>
                                                         </div>
-                                                        <div class="text-end">
-                                                            <div><?= shippingBadge($item['status_pengiriman'] ?? '-') ?></div>
-                                                            <div class="meta-muted mt-2"><?= h($item['tanggal_keluar'] ?? '-') ?></div>
-                                                        </div>
+                                                    </div>
+                                                    <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">
+                                                        <?= shippingBadge($item['status_pengiriman'] ?? '-') ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -654,4 +888,5 @@ $notifications = fetchAllAssoc($qNotifications);
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

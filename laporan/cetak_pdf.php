@@ -38,7 +38,7 @@ $singleId    = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $range = resolve_period_range($periode, $tahun, $bulan, '', $_GET['custom_awal']??'', $_GET['custom_akhir']??'');
 
 $sql = "
-    SELECT b.id, b.no_asset, b.serial_number, b.tanggal_kirim, b.user, b.bermasalah, b.keterangan_masalah,
+    SELECT b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.user, b.bermasalah, b.keterangan_masalah,
            tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
            bp.id_pengiriman, bp.tanggal_keluar, bp.tanggal_diterima, bp.status_pengiriman, bp.nomor_resi_keluar, bp.nama_penerima, bp.jasa_pengiriman,
            bpasal.nama_branch AS branch_asal_pengiriman, bptujuan.nama_branch AS branch_tujuan
@@ -50,7 +50,7 @@ $sql = "
     LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id
     LEFT JOIN tb_branch bpasal ON bpasal.id_branch = bp.branch_asal
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
-    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_kirim)) BETWEEN ? AND ?
+    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN ? AND ?
 ";
 if (!$isAdmin) { $sql .= " AND b.id_branch = $myBranchId "; }
 if ($singleId > 0) { $sql .= " AND b.id = $singleId "; }
@@ -195,7 +195,7 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
                 <div class="info-box">
                     <div style="font-weight: 800; margin-bottom: 5px;">Ringkasan Asset & Kondisi</div>
                     Cabang aktif: <b><?= h($asset['branch_aktif'] ?: '-') ?></b> | 
-                    Tanggal masuk: <b><?= h($asset['tanggal_kirim'] ?: '-') ?></b> | 
+                    Tanggal masuk: <b><?= h($asset['tanggal_terima'] ?: '-') ?></b> | 
                     Status: <b><?= h($asset['nama_status'] ?: '-') ?></b><br>
                     Kondisi Fisik: <b><?= ($asset['bermasalah'] === 'Iya' ? 'Bermasalah — ' . h($asset['keterangan_masalah']) : 'Kondisi Normal') ?></b>
                 </div>

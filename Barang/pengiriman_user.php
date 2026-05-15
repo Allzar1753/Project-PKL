@@ -192,7 +192,7 @@ $barangList = getBarangMasterOptions($koneksi);
 
         <div class="col-md-6">
             <label class="form-label">Tanggal Kirim</label>
-            <input type="date" name="tanggal_keluar" class="form-control" required value="<?= date('Y-m-d') ?>">
+            <input type="date" name="tanggal_keluar" class="form-control" required value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>">
         </div>
 
         <div class="col-md-6">

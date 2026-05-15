@@ -182,7 +182,7 @@ if (!function_exists('find_user_by_login')) {
         $sql = "
             SELECT id, username, email, password, role, id_branch, must_change_password
             FROM users
-            WHERE username = ? OR email = ?
+            WHERE BINARY username = ? OR BINARY email = ?
             LIMIT 1
         ";
 

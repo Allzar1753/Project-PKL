@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Cek apakah user dengan username + email tersebut ada
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id FROM users WHERE username = ? AND email = ? LIMIT 1"
+        "SELECT id FROM users WHERE BINARY username = ? AND BINARY email = ? LIMIT 1"
     );
 
     if (!$stmt) {

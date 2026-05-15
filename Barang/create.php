@@ -68,7 +68,6 @@ function ambilDetailBarangUntukEmail(mysqli $koneksi, int $idBarangBaru): ?array
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
 
-    // 'no_asset' dihapus dari required agar bisa kosong
     $required = [
         'id_barang',
         'id_merk',
@@ -78,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'tanggal_terima',
         'bermasalah',
         'id_branch',
-        'user'
+        'user' // Dikembalikan ke 'user' (input text manual)
     ];
 
     foreach ($required as $field) {
@@ -88,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $no_asset      = esc($koneksi, $_POST['no_asset']); // Bisa kosong
+    $no_asset      = esc($koneksi, $_POST['no_asset']); 
     $id_barang     = (int) $_POST['id_barang'];
     $id_merk       = (int) $_POST['id_merk'];
     $serial_number = esc($koneksi, $_POST['serial_number']);
@@ -102,7 +101,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
-    $user          = esc($koneksi, $_POST['user']);
+    $user          = esc($koneksi, $_POST['user']); // Inputan manual nama user
+
+    // Mengambil ID sistem admin yang sedang login untuk dicatat ke database
+    $user_id_sistem = (int) current_user_id(); 
 
     $keterangan_masalah = ($bermasalah === 'Iya') ? esc($koneksi, $_POST['keterangan_masalah'] ?? '') : null;
     if ($bermasalah === 'Iya' && empty($keterangan_masalah)) {
@@ -110,19 +112,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Ambil info nama barang input
     $getBarangInput = mysqli_query($koneksi, "SELECT nama_barang FROM tb_barang WHERE id_barang = $id_barang LIMIT 1");
     $dataBarangInput = mysqli_fetch_assoc($getBarangInput);
     $namaBarangInput = strtolower(trim($dataBarangInput['nama_barang']));
 
-    // 1. SERIAL NUMBER HARUS TETAP UNIK (Global)
     $cekSerial = mysqli_query($koneksi, "SELECT id FROM barang WHERE serial_number = '$serial_number' LIMIT 1");
     if (mysqli_num_rows($cekSerial) > 0) {
         echo json_encode(['status' => 'error', 'message' => 'Serial Number sudah terdaftar']);
         exit;
     }
 
-    // 2. LOGIKA NO ASSET (Hanya dijalankan jika No Asset diisi)
     if (!empty($no_asset)) {
         $barangPair = ['monitor', 'cpu'];
         $cekNoAsset = mysqli_query($koneksi, "
@@ -140,26 +139,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $namaBarangDb = strtolower(trim($row['nama_barang']));
                 $barangSudahAda[] = $namaBarangDb;
 
-                // Jika barang yang sama persis sudah ada di No Asset tersebut
                 if ($namaBarangDb === $namaBarangInput) {
                     echo json_encode(['status' => 'error', 'message' => "Barang '$namaBarangInput' sudah terdaftar pada No Asset ini"]);
                     exit;
                 }
 
-                // Jika di database ada barang yang BUKAN monitor/cpu menggunakan No Asset ini
                 if (!in_array($namaBarangDb, $barangPair, true)) {
                     echo json_encode(['status' => 'error', 'message' => 'No Asset sudah digunakan oleh perangkat lain']);
                     exit;
                 }
             }
 
-            // Jika barang yang sedang diinput bukan Monitor/CPU tapi mencoba pakai No Asset yang sudah ada isinya
             if (!$inputAdalahPair) {
                 echo json_encode(['status' => 'error', 'message' => 'No Asset sudah terdaftar']);
                 exit;
             }
 
-            // Jika sudah ada 2 jenis barang (sudah lengkap Monitor + CPU)
             if (count(array_unique($barangSudahAda)) >= 2) {
                 echo json_encode(['status' => 'error', 'message' => 'No Asset ini sudah lengkap (Monitor & CPU)']);
                 exit;
@@ -167,7 +162,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Upload Foto
     $uploadFoto = uploadImage('foto');
     if ($uploadFoto['status'] === 'error') {
         echo json_encode(['status' => 'error', 'message' => $uploadFoto['message']]);
@@ -177,8 +171,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $foto = ($uploadFoto['status'] === 'success') ? $uploadFoto['filename'] : null;
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
 
-    $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`) 
-                    VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user')";
+    // INSERT otomatis memasukkan $user_id_sistem ke database walau tidak ada di form
+    $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id) 
+                    VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem')";
 
     mysqli_begin_transaction($koneksi);
     try {
@@ -186,7 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idBarangBaru = (int) mysqli_insert_id($koneksi);
         mysqli_commit($koneksi);
 
-        // Kirim Email
         $detailBarang = ambilDetailBarangUntukEmail($koneksi, $idBarangBaru);
         if ($detailBarang) {
             $fotoPath = (!empty($detailBarang['foto']) && is_file(__DIR__ . '/../assets/images/' . $detailBarang['foto'])) ? __DIR__ . '/../assets/images/' . $detailBarang['foto'] : null;
@@ -218,7 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label>No Asset</label>
-            <!-- Diubah: Required dihapus, placeholder diupdate -->
             <input type="text" name="no_asset" class="form-control" placeholder="Boleh dikosongkan">
         </div>
 
@@ -283,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>User <span class="text-danger">*</span></label>
+            <label>User Pengguna <span class="text-danger">*</span></label>
             <input type="text" name="user" class="form-control" required placeholder="User pengguna">
         </div>
 
@@ -320,7 +313,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script>
     $(document).ready(function() {
-        // Handle input bermasalah
         $('#bermasalahSelect').on('change', function() {
             if ($(this).val() === 'Iya') {
                 $('#keteranganMasalahDiv').slideDown();
@@ -331,7 +323,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
 
-        // Preview Foto
         $('#fotoInput').change(function() {
             if (!this.files || !this.files[0]) return;
             let reader = new FileReader();

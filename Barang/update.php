@@ -27,50 +27,30 @@ function uploadImage(string $fieldName, string $targetDir = "../assets/images/")
     if (!isset($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
         return ['status' => 'empty', 'filename' => ''];
     }
-
     $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
-
     if (!in_array($ext, $allowed, true)) {
         return ['status' => 'error', 'message' => "Format file {$fieldName} tidak diperbolehkan"];
     }
-
     if ($_FILES[$fieldName]['size'] > 2000000) {
         return ['status' => 'error', 'message' => "Ukuran file {$fieldName} maksimal 2MB"];
     }
-
-    if (!is_dir($targetDir)) {
-        mkdir($targetDir, 0777, true);
-    }
-
+    if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
     $filename = uniqid($fieldName . "_", true) . "." . $ext;
-
     if (!move_uploaded_file($_FILES[$fieldName]['tmp_name'], $targetDir . $filename)) {
         return ['status' => 'error', 'message' => "Gagal upload file {$fieldName}"];
     }
-
     return ['status' => 'success', 'filename' => $filename];
 }
 
 function jsonResponse(string $status, string $message): void
 {
     header('Content-Type: application/json');
-    echo json_encode([
-        'status' => $status,
-        'message' => $message
-    ]);
+    echo json_encode(['status' => $status, 'message' => $message]);
     exit;
 }
-
-function jsonError(string $message): void
-{
-    jsonResponse('error', $message);
-}
-
-function jsonSuccess(string $message): void
-{
-    jsonResponse('success', $message);
-}
+function jsonError(string $message): void { jsonResponse('error', $message); }
+function jsonSuccess(string $message): void { jsonResponse('success', $message); }
 
 function getBarangById(mysqli $koneksi, int $id): ?array
 {
@@ -80,7 +60,6 @@ function getBarangById(mysqli $koneksi, int $id): ?array
     $result = mysqli_stmt_get_result($stmt);
     $row = mysqli_fetch_assoc($result) ?: null;
     mysqli_stmt_close($stmt);
-
     return $row;
 }
 
@@ -88,24 +67,17 @@ function getLastPengiriman(mysqli $koneksi, int $idBarang): ?array
 {
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT
-            bp.*,
-            asal.nama_branch AS nama_branch_asal,
-            tujuan.nama_branch AS nama_branch_tujuan
+        "SELECT bp.*, asal.nama_branch AS nama_branch_asal, tujuan.nama_branch AS nama_branch_tujuan
          FROM barang_pengiriman bp
          LEFT JOIN tb_branch asal ON bp.branch_asal = asal.id_branch
          LEFT JOIN tb_branch tujuan ON bp.branch_tujuan = tujuan.id_branch
-         WHERE bp.id_barang = ?
-         ORDER BY bp.id_pengiriman DESC
-         LIMIT 1"
+         WHERE bp.id_barang = ? ORDER BY bp.id_pengiriman DESC LIMIT 1"
     );
-
     mysqli_stmt_bind_param($stmt, 'i', $idBarang);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $row = mysqli_fetch_assoc($result) ?: null;
     mysqli_stmt_close($stmt);
-
     return $row;
 }
 
@@ -113,83 +85,50 @@ function getSelectOptions(mysqli $koneksi, string $sql): array
 {
     $rows = [];
     $query = mysqli_query($koneksi, $sql);
-    if (!$query) {
-        return $rows;
-    }
-    while ($row = mysqli_fetch_assoc($query)) {
-        $rows[] = $row;
-    }
+    if (!$query) return $rows;
+    while ($row = mysqli_fetch_assoc($query)) $rows[] = $row;
     return $rows;
 }
 
 function ensureBarangAccess(array $barang, ?array $pengirimanTerakhir): void
 {
-    if (is_admin()) {
-        return;
-    }
-
+    if (is_admin()) return;
     $myBranchId = (int) current_user_branch_id();
     $barangBranchId = (int) ($barang['id_branch'] ?? 0);
     $branchTujuan = (int) ($pengirimanTerakhir['branch_tujuan'] ?? 0);
     $statusPengiriman = (string) ($pengirimanTerakhir['status_pengiriman'] ?? '');
-
     $sedangDikirim = !empty($pengirimanTerakhir) && $statusPengiriman !== STATUS_SUDAH_DITERIMA;
-
-    if ($barangBranchId === $myBranchId) {
-        return;
-    }
-
-    if ($sedangDikirim && $branchTujuan === $myBranchId) {
-        return;
-    }
-
+    
+    if ($barangBranchId === $myBranchId) return;
+    if ($sedangDikirim && $branchTujuan === $myBranchId) return;
     http_response_code(403);
     exit('Anda tidak boleh mengakses barang cabang lain.');
 }
 
 function isSedangDikirim(?array $pengirimanTerakhir): bool
 {
-    if (empty($pengirimanTerakhir)) {
-        return false;
-    }
-    return (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') !== STATUS_SUDAH_DITERIMA;
+    return (!empty($pengirimanTerakhir) && (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') !== STATUS_SUDAH_DITERIMA);
 }
 
 function isSudahDiterima(?array $pengirimanTerakhir): bool
 {
-    if (empty($pengirimanTerakhir)) {
-        return false;
-    }
-    return (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') === STATUS_SUDAH_DITERIMA;
+    return (!empty($pengirimanTerakhir) && (string) ($pengirimanTerakhir['status_pengiriman'] ?? '') === STATUS_SUDAH_DITERIMA);
 }
 
 function ensureUserCanReceive(?array $pengirimanTerakhir): void
 {
-    if (is_admin()) {
-        return;
-    }
-
+    if (is_admin()) return;
     $myBranchId = (int) current_user_branch_id();
     $branchTujuan = (int) ($pengirimanTerakhir['branch_tujuan'] ?? 0);
-
     if (!$pengirimanTerakhir || !isSedangDikirim($pengirimanTerakhir) || $branchTujuan !== $myBranchId) {
         http_response_code(403);
         exit('User cabang hanya boleh konfirmasi penerimaan barang untuk branch-nya sendiri.');
     }
 }
 
-// FUNGSI VALIDASI DUPLIKAT
 function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, string $serialNumber): ?string
 {
-    $stmtCurrent = mysqli_prepare(
-        $koneksi,
-        "SELECT tb.nama_barang
-         FROM barang b
-         INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang
-         WHERE b.id = ?
-         LIMIT 1"
-    );
-
+    $stmtCurrent = mysqli_prepare($koneksi, "SELECT tb.nama_barang FROM barang b INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE b.id = ? LIMIT 1");
     mysqli_stmt_bind_param($stmtCurrent, 'i', $id);
     mysqli_stmt_execute($stmtCurrent);
     $resultCurrent = mysqli_stmt_get_result($stmtCurrent);
@@ -211,13 +150,7 @@ function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, stri
     if ($serialDuplikat) return "Serial Number sudah digunakan oleh data lain.";
 
     if (!empty($noAsset)) {
-        $stmtAsset = mysqli_prepare(
-            $koneksi,
-            "SELECT b.id, b.no_asset, tb.nama_barang
-            FROM barang b 
-            INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang 
-            WHERE b.no_asset = ? AND b.id != ?"
-        );
+        $stmtAsset = mysqli_prepare($koneksi, "SELECT b.id, b.no_asset, tb.nama_barang FROM barang b INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE b.no_asset = ? AND b.id != ?");
         mysqli_stmt_bind_param($stmtAsset, 'si', $noAsset, $id);
         mysqli_stmt_execute($stmtAsset);
         $resultAsset = mysqli_stmt_get_result($stmtAsset);
@@ -329,10 +262,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <?php endforeach; ?>
                     </select>
                 </div>
+                
                 <div class="col-md-6">
                     <label class="form-label">User Pengguna<span class="text-danger">*</span></label>
-                    <input type="text" name="user" class="form-control" value="<?= h($barang['user'] ?? '') ?>">
+                    <input type="text" name="user" class="form-control" value="<?= h($barang['user'] ?? '') ?>" required>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Status Bermasalah<span class="text-danger">*</span></label>
                     <select name="bermasalah" class="form-control">
@@ -467,11 +402,16 @@ if ($formType === 'penerimaan') {
 
     $upload = uploadImage('foto');
     $fotoBaru = $upload['status'] === 'success' ? $upload['filename'] : null;
+    
+    // Mendapatkan ID user yang sedang login untuk dicatat sebagai Updater
+    $user_id_sistem = (int) current_user_id();
 
     mysqli_begin_transaction($koneksi);
     try {
-        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, bermasalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
-        mysqli_stmt_bind_param($stmt, 'ssiiiisssi', $noAsset, $serialNumber, $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['bermasalah'], $_POST['tanggal_terima'], $fotoBaru, $id);
+        // Query UPDATE otomatis memasukkan user_id sistem dan user manual
+        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
+        // s=string, i=int. Total 12 variabel -> ssiiiisissii
+        mysqli_stmt_bind_param($stmt, 'ssiiiisissii', $noAsset, $serialNumber, $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem, $_POST['bermasalah'], $_POST['tanggal_terima'], $fotoBaru, $id);
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
         jsonSuccess("Data berhasil diupdate.");

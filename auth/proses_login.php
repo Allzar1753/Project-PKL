@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Cek user berdasarkan username ATAU email
-    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1");
+    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE BINARY username = ? OR BINARY email = ? LIMIT 1");
     mysqli_stmt_bind_param($stmt, 'ss', $login, $login);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);

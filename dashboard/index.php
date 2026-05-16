@@ -1,19 +1,24 @@
 <?php
 
-/** @var mysqli $koneksi */ //
+/** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
 
+// Cek Permission
 require_permission($koneksi, 'dashboard.view');
 
 $isAdmin = is_admin();
-$myBranchId = current_user_branch_id();
+$myBranchId = (int) current_user_branch_id();
 
-if (!$isAdmin && (!$myBranchId || $myBranchId <= 0)) {
+// Proteksi Awal
+if ($myBranchId <= 0) {
     http_response_code(403);
-    exit('Branch user belum ditentukan.');
+    exit('Error: ID Branch user tidak ditemukan dalam sistem.');
 }
 
+// ==============================================================================
+// FUNGSI HELPER (PENTING: Jangan Dihapus agar tidak error)
+// ==============================================================================
 function h($value): string
 {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
@@ -23,21 +28,19 @@ function shippingBadge(string $status): string
 {
     $class = 'bg-secondary';
     $icon  = 'bi-clock';
-
     $statusLower = strtolower(trim($status));
 
-    if ($statusLower === 'menunggu persetujuan admin' || $statusLower === 'sedang dikemas') {
+    if (in_array($statusLower, ['menunggu persetujuan admin', 'sedang dikemas'])) {
         $class = 'bg-warning text-dark';
         $icon  = 'bi-hourglass-split';
     } elseif ($statusLower === 'sedang perjalanan') {
         $class = 'bg-primary';
         $icon  = 'bi-truck';
-    } elseif ($statusLower === 'sudah diterima' || $statusLower === 'sudah diterima ho') {
+    } elseif (in_array($statusLower, ['sudah diterima', 'sudah diterima ho'])) {
         $class = 'bg-success';
         $icon  = 'bi-check-circle';
     }
-
-    return '<span class="badge rounded-pill text-wrap text-start ' . $class . '" style="line-height: 1.4;"><i class="bi ' . $icon . ' me-1 mb-1"></i>' . h($status) . '</span>';
+    return '<span class="badge rounded-pill ' . $class . '" style="line-height: 1.4;"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
 }
 
 function barangBadge(string $bermasalah): string
@@ -46,6 +49,14 @@ function barangBadge(string $bermasalah): string
         return '<span class="badge rounded-pill bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
     }
     return '<span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
+}
+
+function fetchSingleValue(mysqli $koneksi, string $sql): int
+{
+    $query = mysqli_query($koneksi, $sql);
+    if (!$query) return 0;
+    $row = mysqli_fetch_assoc($query);
+    return (int) ($row['total'] ?? 0);
 }
 
 function fetchAllAssoc($query): array
@@ -59,164 +70,119 @@ function fetchAllAssoc($query): array
     return $rows;
 }
 
-function fetchSingleValue(mysqli $koneksi, string $sql, string $field = 'total'): int
+function fetchBranchName(mysqli $koneksi, int $id): string
 {
-    $query = mysqli_query($koneksi, $sql);
-    if (!$query) return 0;
-    $row = mysqli_fetch_assoc($query) ?: [];
-    return (int) ($row[$field] ?? 0);
-}
-
-function fetchBranchName(mysqli $koneksi, ?int $branchId): string
-{
-    $branchId = (int) $branchId;
-    if ($branchId <= 0) return '-';
-    $stmt = mysqli_prepare($koneksi, "SELECT nama_branch FROM tb_branch WHERE id_branch = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, 'i', $branchId);
+    $stmt = mysqli_prepare($koneksi, "SELECT nama_branch FROM tb_branch WHERE id_branch = ?");
+    mysqli_stmt_bind_param($stmt, 'i', $id);
     mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $row = mysqli_fetch_assoc($result) ?: null;
-    mysqli_stmt_close($stmt);
-    return $row['nama_branch'] ?? '-';
+    $res = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($res);
+    return $row['nama_branch'] ?? 'Unknown';
 }
 
-$previewLimit = 3;
+// ==============================================================================
+// 1. LOGIKA ANGKA WIDGET (FILTER PER CABANG LOGIN)
+// ==============================================================================
 
-// ==============================================================================
-// 1. LOGIKA UNTUK ANGKA WIDGET (KOTAK ATAS)
-// ==============================================================================
+// Total Inventaris di lokasi user sekarang
+$totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId");
+
+// Total Masuk (Barang yang sampai di lokasi user)
 if ($isAdmin) {
-    // ADMIN (HO) VIEW
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang");
     $totalMasuk = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
-    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
-    $totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE bermasalah = 'Iya'");
+} else {
+    $totalMasuk = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
+}
+
+// Total Keluar (Barang yang dikirim dari lokasi user)
+if ($isAdmin) {
+    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_asal = $myBranchId");
+} else {
+    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
+}
+
+// Total Bermasalah di lokasi user
+$totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId AND bermasalah = 'Iya'");
+
+// Total Pending (Barang yang sedang otw ke lokasi user)
+if ($isAdmin) {
     $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Menunggu persetujuan admin'");
 } else {
-    // USER (CABANG) VIEW
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = " . (int)$myBranchId);
-    $totalMasuk = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = " . (int)$myBranchId . " AND status_pengiriman = 'Sudah diterima'");
-    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = " . (int)$myBranchId);
-    $totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = " . (int)$myBranchId . " AND bermasalah = 'Iya'");
-    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = " . (int)$myBranchId . " AND status_pengiriman = 'Sedang perjalanan'");
+    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sedang perjalanan'");
 }
 
 // ==============================================================================
-// 2. LOGIKA UNTUK DAFTAR AKTIVITAS (CARD DI BAWAH)
+// 2. LOGIKA LIST AKTIVITAS
 // ==============================================================================
+$previewLimit = 3;
 
-// --- KOTAK BARANG MASUK ---
+// --- Masuk Terbaru ---
 if ($isAdmin) {
-    $qBarangMasukTerbaru = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman_ho AS id, p.serial_number, p.tanggal_pengajuan AS tanggal_kirim, p.pemilik_barang AS user, 
-               tb.nama_barang, asal.nama_branch AS nama_branch_aktif
-        FROM pengiriman_cabang_ho p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch asal ON p.branch_asal = asal.id_branch
-        WHERE p.status_pengiriman = 'Sudah diterima HO'
-        ORDER BY p.id_pengiriman_ho DESC LIMIT 15
-    ");
+    $qMasuk = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_kirim, tb.nama_barang, br.nama_branch AS nama_branch_aktif
+               FROM pengiriman_cabang_ho p
+               LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
+               LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
+               WHERE p.status_pengiriman = 'Sudah diterima HO' ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
 } else {
-    $qBarangMasukTerbaru = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman AS id, p.tanggal_keluar AS tanggal_kirim, 
-               tb.nama_barang, asal.nama_branch AS nama_branch_aktif, p.nomor_resi_keluar
-        FROM barang_pengiriman p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch asal ON p.branch_asal = asal.id_branch
-        WHERE p.branch_tujuan = '{$myBranchId}' AND p.status_pengiriman = 'Sudah diterima'
-        ORDER BY p.id_pengiriman DESC LIMIT 15
-    ");
+    $qMasuk = "SELECT p.id_pengiriman AS id, p.tanggal_keluar AS tanggal_kirim, tb.nama_barang, br.nama_branch AS nama_branch_aktif
+               FROM barang_pengiriman p
+               LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
+               LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
+               WHERE p.branch_tujuan = $myBranchId AND p.status_pengiriman = 'Sudah diterima' ORDER BY p.id_pengiriman DESC LIMIT 15";
 }
-$barangMasukTerbaru = fetchAllAssoc($qBarangMasukTerbaru);
+$barangMasukTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qMasuk));
 
-
-// --- KOTAK BARANG KELUAR ---
+// --- Keluar Terbaru ---
 if ($isAdmin) {
-    $qBarangKeluarTerbaru = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
-               tb.nama_barang, tujuan.nama_branch AS nama_branch_tujuan
-        FROM barang_pengiriman p
-        INNER JOIN barang b ON p.id_barang = b.id 
-        INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang 
-        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch ORDER BY p.id_pengiriman DESC LIMIT 15
-    ");
+    $qKeluar = "SELECT p.id_pengiriman, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_tujuan
+                FROM barang_pengiriman p
+                LEFT JOIN barang b ON p.id_barang = b.id
+                LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
+                LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch
+                WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman DESC LIMIT 15";
 } else {
-    $qBarangKeluarTerbaru = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman_ho AS id, p.serial_number, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
-               tb.nama_barang, tujuan.nama_branch AS nama_branch_tujuan
-        FROM pengiriman_cabang_ho p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch
-        WHERE p.branch_asal = '{$myBranchId}'
-        ORDER BY p.id_pengiriman_ho DESC LIMIT 15
-    ");
+    $qKeluar = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, 'Kantor Pusat' AS nama_branch_tujuan
+                FROM pengiriman_cabang_ho p
+                LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
+                WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
 }
-$barangKeluarTerbaru = fetchAllAssoc($qBarangKeluarTerbaru);
+$barangKeluarTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qKeluar));
 
+// --- Bermasalah ---
+$qBermasalah = "SELECT b.id, b.serial_number, b.keterangan_masalah, tb.nama_barang, br.nama_branch AS nama_branch_aktif
+                FROM barang b
+                LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
+                LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
+                WHERE b.id_branch = $myBranchId AND b.bermasalah = 'Iya' ORDER BY b.id DESC LIMIT 15";
+$barangBermasalah = fetchAllAssoc(mysqli_query($koneksi, $qBermasalah));
 
-// --- KOTAK BARANG BERMASALAH (Logika Sama, Beda WHERE) ---
-$whereBermasalah = $isAdmin ? "1=1" : "b.id_branch = '{$myBranchId}'";
-$qBarangBermasalah = mysqli_query($koneksi, "
-    SELECT b.id, b.no_asset, b.serial_number, b.keterangan_masalah, b.user, 
-           tb.nama_barang, m.nama_merk, br.nama_branch AS nama_branch_aktif
-    FROM barang b
-    LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-    LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
-    LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
-    WHERE {$whereBermasalah} AND b.bermasalah = 'Iya'
-    ORDER BY b.id DESC LIMIT 15
-");
-$barangBermasalah = fetchAllAssoc($qBarangBermasalah);
-
-
-// --- KOTAK BELUM DITERIMA ---
+// --- Belum Diterima ---
 if ($isAdmin) {
-    $qPengirimanBelumDiterima = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman_ho AS id, p.serial_number, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
-               tb.nama_barang, asal.nama_branch AS nama_branch_asal, tujuan.nama_branch AS nama_branch_tujuan
-        FROM pengiriman_cabang_ho p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch asal ON p.branch_asal = asal.id_branch
-        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch
-        WHERE p.status_pengiriman = 'Menunggu persetujuan admin'
-        ORDER BY p.id_pengiriman_ho DESC LIMIT 15
-    ");
+    $qTransit = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, tb.nama_barang, br.nama_branch AS nama_branch_asal, 'Kantor Pusat' AS nama_branch_tujuan
+                 FROM pengiriman_cabang_ho p
+                 LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
+                 LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
+                 WHERE p.status_pengiriman = 'Menunggu persetujuan admin' ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
 } else {
-    $qPengirimanBelumDiterima = mysqli_query($koneksi, "
-        SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, 
-               tb.nama_barang, asal.nama_branch AS nama_branch_asal, tujuan.nama_branch AS nama_branch_tujuan
-        FROM barang_pengiriman p
-        LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-        LEFT JOIN tb_branch asal ON p.branch_asal = asal.id_branch
-        LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch
-        WHERE p.branch_tujuan = '{$myBranchId}' AND p.status_pengiriman = 'Sedang perjalanan'
-        ORDER BY p.id_pengiriman DESC LIMIT 15
-    ");
+    $qTransit = "SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_asal, 'Cabang Saya' AS nama_branch_tujuan
+                 FROM barang_pengiriman p
+                 LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
+                 LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
+                 WHERE p.branch_tujuan = $myBranchId AND p.status_pengiriman = 'Sedang perjalanan' ORDER BY p.id_pengiriman DESC LIMIT 15";
 }
-$pengirimanBelumDiterima = fetchAllAssoc($qPengirimanBelumDiterima);
+$pengirimanBelumDiterima = fetchAllAssoc(mysqli_query($koneksi, $qTransit));
 
-// Set View Properties
-$roleLabel = is_admin() ? 'Administrator' : 'User';
-$branchLabel = $isAdmin ? 'Semua Cabang' : fetchBranchName($koneksi, $myBranchId);
+// Data View
+$roleLabel = $isAdmin ? 'Administrator HO' : 'Staff Cabang';
+$branchLabel = fetchBranchName($koneksi, $myBranchId);
 $usernameLabel = (string) (current_user()['username'] ?? 'User');
-$heroTitle = $isAdmin
-    ? 'Dashboard IT Asset Management'
-    : ('Selamat datang ' . $usernameLabel . ' dari cabang ' . $branchLabel);
+$heroTitle = "Selamat Datang, " . $usernameLabel;
 
-$notifWhere = "target_role = '" . mysqli_real_escape_string($koneksi, (string) current_role()) . "'";
-if (!$isAdmin) {
-    $notifWhere .= " AND (target_branch_id IS NULL OR target_branch_id = " . (int) $myBranchId . ")";
-}
-$qNotifications = mysqli_query($koneksi, "
-    SELECT id, title, message, link, created_at
-    FROM system_notifications
-    WHERE {$notifWhere}
-      AND is_read = 0
-    ORDER BY id DESC
-    LIMIT 3
-");
+// Notifikasi (Opsional)
+$qNotifications = mysqli_query($koneksi, "SELECT * FROM system_notifications WHERE target_role = '" . current_role() . "' AND is_read = 0 LIMIT 3");
 $notifications = fetchAllAssoc($qNotifications);
 ?>
+
 <!DOCTYPE html>
 <html lang="id">
 

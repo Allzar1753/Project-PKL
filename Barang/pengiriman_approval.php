@@ -115,6 +115,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // --- LOGIKA OTOMATISASI PINDAH INVENTARIS ---
+        $stmtGetSN = mysqli_prepare($koneksi, "SELECT serial_number FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ?");
+        mysqli_stmt_bind_param($stmtGetSN, 'i', $idPengiriman);
+        mysqli_stmt_execute($stmtGetSN);
+        $resSN = mysqli_stmt_get_result($stmtGetSN);
+        $dataSN = mysqli_fetch_assoc($resSN);
+
+        if ($dataSN) {
+            $sn = $dataSN['serial_number'];
+
+            $queryUpdateBarang = "UPDATE barang SET 
+        id_branch = ?, 
+        status = 'Tersedia', 
+        user = 'Pusat HO (Dalam Perbaikan)' 
+        WHERE serial_number = ?";
+
+            $stmtUpdate = mysqli_prepare($koneksi, $queryUpdateBarang);
+            mysqli_stmt_bind_param($stmtUpdate, 'is', $jakartaBranchId, $sn);
+            mysqli_stmt_execute($stmtUpdate);
+        }
+
         mysqli_commit($koneksi);
         jsonOut(['status' => 'success', 'message' => 'Barang dari cabang sudah dikonfirmasi diterima HO. Notifikasi dikirim ke user cabang.']);
     } catch (Throwable $e) {

@@ -68,9 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // 3. Simpan ke Database
     $queryBarang = "INSERT INTO barang 
-        (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, id_status, id_branch, foto, `user`, user_id) 
+        (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, id_status, id_branch, foto, `user`, user_id, status) 
         VALUES 
-        ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', '$id_status', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem')";
+        ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', '$id_status', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem', 'Tersedia')";
 
     if (mysqli_query($koneksi, $queryBarang)) {
         jsonResponse('success', 'Aset baru berhasil ditambahkan ke inventaris cabang Anda.');

@@ -96,9 +96,6 @@ if ($searchInput !== '') {
 // LOGIKA SUMMARY CARD & QUERY DATA
 // =========================================================================
 
-// [REVISI ALUR]: Pengecualian Stok Tersedia
-// Admin: Sembunyikan barang dari tampilan Stok Tersedia jika statusnya sedang dikirim / sudah diterima cabang.
-// Barang ini sekarang menjadi "Riwayat Abadi" yang hanya tampil di tab Logistik Keluar.
 if ($isAdmin) {
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman IN ('Sedang perjalanan', 'Sudah diterima')) ";
 } else {
@@ -108,7 +105,7 @@ if ($isAdmin) {
 $stokAktifSql = " AND barang.status = 'Tersedia' ";
 
 if ($isAdmin) {
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE 1=1 $excludeTransitSql $stokAktifSql");
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
@@ -152,10 +149,11 @@ if ($filter === 'keluar') {
                      WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     }
 } else {
-    $whereLokasi = $isAdmin ? "1=1" : "barang.id_branch = $myBranchId";
-    $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, barang.user, barang.keterangan_masalah,
-                        tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
-                 FROM barang
+    $whereLokasi = "barang.id_branch = $myBranchId";
+
+    $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, barang.user, barang.keterangan_masalah, barang.status,
+                    tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
+             FROM barang
                  JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
                  LEFT JOIN tb_merk m ON barang.id_merk = m.id_merk
                  LEFT JOIN tb_tipe t ON barang.id_tipe = t.id_tipe
@@ -721,11 +719,14 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     <td class="text-center pe-4">
                                                         <div class="action-group">
                                                             <?php if ($isAdmin): ?>
+                                                                <!-- Admin HO punya akses penuh untuk edit/delete barang yang ada di HO -->
                                                                 <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-info btn-sm text-white btnLogistik" data-id="<?= $data['id'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>"><i class="bi bi-truck"></i></button>
                                                                 <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>"><i class="bi bi-trash"></i></button>
                                                             <?php else: ?>
-                                                                <span class="badge bg-success-subtle text-success">Aktif</span>
+                                                                <!-- User Cabang hanya bisa edit jika barang memang masih di tangan mereka (Tersedia) -->
+                                                                <!-- Logika ini otomatis aman karena query utama User hanya menarik id_branch mereka sendiri -->
+                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>"><i class="bi bi-pencil-fill"></i></button>
+                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>"><i class="bi bi-trash"></i></button>
                                                             <?php endif; ?>
                                                         </div>
                                                     </td>
@@ -897,13 +898,22 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             new bootstrap.Modal('#modalFoto').show();
         });
 
-        // Edit Master Data
+        // Edit Master Data (Admin & User)
         $(document).on('click', '.btnEditMaster', function() {
             const id = $(this).data('id');
-            $('#modalUpdateTitle').text('Update Data Barang Master');
+
+            <?php if (is_admin()): ?>
+                const targetUrl = 'update.php';
+                $('#modalUpdateTitle').text('Update Data Barang Master');
+            <?php else: ?>
+                const targetUrl = 'update_cabang.php';
+                $('#modalUpdateTitle').text('Edit Data Aset Cabang');
+            <?php endif; ?>
+
             $('#contentUpdate').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
             bootstrap.Modal.getOrCreateInstance('#modalUpdate').show();
-            $.get('update.php', {
+
+            $.get(targetUrl, {
                 id: id,
                 type: 'master'
             }, function(html) {
@@ -939,7 +949,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         });
 
         // Submit Forms via AJAX
-        $(document).on('submit', '#formCreate, #formUpdate, #formPengirimanUser, #formTerimaCabang, #formCreateCabang', function(e) {
+        $(document).on('submit', '#formCreate, #formUpdate, #formPengirimanUser, #formTerimaCabang, #formCreateCabang, #formUpdateCabang', function(e) {
             e.preventDefault();
             const $form = $(this);
             const $btn = $form.find('button[type="submit"]');

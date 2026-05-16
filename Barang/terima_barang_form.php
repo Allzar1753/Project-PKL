@@ -1,9 +1,13 @@
 <?php
+
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
+require_once '../config/auth.php';
 
 $id_pengiriman = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $resi_keluar = '';
+
+$nama_user_login = $_SESSION['username'] ?? 'Nama User Tidak Terbaca';
 
 // Ambil nomor resi keluar dari database
 if ($id_pengiriman > 0) {
@@ -34,12 +38,13 @@ if ($id_pengiriman > 0) {
         line-height: 1.5;
         margin-bottom: 1.5rem;
     }
+
     .alert-custom i {
         font-size: 1.4rem;
         color: #ff7a00;
         margin-top: -2px;
     }
-    
+
     .form-label-custom {
         font-size: 0.8rem;
         font-weight: 800;
@@ -49,10 +54,10 @@ if ($id_pengiriman > 0) {
         margin-bottom: 6px;
         display: block;
     }
-    
+
     /* Ubah warna bintang wajib isi jadi orange pekat */
     .asterisk-orange {
-        color: #ea580c; 
+        color: #ea580c;
     }
 
     .form-control-custom {
@@ -64,13 +69,13 @@ if ($id_pengiriman > 0) {
         transition: all 0.2s ease;
         background-color: #fff;
     }
-    
+
     .form-control-custom:focus {
         border-color: #ff9800;
         box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.15);
         outline: none;
     }
-    
+
     .form-control-readonly {
         background-color: #fffaf5;
         border: 1px dashed #ffb000;
@@ -81,7 +86,8 @@ if ($id_pengiriman > 0) {
 
     .form-text-custom {
         font-size: 0.8rem;
-        color: #8b5cf6; /* Warna ikon note sedikit redup */
+        color: #8b5cf6;
+        /* Warna ikon note sedikit redup */
         color: #9a5410;
         margin-top: 6px;
         display: flex;
@@ -117,7 +123,7 @@ if ($id_pengiriman > 0) {
 <form id="formTerimaCabang" enctype="multipart/form-data">
     <!-- Input hidden untuk ID Pengiriman -->
     <input type="hidden" name="id_pengiriman" value="<?= $id_pengiriman ?>">
-    
+
     <!-- Custom Alert Warning Orange -->
     <div class="alert-custom">
         <i class="bi bi-exclamation-circle-fill"></i>
@@ -129,10 +135,13 @@ if ($id_pengiriman > 0) {
             <label class="form-label-custom">Tanggal Diterima <span class="asterisk-orange">*</span></label>
             <input type="date" name="tanggal_diterima" class="form-control form-control-custom" required value="<?= date('Y-m-d') ?>">
         </div>
-        
+
         <div class="col-md-6">
             <label class="form-label-custom">Nama Penerima <span class="asterisk-orange">*</span></label>
-            <input type="text" name="nama_penerima" class="form-control form-control-custom" required placeholder="Wajib diisi!">
+            <input type="text" name="nama_penerima" class="form-control form-control-custom form-control-readonly"
+                value="<?= htmlspecialchars($nama_user_login, ENT_QUOTES, 'UTF-8') ?>"
+                readonly required>
+            <small class="text-muted" style="font-size: 0.7rem;">Otomatis sesuai akun login.</small>
         </div>
     </div>
 

@@ -92,6 +92,7 @@ if ($searchInput !== '') {
     $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%') ";
 }
 
+
 // =========================================================================
 // LOGIKA SUMMARY CARD & QUERY DATA
 // =========================================================================
@@ -102,22 +103,22 @@ if ($isAdmin) {
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
 }
 
-$stokAktifSql = " AND barang.status = 'Tersedia' ";
+$stokAktifSql = $isAdmin ? " AND (barang.status = 'Tersedia' OR barang.status = 'Bermasalah') " : " AND barang.status = 'Tersedia' ";
 
 if ($isAdmin) {
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
+    $whereLokasi = " 1=1 ";
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE 1=1 $excludeTransitSql $stokAktifSql");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
+    $whereLokasi = "barang.id_branch = $myBranchId";
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
 }
 
-// Menentukan Query Berdasarkan Filter
 if ($filter === 'keluar') {
     if ($isAdmin) {
-        // [REVISI ALUR]: Tambahkan b.id AS id_barang & b.bermasalah agar tombol Pop-up Logistik bisa melempar ID dengan benar di tabel ini
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
                             b.id AS id_barang, b.bermasalah, b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
                      FROM barang_pengiriman p
@@ -149,8 +150,6 @@ if ($filter === 'keluar') {
                      WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     }
 } else {
-    $whereLokasi = "barang.id_branch = $myBranchId";
-
     $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, barang.user, barang.keterangan_masalah, barang.status,
                     tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
              FROM barang
@@ -162,6 +161,7 @@ if ($filter === 'keluar') {
                  WHERE $whereLokasi $excludeTransitSql $stokAktifSql $searchSql_barang 
                  ORDER BY barang.id DESC";
 }
+
 
 // Pagination Logic
 $countQuery = "SELECT COUNT(*) AS total FROM ($querySql) AS sub";
@@ -235,23 +235,69 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             position: relative;
             overflow: hidden;
             border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(255, 122, 0, 0.96) 100%);
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
-            padding: 1.8rem;
-            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #111111 0%, #ff7a00 100%);
+            /* Gradien Gelap ke Oranye */
+            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.25);
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
         }
 
         .page-title {
             color: #fff;
-            font-size: 1.8rem;
+            font-size: 2.2rem;
             font-weight: 800;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.03em;
+            margin-bottom: 0.5rem;
         }
 
         .page-desc {
-            color: rgba(255, 255, 255, 0.84);
-            font-size: .94rem;
-            max-width: 700px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            max-width: 600px;
+            margin-bottom: 0;
+        }
+
+        .btn-header-light {
+            background: #fff;
+            color: #111;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-header-light:hover {
+            transform: translateY(-3px);
+            background: #f8f9fa;
+            color: #000;
+        }
+
+        .btn-header-dark {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 0.75rem 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-header-dark:hover {
+            transform: translateY(-3px);
+            background: #000;
+            color: #fff;
         }
 
         .btn-add-item {
@@ -501,30 +547,33 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 
                 <div class="page-shell">
 
-                    <!-- Header Hero -->
+                    <!-- Header Hero Modern -->
                     <div class="page-hero">
-                        <div class="hero-content d-flex justify-content-between align-items-center flex-wrap gap-3">
-                            <div>
+                        <div class="hero-text">
+                            <?php if ($isAdmin): ?>
                                 <h1 class="page-title">Peralatan & Asset IT</h1>
-                                <p class="page-desc">Kelola inventaris, lacak pengiriman antar cabang, dan pantau status kondisi perangkat secara real-time.</p>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <?php if (canCreateBarang()): ?>
-                                    <button class="btn btn-add-item" data-bs-toggle="modal" data-bs-target="#modalCreate">
-                                        <i class="bi bi-plus-circle me-2"></i>Tambah Barang
-                                    </button>
-                                <?php endif; ?>
-                                <?php if (!$isAdmin): ?>
-                                    <button class="btn btn-add-item text-dark" data-bs-toggle="modal" data-bs-target="#modalCreateCabang">
-                                        <i class="bi bi-plus-circle me-2"></i>Tambah Aset
-                                    </button>
-                                <?php endif; ?>
-                                <?php if (canOpenPengirimanUser()): ?>
-                                    <button class="btn btn-add-item bg-dark text-white" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
-                                        <i class="bi bi-truck me-2"></i>Kirim Barang Rusak
-                                    </button>
-                                <?php endif; ?>
-                            </div>
+                                <p class="page-desc">Kelola inventaris pusat, distribusi barang ke cabang, dan pantau status aset secara real-time dari Dashboard HO.</p>
+                            <?php else: ?>
+                                <h1 class="page-title">Aset & Inventaris Cabang</h1>
+                                <p class="page-desc">Kelola stok barang di unit Anda, laporkan kerusakan, dan pantau pengiriman logistik dari pusat dengan mudah.</p>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="hero-actions d-flex gap-3">
+                            <?php if ($isAdmin): ?>
+                                <!-- Tombol Khusus Admin HO -->
+                                <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreate">
+                                    <i class="bi bi-plus-circle me-2"></i>Tambah Barang Master
+                                </button>
+                            <?php else: ?>
+                                <!-- Tombol Khusus User Cabang -->
+                                <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreateCabang">
+                                    <i class="bi bi-plus-circle me-2"></i>Tambah Aset
+                                </button>
+                                <button class="btn btn-header-dark" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
+                                    <i class="bi bi-truck me-2"></i>Kirim Barang Rusak
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -719,14 +768,17 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     <td class="text-center pe-4">
                                                         <div class="action-group">
                                                             <?php if ($isAdmin): ?>
-                                                                <!-- Admin HO punya akses penuh untuk edit/delete barang yang ada di HO -->
-                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>"><i class="bi bi-trash"></i></button>
+                                                                <!-- Tombol Admin: Edit Master, Hapus, dan KIRIM KE CABANG -->
+                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>" title="Edit Master"><i class="bi bi-pencil-fill"></i></button>
+                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
+
+                                                                <!-- Tombol Truk Biru (Logistik ke Cabang) -->
+                                                                <button class="btn btn-info btn-sm text-white btnLogistik" data-id="<?= $data['id'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Kirim ke Cabang"><i class="bi bi-truck"></i></button>
+
                                                             <?php else: ?>
-                                                                <!-- User Cabang hanya bisa edit jika barang memang masih di tangan mereka (Tersedia) -->
-                                                                <!-- Logika ini otomatis aman karena query utama User hanya menarik id_branch mereka sendiri -->
-                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>"><i class="bi bi-trash"></i></button>
+                                                                <!-- Tombol User: Edit Aset Cabang & Hapus -->
+                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>" title="Edit Aset"><i class="bi bi-pencil-fill"></i></button>
+                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
                                                             <?php endif; ?>
                                                         </div>
                                                     </td>
@@ -885,31 +937,43 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             });
         }
 
-        // Modal Create
+        /**
+         * MODAL LOADERS (CREATE)
+         */
+        // Modal Create Master (Admin)
         $('#modalCreate').on('show.bs.modal', function() {
             $('#contentCreate').load('create.php', function() {
                 initSelect2('#contentCreate', '#modalCreate');
             });
         });
 
-        // Preview Foto
-        $(document).on('click', '.previewFoto', function() {
-            $('#fotoPreview').attr('src', $(this).data('foto'));
-            new bootstrap.Modal('#modalFoto').show();
+        // Modal Create Aset (User Cabang)
+        $('#modalCreateCabang').on('show.bs.modal', function() {
+            $('#contentCreateCabang').load('create_cabang.php', function() {
+                initSelect2('#contentCreateCabang', '#modalCreateCabang');
+            });
         });
 
-        // Edit Master Data (Admin & User)
+        // Modal Pengiriman Cabang ke HO (User Only)
+        $('#modalPengirimanUser').on('show.bs.modal', function() {
+            $('#contentPengirimanUser').load('pengiriman_user.php', function() {
+                initSelect2('#contentPengirimanUser', '#modalPengirimanUser');
+            });
+        });
+
+        /**
+         * ACTION BUTTONS (EDIT & LOGISTIK)
+         */
+        // Edit Data (Berbeda URL antara Admin dan User)
         $(document).on('click', '.btnEditMaster', function() {
             const id = $(this).data('id');
+            const isAdmin = <?= is_admin() ? 'true' : 'false' ?>;
 
-            <?php if (is_admin()): ?>
-                const targetUrl = 'update.php';
-                $('#modalUpdateTitle').text('Update Data Barang Master');
-            <?php else: ?>
-                const targetUrl = 'update_cabang.php';
-                $('#modalUpdateTitle').text('Edit Data Aset Cabang');
-            <?php endif; ?>
+            // Penentuan target file
+            const targetUrl = isAdmin ? 'update.php' : 'update_cabang.php';
+            const modalTitle = isAdmin ? 'Update Data Barang Master' : 'Edit Data Aset Cabang';
 
+            $('#modalUpdateTitle').text(modalTitle);
             $('#contentUpdate').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
             bootstrap.Modal.getOrCreateInstance('#modalUpdate').show();
 
@@ -922,16 +986,20 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             });
         });
 
-        // Pengiriman Logistik (Admin Only)
+        // Pengiriman Logistik ke Cabang (Hanya Admin)
         $(document).on('click', '.btnLogistik', function() {
-            if ($(this).data('bermasalah') == '1') {
+            const id = $(this).data('id');
+            const isBermasalah = $(this).data('bermasalah');
+
+            if (isBermasalah == '1' || isBermasalah == 'Iya') {
                 Swal.fire('Perhatian', 'Barang berstatus bermasalah tidak dapat dikirim ke cabang.', 'error');
                 return;
             }
-            const id = $(this).data('id');
+
             $('#modalUpdateTitle').text('Logistik Pengiriman ke Cabang');
             $('#contentUpdate').html('<div class="text-center p-4"><div class="spinner-border text-info"></div></div>');
             bootstrap.Modal.getOrCreateInstance('#modalUpdate').show();
+
             $.get('update.php', {
                 id: id,
                 type: 'logistik'
@@ -941,25 +1009,70 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             });
         });
 
-        // Pengiriman User (Cabang ke HO)
-        $('#modalPengirimanUser').on('show.bs.modal', function() {
-            $('#contentPengirimanUser').load('pengiriman_user.php', function() {
-                initSelect2('#contentPengirimanUser', '#modalPengirimanUser');
-            });
+        /**
+         * KONFIRMASI PENERIMAAN (LOGISTIK MASUK)
+         */
+        $(document).on('click', '.btnKonfirmasiTerima', function() {
+            const id = $(this).data('id');
+            const role = $(this).data('role');
+
+            if (role === 'admin') {
+                // Admin Konfirmasi Terima Barang dari Cabang
+                Swal.fire({
+                    title: 'Konfirmasi Terima?',
+                    text: "Pastikan fisik barang sudah diterima di HO Jakarta.",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff7a00',
+                    confirmButtonText: 'Ya, Sudah Terima'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.post('pengiriman_approval.php', {
+                            id_pengiriman: id,
+                            nama_penerima: 'Admin HO'
+                        }, function(res) {
+                            if (res.status === 'success') {
+                                Swal.fire('Berhasil', res.message, 'success').then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', res.message, 'error');
+                            }
+                        }, 'json');
+                    }
+                });
+            } else {
+                // User Cabang Membuka Form Terima Barang dari HO
+                $('#contentTerimaCabang').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
+                $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id);
+                bootstrap.Modal.getOrCreateInstance('#modalTerimaCabang').show();
+            }
         });
 
-        // Submit Forms via AJAX
-        $(document).on('submit', '#formCreate, #formUpdate, #formPengirimanUser, #formTerimaCabang, #formCreateCabang, #formUpdateCabang', function(e) {
+        /**
+         * AJAX SUBMIT FORMS
+         */
+        $(document).on('submit', '#formCreate, #formUpdate, #formUpdateCabang, #formPengirimanUser, #formTerimaCabang, #formCreateCabang', function(e) {
             e.preventDefault();
             const $form = $(this);
             const $btn = $form.find('button[type="submit"]');
             const originalBtnHtml = $btn.html();
-            const url = $form.attr('action') || ($form.attr('id') === 'formCreate' ? 'create.php' : ($form.attr('id') === 'formUpdate' ? 'update.php' : ($form.attr('id') === 'formPengirimanUser' ? 'pengiriman_user.php' : ($form.attr('id') === 'formCreateCabang' ? 'create_cabang.php' : 'terima_barang_proses.php'))));
+            const formId = $form.attr('id');
+
+            // Mapping URL berdasarkan ID Form agar tidak salah alamat
+            const urlMap = {
+                'formCreate': 'create.php',
+                'formUpdate': 'update.php',
+                'formUpdateCabang': 'update_cabang.php',
+                'formPengirimanUser': 'pengiriman_user.php',
+                'formTerimaCabang': 'terima_barang_proses.php',
+                'formCreateCabang': 'create_cabang.php'
+            };
+
+            const targetUrl = $form.attr('action') || urlMap[formId];
 
             $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Proses...');
 
             $.ajax({
-                url: url,
+                url: targetUrl,
                 type: 'POST',
                 data: new FormData(this),
                 contentType: false,
@@ -970,14 +1083,19 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                         Swal.fire('Berhasil', res.message, 'success').then(() => location.reload());
                     } else {
                         Swal.fire('Gagal', res.message || 'Terjadi kesalahan sistem', 'error');
+                        $btn.prop('disabled', false).html(originalBtnHtml);
                     }
                 },
-                error: () => Swal.fire('Error', 'Gagal menghubungi server', 'error'),
-                complete: () => $btn.prop('disabled', false).html(originalBtnHtml)
+                error: function() {
+                    Swal.fire('Error', 'Gagal menghubungi server', 'error');
+                    $btn.prop('disabled', false).html(originalBtnHtml);
+                }
             });
         });
 
-        // Delete Item
+        /**
+         * DELETE ACTION
+         */
         $(document).on('click', '.btnDelete', function() {
             const id = $(this).data('id');
             Swal.fire({
@@ -992,43 +1110,26 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                     $.getJSON('delete.php', {
                         id: id
                     }, function(res) {
-                        if (res.status === 'success') Swal.fire('Dihapus!', res.message, 'success').then(() => location.reload());
-                        else Swal.fire('Gagal', res.message, 'error');
+                        if (res.status === 'success') {
+                            Swal.fire('Dihapus!', res.message, 'success').then(() => location.reload());
+                        } else {
+                            Swal.fire('Gagal', res.message, 'error');
+                        }
                     });
                 }
             });
         });
 
-        // Konfirmasi Terima Barang (Logistik Masuk)
-        $(document).on('click', '.btnKonfirmasiTerima', function() {
-            const id = $(this).data('id');
-            const role = $(this).data('role');
-
-            if (role === 'admin') {
-                Swal.fire({
-                    title: 'Konfirmasi Terima?',
-                    text: "Pastikan fisik barang sudah diterima di HO Jakarta.",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, Sudah Terima'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.post('pengiriman_approval.php', {
-                            id_pengiriman: id,
-                            nama_penerima: 'Admin HO'
-                        }, function(res) {
-                            if (res.status === 'success') location.reload();
-                            else Swal.fire('Error', res.message, 'error');
-                        }, 'json');
-                    }
-                });
-            } else {
-                $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id);
-                bootstrap.Modal.getOrCreateInstance('#modalTerimaCabang').show();
-            }
+        /**
+         * UI INTERACTION & PREVIEW
+         */
+        // Preview Foto
+        $(document).on('click', '.previewFoto', function() {
+            $('#fotoPreview').attr('src', $(this).data('foto'));
+            new bootstrap.Modal('#modalFoto').show();
         });
 
-        // Logic Toggle Kondisi Masalah di Form Edit
+        // Toggle Keterangan Masalah di Form Update
         $(document).on('change', '#bermasalahUpdate', function() {
             if ($(this).val() === 'Iya') {
                 $('#keteranganMasalahWrap').slideDown();
@@ -1037,13 +1138,6 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                 $('#keteranganMasalahWrap').slideUp();
                 $('#keteranganMasalahUpdate').removeAttr('required').val('');
             }
-        });
-
-        // Load Form Tambah Aset Cabang
-        $('#modalCreateCabang').on('show.bs.modal', function() {
-            $('#contentCreateCabang').load('create_cabang.php', function() {
-                initSelect2('#contentCreateCabang', '#modalCreateCabang');
-            });
         });
     </script>
 

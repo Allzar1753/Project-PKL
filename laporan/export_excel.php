@@ -70,7 +70,7 @@ $range = resolve_period_range($periode, $tahun, $bulan, $minggu, $customAwal, $c
 // Query Database
 $sql = "
     SELECT
-        b.id, b.no_asset, b.serial_number, b.tanggal terima, b.user, b.bermasalah, b.keterangan_masalah,
+        b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.user, b.bermasalah, b.keterangan_masalah,
         tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
         bp.id_pengiriman, bp.tanggal_keluar, bp.tanggal_diterima, bp.status_pengiriman,
         bp.nomor_resi_keluar, bp.nama_penerima, bp.jasa_pengiriman,
@@ -83,10 +83,14 @@ $sql = "
     LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id
     LEFT JOIN tb_branch bpasal ON bpasal.id_branch = bp.branch_asal
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
-    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal terima)) BETWEEN ? AND ?
+    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN ? AND ?
 ";
 
-if (!$isAdmin) { $sql .= " AND b.id_branch = $myBranchId "; }
+if ($isAdmin) {
+    $sql .= " AND (b.id_branch = $myBranchId OR bp.branch_tujuan = $myBranchId) ";
+} else {
+    $sql .= " AND b.id_branch = $myBranchId AND b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
+}
 $sql .= " ORDER BY b.id DESC, bp.id_pengiriman ASC ";
 
 $stmt = mysqli_prepare($koneksi, $sql);

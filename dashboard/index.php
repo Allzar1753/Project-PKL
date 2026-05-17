@@ -24,6 +24,13 @@ function h($value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
+// Display value with nicer fallback when data kosong
+function dv($value, $fallback = '—'): string
+{
+    if (!isset($value) || $value === null || $value === '') return $fallback;
+    return h($value);
+}
+
 function shippingBadge(string $status): string
 {
     $class = 'bg-secondary';
@@ -85,7 +92,7 @@ function fetchBranchName(mysqli $koneksi, int $id): string
 // ==============================================================================
 
 // Total Inventaris di lokasi user sekarang
-$totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId");
+$totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId AND status IN ('Tersedia','Diterima') AND serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai'))");
 
 // Total Masuk (Barang yang sampai di lokasi user)
 if ($isAdmin) {
@@ -179,7 +186,14 @@ $usernameLabel = (string) (current_user()['username'] ?? 'User');
 $heroTitle = "Selamat Datang, " . $usernameLabel;
 
 // Notifikasi (Opsional)
-$qNotifications = mysqli_query($koneksi, "SELECT * FROM system_notifications WHERE target_role = '" . current_role() . "' AND is_read = 0 LIMIT 3");
+$role = current_role();
+$branchFilter = '';
+if ($role === 'user') {
+    $myBranchId = (int) current_user_branch_id();
+    $branchFilter = " AND (target_branch_id IS NULL OR target_branch_id = {$myBranchId})";
+}
+$sqlNotifs = "SELECT * FROM system_notifications WHERE target_role = '" . $role . "' AND is_read = 0 " . $branchFilter . " ORDER BY created_at DESC LIMIT 3";
+$qNotifications = mysqli_query($koneksi, $sqlNotifs);
 $notifications = fetchAllAssoc($qNotifications);
 ?>
 
@@ -589,8 +603,8 @@ $notifications = fetchAllAssoc($qNotifications);
                                 $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
                                 ?>
                                 <div class="mb-2">
-                                    <div class="fw-semibold"><?= h($notif['title'] ?? '-') ?></div>
-                                    <div class="small"><?= h($notif['message'] ?? '-') ?></div>
+                                    <div class="fw-semibold"><?= dv($notif['title'] ?? null) ?></div>
+                                    <div class="small"><?= dv($notif['message'] ?? null) ?></div>
                                     <a href="<?= h($notifReadUrl) ?>" class="small">Buka detail</a>
                                 </div>
                             <?php endforeach; ?>
@@ -680,13 +694,13 @@ $notifications = fetchAllAssoc($qNotifications);
                                             <?php foreach ($barangMasukTerbaru as $index => $item): ?>
                                                 <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
                                                     <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="activity-title mb-2"><?= dv($item['nama_barang'] ?? null) ?></div>
                                                         <div class="meta-grid">
-                                                            <?php if (isset($item['serial_number'])): ?>
-                                                                <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number']) ?></div>
+                                                            <?php if (!empty($item['serial_number'])): ?>
+                                                                <div class="meta-line"><strong>Serial:</strong> <?= dv($item['serial_number']) ?></div>
                                                             <?php endif; ?>
-                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_aktif'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_kirim'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= dv($item['nama_branch_aktif'] ?? null) ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= dv($item['tanggal_kirim'] ?? null) ?></div>
                                                         </div>
                                                     </div>
                                                     <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">
@@ -720,11 +734,11 @@ $notifications = fetchAllAssoc($qNotifications);
                                             <?php foreach ($barangKeluarTerbaru as $index => $item): ?>
                                                 <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
                                                     <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div class="activity-title mb-2"><?= dv($item['nama_barang'] ?? null) ?></div>
                                                         <div class="meta-grid">
-                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_keluar'] ?? '-') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= dv($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= dv($item['nomor_resi_keluar'] ?? null) ?></div>
+                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= dv($item['tanggal_keluar'] ?? null) ?></div>
                                                         </div>
                                                     </div>
                                                     <div class="pt-2 mt-3 text-start" style="border-top: 1px dashed rgba(255, 152, 0, 0.2);">

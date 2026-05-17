@@ -160,14 +160,16 @@ $sql = "
     WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN ? AND ?
 ";
 
-if (!$isAdmin) {
-    $sql .= " AND b.id_branch = ? ";
+if ($isAdmin) {
+    $sql .= " AND (b.id_branch = ? OR bp.branch_tujuan = ?) ";
+} else {
+    $sql .= " AND b.id_branch = ? AND b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 }
 $sql .= " ORDER BY b.id DESC, bp.id_pengiriman ASC ";
 
 $stmt = mysqli_prepare($koneksi, $sql);
 if ($isAdmin) {
-    mysqli_stmt_bind_param($stmt, 'ss', $range['start'], $range['end']);
+    mysqli_stmt_bind_param($stmt, 'ssss', $range['start'], $range['end'], $myBranchId, $myBranchId);
 } else {
     mysqli_stmt_bind_param($stmt, 'ssi', $range['start'], $range['end'], $myBranchId);
 }
@@ -176,9 +178,7 @@ $result = mysqli_stmt_get_result($stmt);
 
 // Grouping hasil query
 $groupedAssets = [];
-$totalPengiriman = 0;
-$totalDiterima = 0;
-$totalProses = 0;
+// Kumpulkan timeline per asset (tetap diperlukan untuk tampilannya)
 while ($row = mysqli_fetch_assoc($result)) {
     $id = (int) $row['id'];
     if (!isset($groupedAssets[$id])) {
@@ -186,14 +186,24 @@ while ($row = mysqli_fetch_assoc($result)) {
     }
     if (!empty($row['id_pengiriman'])) {
         $groupedAssets[$id]['timeline'][] = $row;
-        $totalPengiriman++;
-        if (($row['status_pengiriman'] ?? '') === 'Sudah diterima') $totalDiterima++;
-        else $totalProses++;
     }
 }
 mysqli_stmt_close($stmt);
 
 $totalAsset = count($groupedAssets);
+
+// Hitung ringkasan pengiriman menggunakan query yang sesuai periode dan branch
+$safeStart = mysqli_real_escape_string($koneksi, $range['start']);
+$safeEnd = mysqli_real_escape_string($koneksi, $range['end']);
+$branchCond = $isAdmin ? " AND (b.id_branch = {$myBranchId} OR bp.branch_tujuan = {$myBranchId}) " : " AND b.id_branch = {$myBranchId} AND b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = {$myBranchId} AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
+
+$qTotalPengiriman = mysqli_query($koneksi, "SELECT COUNT(DISTINCT bp.id_pengiriman) AS total FROM barang b LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN '$safeStart' AND '$safeEnd' $branchCond AND bp.id_pengiriman IS NOT NULL");
+$totalPengiriman = (int) (mysqli_fetch_assoc($qTotalPengiriman)['total'] ?? 0);
+
+$qTotalDiterima = mysqli_query($koneksi, "SELECT COUNT(DISTINCT bp.id_pengiriman) AS total FROM barang b LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN '$safeStart' AND '$safeEnd' $branchCond AND bp.status_pengiriman = 'Sudah diterima' AND bp.id_pengiriman IS NOT NULL");
+$totalDiterima = (int) (mysqli_fetch_assoc($qTotalDiterima)['total'] ?? 0);
+
+$totalProses = max(0, $totalPengiriman - $totalDiterima);
 
 // Options untuk dropdown select Bulan
 $bulanOptions = [

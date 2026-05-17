@@ -7,7 +7,8 @@ require_once '../config/auth.php';
 $id_pengiriman = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $resi_keluar = '';
 
-$nama_user_login = $_SESSION['username'] ?? 'Nama User Tidak Terbaca';
+$currentUser = current_user();
+$nama_user_login = $currentUser['username'] ?? $currentUser['email'] ?? 'Nama User Tidak Terbaca';
 
 // Ambil nomor resi keluar dari database
 if ($id_pengiriman > 0) {
@@ -133,7 +134,7 @@ if ($id_pengiriman > 0) {
     <div class="row g-3 mb-3">
         <div class="col-md-6">
             <label class="form-label-custom">Tanggal Diterima <span class="asterisk-orange">*</span></label>
-            <input type="date" name="tanggal_diterima" class="form-control form-control-custom" required value="<?= date('Y-m-d') ?>">
+            <input type="date" name="tanggal_diterima" class="form-control form-control-custom" required min="<?= date('Y-m-d') ?>">
         </div>
 
         <div class="col-md-6">

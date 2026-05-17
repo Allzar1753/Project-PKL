@@ -16,63 +16,89 @@ function h($value): string
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 }
 
-$onlineThresholdMinutes = 5;
-$cutoff = date('Y-m-d H:i:s', time() - ($onlineThresholdMinutes * 60));
+function sendJson(array $data): void
+{
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}
 
-$qUsers = mysqli_query($koneksi, "
-    SELECT
-        u.id,
-        u.username,
-        u.email,
-        u.role,
-        b.nama_branch,
-        p.last_seen_at
-    FROM users u
-    LEFT JOIN tb_branch b ON b.id_branch = u.id_branch
-    LEFT JOIN user_presence p ON p.user_id = u.id
-    WHERE u.role = 'user'
-    ORDER BY b.nama_branch ASC, u.username ASC
-");
+function getUserPresenceData(mysqli $koneksi, int $onlineThresholdMinutes): array
+{
+    $cutoff = date('Y-m-d H:i:s', time() - ($onlineThresholdMinutes * 60));
 
-// --- PERSIAPAN DATA UNTUK SUMMARY CARDS ---
-$usersData = [];
-$totalUsers = 0;
-$onlineUsers = 0;
-$offlineUsers = 0;
+    $qUsers = mysqli_query($koneksi, "
+        SELECT
+            u.id,
+            u.username,
+            u.email,
+            u.role,
+            b.nama_branch,
+            p.last_seen_at
+        FROM users u
+        LEFT JOIN tb_branch b ON b.id_branch = u.id_branch
+        LEFT JOIN user_presence p ON p.user_id = u.id
+        WHERE u.role = 'user'
+        ORDER BY b.nama_branch ASC, u.username ASC
+    ");
 
-if ($qUsers && mysqli_num_rows($qUsers) > 0) {
-    while ($u = mysqli_fetch_assoc($qUsers)) {
-        $lastSeen = (string) ($u['last_seen_at'] ?? '');
-        $isOnline = $lastSeen !== '' && strtotime($lastSeen) >= strtotime($cutoff);
+    $usersData = [];
+    $totalUsers = 0;
+    $onlineUsers = 0;
+    $offlineUsers = 0;
 
-        // Hitung statistik
-        $totalUsers++;
-        if ($isOnline) {
-            $onlineUsers++;
-        } else {
-            $offlineUsers++;
-        }
+    if ($qUsers && mysqli_num_rows($qUsers) > 0) {
+        while ($u = mysqli_fetch_assoc($qUsers)) {
+            $lastSeen = (string) ($u['last_seen_at'] ?? '');
+            $isOnline = $lastSeen !== '' && strtotime($lastSeen) >= strtotime($cutoff);
 
-        // Format waktu
-        $lastSeenFormatted = '-';
-        if ($lastSeen !== '') {
-            $timestamp = strtotime($lastSeen);
-            if ($timestamp !== false) {
-                // Jika hari ini, tampilkan jam saja. Jika hari lain, tampilkan tanggal & jam.
-                if (date('Y-m-d', $timestamp) === date('Y-m-d')) {
-                    $lastSeenFormatted = 'Hari ini, ' . date('H:i', $timestamp) . ' WIB';
-                } else {
-                    $lastSeenFormatted = date('d M Y, H:i', $timestamp) . ' WIB';
+            $totalUsers++;
+            if ($isOnline) {
+                $onlineUsers++;
+            } else {
+                $offlineUsers++;
+            }
+
+            $lastSeenFormatted = '-';
+            if ($lastSeen !== '') {
+                $timestamp = strtotime($lastSeen);
+                if ($timestamp !== false) {
+                    if (date('Y-m-d', $timestamp) === date('Y-m-d')) {
+                        $lastSeenFormatted = 'Hari ini, ' . date('H:i', $timestamp) . ' WIB';
+                    } else {
+                        $lastSeenFormatted = date('d M Y, H:i', $timestamp) . ' WIB';
+                    }
                 }
             }
-        }
 
-        // Simpan ke array untuk ditampilkan di tabel nanti
-        $u['is_online'] = $isOnline;
-        $u['last_seen_formatted'] = $lastSeenFormatted;
-        $usersData[] = $u;
+            $u['is_online'] = $isOnline;
+            $u['last_seen_formatted'] = $lastSeenFormatted;
+            $usersData[] = $u;
+        }
     }
+
+    return [
+        'totalUsers' => $totalUsers,
+        'onlineUsers' => $onlineUsers,
+        'offlineUsers' => $offlineUsers,
+        'usersData' => $usersData,
+    ];
 }
+
+$onlineThresholdMinutes = 5;
+
+if (isset($_GET['action']) && $_GET['action'] === 'status') {
+    $payload = getUserPresenceData($koneksi, $onlineThresholdMinutes);
+    sendJson($payload);
+}
+
+$data = getUserPresenceData($koneksi, $onlineThresholdMinutes);
+$qUsers = null;
+$usersData = $data['usersData'];
+$totalUsers = $data['totalUsers'];
+$onlineUsers = $data['onlineUsers'];
+$offlineUsers = $data['offlineUsers'];
+
 ?>
 
 <!DOCTYPE html>
@@ -361,6 +387,7 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
                             <div>
                                 <h1 class="page-title"><i class="bi bi-activity me-2 text-warning"></i>Monitoring User Cabang</h1>
                                 <p class="page-desc">Pantau status koneksi dan keaktifan akun pengguna cabang secara aktual. (Threshold online: <?= $onlineThresholdMinutes ?> menit terakhir).</p>
+                                <div id="presenceSyncStatus" class="text-meta mt-2">Sinkronisasi terakhir: <span id="presenceSyncTime">Sekarang</span></div>
                             </div>
                             <div>
                                 <!-- Tombol Action -->
@@ -378,7 +405,7 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
                                 <div class="sc-icon blue"><i class="bi bi-people-fill"></i></div>
                                 <div>
                                     <div class="sc-label">Total Akun Cabang</div>
-                                    <div class="sc-value"><?= $totalUsers ?></div>
+                                    <div id="presenceTotalUsers" class="sc-value"><?= $totalUsers ?></div>
                                 </div>
                             </div>
                         </div>
@@ -387,7 +414,7 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
                                 <div class="sc-icon green"><i class="bi bi-wifi"></i></div>
                                 <div>
                                     <div class="sc-label">Sedang Online</div>
-                                    <div class="sc-value text-success"><?= $onlineUsers ?></div>
+                                    <div id="presenceOnlineUsers" class="sc-value text-success"><?= $onlineUsers ?></div>
                                 </div>
                             </div>
                         </div>
@@ -396,7 +423,7 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
                                 <div class="sc-icon gray"><i class="bi bi-wifi-off"></i></div>
                                 <div>
                                     <div class="sc-label">Sedang Offline</div>
-                                    <div class="sc-value text-secondary"><?= $offlineUsers ?></div>
+                                    <div id="presenceOfflineUsers" class="sc-value text-secondary"><?= $offlineUsers ?></div>
                                 </div>
                             </div>
                         </div>
@@ -415,7 +442,7 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
                                         <th width="20%">Aktivitas Terakhir</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="presenceTableBody">
                                     <?php if (!empty($usersData)): ?>
                                         <?php $no = 1; ?>
                                         <?php foreach ($usersData as $u): ?>
@@ -480,6 +507,73 @@ if ($qUsers && mysqli_num_rows($qUsers) > 0) {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const statusEndpoint = window.location.pathname + '?action=status';
+            const presenceSyncTime = document.getElementById('presenceSyncTime');
+            const presenceTotalUsers = document.getElementById('presenceTotalUsers');
+            const presenceOnlineUsers = document.getElementById('presenceOnlineUsers');
+            const presenceOfflineUsers = document.getElementById('presenceOfflineUsers');
+            const presenceTableBody = document.getElementById('presenceTableBody');
+
+            if (!presenceSyncTime || !presenceTotalUsers || !presenceOnlineUsers || !presenceOfflineUsers || !presenceTableBody) {
+                console.warn('Element presence not ditemukan, polling dihentikan.');
+                return;
+            }
+
+            function buildRow(index, user) {
+                const statusBadge = user.is_online
+                    ? '<span class="badge-status badge-online"><span class="status-dot dot-online"></span>Online</span>'
+                    : '<span class="badge-status badge-offline"><span class="status-dot dot-offline"></span>Offline</span>';
+
+                return `
+                    <tr>
+                        <td class="text-muted fw-bold">${index}</td>
+                        <td>
+                            <div class="user-info">
+                                <div class="user-avatar">${String(user.username || '').charAt(0).toUpperCase()}</div>
+                                <div>
+                                    <div class="text-bold">${user.username ? user.username : '-'}</div>
+                                    <div class="text-meta"><i class="bi bi-envelope me-1"></i>${user.email ? user.email : '-'}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-bold"><i class="bi bi-geo-alt-fill text-warning me-1"></i>${user.nama_branch ? user.nama_branch : '-'}</div>
+                        </td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            <div class="text-meta"><i class="bi bi-clock-history me-1"></i>${user.last_seen_formatted ? user.last_seen_formatted : '-'}</div>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            async function refreshPresence() {
+                try {
+                    const response = await fetch(statusEndpoint, { cache: 'no-store' });
+                    if (!response.ok) {
+                        throw new Error('Status: ' + response.status);
+                    }
+                    const data = await response.json();
+                    presenceTotalUsers.textContent = data.totalUsers;
+                    presenceOnlineUsers.textContent = data.onlineUsers;
+                    presenceOfflineUsers.textContent = data.offlineUsers;
+                    presenceSyncTime.textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                    if (Array.isArray(data.usersData)) {
+                        presenceTableBody.innerHTML = data.usersData.map((user, index) => buildRow(index + 1, user)).join('');
+                    }
+                } catch (error) {
+                    console.warn('Gagal memperbarui status presence:', error);
+                    presenceSyncTime.textContent = 'Gagal sinkronisasi';
+                }
+            }
+
+            setInterval(refreshPresence, 5000);
+            refreshPresence();
+        });
+    </script>
 </body>
 
 </html>

@@ -52,7 +52,11 @@ $sql = "
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
     WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN ? AND ?
 ";
-if (!$isAdmin) { $sql .= " AND b.id_branch = $myBranchId "; }
+if ($isAdmin) {
+    $sql .= " AND (b.id_branch = $myBranchId OR bp.branch_tujuan = $myBranchId) ";
+} else {
+    $sql .= " AND b.id_branch = $myBranchId AND b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
+}
 if ($singleId > 0) { $sql .= " AND b.id = $singleId "; }
 $sql .= " ORDER BY b.id DESC, bp.id_pengiriman ASC ";
 

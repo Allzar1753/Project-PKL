@@ -108,8 +108,12 @@ if (!$isAdmin) {
         http_response_code(403);
         exit('Branch user belum ditentukan.');
     }
-    // HANYA riwayat yang melibatkan cabang tersebut (pemilik asli, pengirim, atau penerima)
+    // HANYA riwayat asset cabang saat ini; keluarkan asset yang sedang dalam pengiriman ke HO
     $baseWhere[] = "(b.id_branch = {$myBranchId} OR bp.branch_asal = {$myBranchId} OR bp.branch_tujuan = {$myBranchId})";
+    $baseWhere[] = "b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = {$myBranchId} AND status_pengiriman NOT IN ('Ditolak', 'Selesai'))";
+} else {
+    // Admin hanya melihat data milik admin/HO dan barang masuk ke admin/HO dari branch
+    $baseWhere[] = "(b.id_branch = {$myBranchId} OR bp.branch_tujuan = {$myBranchId})";
 }
 
 $where = $baseWhere; // Kondisi query utama
@@ -132,7 +136,8 @@ if ($filter === 'masuk') {
         // Cabang: Dihitung Masuk jika barang inputan murni ATAU cabang adalah tujuan pengiriman
         $where[] = "(bp.id_pengiriman IS NULL OR bp.branch_tujuan = {$myBranchId})";
     } else {
-        $where[] = "(bp.id_pengiriman IS NULL)";
+        // Admin: Masuk adalah barang milik admin/HO atau barang yang dikirim ke admin/HO
+        $where[] = "(bp.id_pengiriman IS NULL OR bp.branch_tujuan = {$myBranchId})";
     }
 } elseif ($filter === 'keluar') {
     if (!$isAdmin) {
@@ -168,28 +173,28 @@ $offset = ($page - 1) * $limit;
 
 /*
 |--------------------------------------------------------------------------
-| LOGIKA ANGKA KARTU (HANYA MILIK CABANG YBS & TIDAK TERPENGARUH PENCARIAN)
+| LOGIKA ANGKA KARTU
 |--------------------------------------------------------------------------
+| Kartu sekarang menghitung berdasarkan filter aktif (pencarian, tanggal, mode),
+| sehingga angka mencerminkan data yang tampil di tabel riwayat.
 */
-$baseWhereStr = count($baseWhere) ? 'WHERE ' . implode(' AND ', $baseWhere) : '';
 
-// Total Semua
-$totalSemuaQuery = mysqli_query($koneksi, "SELECT COUNT(DISTINCT b.id) AS total $baseFrom $baseWhereStr");
-$totalSemua = (int) (mysqli_fetch_assoc($totalSemuaQuery)['total'] ?? 0);
+// Total Semua: gunakan hasil hitung utama yang sudah dihitung untuk pagination
+$totalSemua = $total_rows;
 
-// Total Masuk
-$masukArr = $baseWhere;
+// Total Masuk: hitung ulang dengan kondisi filter + kondisi masuk
+$masukArr = $where; // gunakan semua kondisi aktif
 if (!$isAdmin) {
     $masukArr[] = "(bp.id_pengiriman IS NULL OR bp.branch_tujuan = {$myBranchId})";
 } else {
-    $masukArr[] = "bp.id_pengiriman IS NULL";
+    $masukArr[] = "(bp.id_pengiriman IS NULL OR bp.branch_tujuan = {$myBranchId})";
 }
 $masukStr = count($masukArr) ? 'WHERE ' . implode(' AND ', $masukArr) : '';
 $totalMasukQuery = mysqli_query($koneksi, "SELECT COUNT(DISTINCT b.id) AS total $baseFrom $masukStr");
 $totalMasuk = (int) (mysqli_fetch_assoc($totalMasukQuery)['total'] ?? 0);
 
-// Total Keluar
-$keluarArr = $baseWhere;
+// Total Keluar: hitung ulang dengan kondisi filter + kondisi keluar
+$keluarArr = $where;
 if (!$isAdmin) {
     $keluarArr[] = "(bp.branch_asal = {$myBranchId})";
 } else {

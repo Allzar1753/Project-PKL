@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // --- LOGIKA OTOMATISASI PINDAH INVENTARIS ---
-        $stmtGetSN = mysqli_prepare($koneksi, "SELECT serial_number FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ?");
+        $stmtGetSN = mysqli_prepare($koneksi, "SELECT serial_number, catatan_user FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ?");
         mysqli_stmt_bind_param($stmtGetSN, 'i', $idPengiriman);
         mysqli_stmt_execute($stmtGetSN);
         $resSN = mysqli_stmt_get_result($stmtGetSN);
@@ -124,16 +124,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($dataSN) {
             $sn = $dataSN['serial_number'];
+            $catatanUser = trim((string) ($dataSN['catatan_user'] ?? ''));
 
             $queryUpdateBarang = "UPDATE barang SET 
         id_branch = ?, 
-        status = 'Tersedia', 
-        user = 'Pusat HO (Dalam Perbaikan)' 
+        status = 'Diterima', 
+        bermasalah = 'Iya', 
+        keterangan_masalah = ?,
+        id_status = 5
         WHERE serial_number = ?";
 
             $stmtUpdate = mysqli_prepare($koneksi, $queryUpdateBarang);
-            mysqli_stmt_bind_param($stmtUpdate, 'is', $jakartaBranchId, $sn);
-            mysqli_stmt_execute($stmtUpdate);
+            if ($stmtUpdate) {
+                mysqli_stmt_bind_param($stmtUpdate, 'iss', $jakartaBranchId, $catatanUser, $sn);
+                mysqli_stmt_execute($stmtUpdate);
+                mysqli_stmt_close($stmtUpdate);
+            }
         }
 
         mysqli_commit($koneksi);
@@ -153,6 +159,7 @@ $q = mysqli_query($koneksi, "
         p.jasa_pengiriman,
         p.serial_number,
         p.pemilik_barang,
+        p.catatan_user,
         asal.nama_branch AS nama_branch_asal,
         tujuan.nama_branch AS nama_branch_tujuan,
         tb_barang.nama_barang
@@ -379,6 +386,9 @@ $q = mysqli_query($koneksi, "
                                                     <div class="fw-bold fs-6 text-dark mb-1"><?= h($row['nama_barang'] ?? '-') ?></div>
                                                     <span class="meta-line"><i class="bi bi-upc-scan me-1"></i> SN: <span class="meta-strong"><?= h($row['serial_number'] ?? 'Belum ada SN') ?></span></span>
                                                     <span class="meta-line"><i class="bi bi-person-badge me-1"></i> User: <span class="meta-strong"><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></span></span>
+                                                    <?php if (!empty($row['catatan_user'])): ?>
+                                                        <span class="meta-line text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Kerusakan: <?= h($row['catatan_user']) ?></span>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <div class="fw-bold text-dark mb-1">

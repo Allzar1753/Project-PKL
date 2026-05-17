@@ -169,6 +169,13 @@ if (!function_exists('ensure_system_schema')) {
             INDEX idx_pengiriman_cabang_ho_tujuan (branch_tujuan)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+        if (!$columnExists('pengiriman_cabang_ho', 'catatan_user')) {
+            mysqli_query($koneksi, "ALTER TABLE pengiriman_cabang_ho ADD COLUMN catatan_user VARCHAR(255) NULL AFTER status_pengiriman");
+        }
+        if (!$columnExists('pengiriman_cabang_ho', 'catatan_admin')) {
+            mysqli_query($koneksi, "ALTER TABLE pengiriman_cabang_ho ADD COLUMN catatan_admin VARCHAR(255) NULL AFTER catatan_user");
+        }
+
         mysqli_query($koneksi, "CREATE TABLE IF NOT EXISTS password_resets (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,

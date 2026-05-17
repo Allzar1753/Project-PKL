@@ -101,13 +101,14 @@ if ($isAdmin) {
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman IN ('Sedang perjalanan', 'Sudah diterima')) ";
 } else {
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 }
 
-$stokAktifSql = $isAdmin ? " AND (barang.status = 'Tersedia' OR barang.status = 'Bermasalah') " : " AND barang.status = 'Tersedia' ";
+$stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') " : " AND barang.status IN ('Tersedia','Diterima') ";
 
 if ($isAdmin) {
-    $whereLokasi = " 1=1 ";
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE 1=1 $excludeTransitSql $stokAktifSql");
+    $whereLokasi = "barang.id_branch = $myBranchId";
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {

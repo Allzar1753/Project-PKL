@@ -138,7 +138,7 @@ $tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC")
 
         <div class="col-md-6">
             <label class="form-label fw-bold">User Pengguna Aset <span class="text-danger">*</span></label>
-            <input type="text" name="user" class="form-control" required placeholder="Contoh: Nabila - Finance">
+            <input type="text" name="user" class="form-control" required placeholder="Contoh: Nabila">
         </div>
 
         <div class="col-md-12">

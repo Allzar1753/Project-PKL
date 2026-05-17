@@ -436,6 +436,21 @@ if ($formType === 'penerimaan') {
         mysqli_stmt_execute($stmt);
 
         mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE id = $id");
+        
+        // Kirim notifikasi ke user cabang tujuan bahwa barang sedang dikirim
+        $newPengirimanId = (int) mysqli_insert_id($koneksi);
+        $targetBranch = (int) ($_POST['tujuan'] ?? 0);
+        if ($targetBranch > 0) {
+            $title = 'Pengiriman dalam perjalanan';
+            $message = 'Barang dengan resi ' . mysqli_real_escape_string($koneksi, $_POST['nomor_resi']) . ' sedang dalam perjalanan ke cabang Anda.';
+            $link = '../Barang/index.php?filter=masuk';
+            $stmtNotif = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)");
+            if ($stmtNotif) {
+                mysqli_stmt_bind_param($stmtNotif, 'isss', $targetBranch, $title, $message, $link);
+                mysqli_stmt_execute($stmtNotif);
+                mysqli_stmt_close($stmtNotif);
+            }
+        }
         mysqli_commit($koneksi);
         jsonSuccess("Pengiriman berhasil dibuat.");
     } catch (Exception $e) {

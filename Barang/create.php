@@ -170,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $foto = ($uploadFoto['status'] === 'success') ? $uploadFoto['filename'] : null;
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
-    $statusField = ($bermasalah === 'Iya') ? 'Bermasalah' : 'Tersedia';
+    $statusField = 'Tersedia';
 
     // INSERT otomatis memasukkan $user_id_sistem ke database walau tidak ada di form
     $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id, status) 

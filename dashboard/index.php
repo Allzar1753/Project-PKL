@@ -94,88 +94,97 @@ function fetchBranchName(mysqli $koneksi, int $id): string
 // Total Inventaris di lokasi user sekarang
 $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId AND status IN ('Tersedia','Diterima') AND serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai'))");
 
-// Total Masuk (Barang yang sampai di lokasi user)
+// ==============================================================================
+// 1. LOGIKA ANGKA WIDGET (SINKRON DENGAN TABEL BARANG)
+// ==============================================================================
+
+// A. Tentukan Batasan Wilayah & Pengecualian Transit (Sama seperti index.php)
 if ($isAdmin) {
-    $totalMasuk = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
+    $whereLokasi = "barang.id IS NOT NULL"; // Admin lihat semua barang master
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman IN ('Sedang perjalanan', 'Sudah diterima')) ";
 } else {
-    $totalMasuk = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
+    $whereLokasi = "barang.id_branch = $myBranchId"; // Cabang hanya lihat miliknya
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 }
 
-// Total Keluar (Barang yang dikirim dari lokasi user)
-if ($isAdmin) {
-    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_asal = $myBranchId");
-} else {
-    $totalKeluar = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
-}
+$stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') " : " AND barang.status IN ('Tersedia','Diterima') ";
 
-// Total Bermasalah di lokasi user
-$totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId AND bermasalah = 'Iya'");
 
-// Total Pending (Barang yang sedang otw ke lokasi user)
+// B. Eksekusi Perhitungan Widget (5 Kotak Atas)
+$totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql $stokAktifSql");
+
 if ($isAdmin) {
-    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Menunggu persetujuan admin'");
+    $totalMasuk         = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho");
+    $totalKeluar        = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
+    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Menunggu persetujuan admin', 'Sedang dikemas', 'Sedang perjalanan')");
 } else {
+    $totalMasuk         = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId");
+    $totalKeluar        = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
     $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sedang perjalanan'");
 }
 
+$totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi AND bermasalah = 'Iya'");
+
+
 // ==============================================================================
-// 2. LOGIKA LIST AKTIVITAS
+// 2. LOGIKA LIST AKTIVITAS (PANEL BAWAH)
 // ==============================================================================
 $previewLimit = 3;
 
-// --- Masuk Terbaru ---
+// --- Masuk Terbaru (Semua histori yang masuk) ---
 if ($isAdmin) {
     $qMasuk = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_kirim, tb.nama_barang, br.nama_branch AS nama_branch_aktif
                FROM pengiriman_cabang_ho p
                LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
                LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-               WHERE p.status_pengiriman = 'Sudah diterima HO' ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
+               ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 } else {
-    $qMasuk = "SELECT p.id_pengiriman AS id, p.tanggal_keluar AS tanggal_kirim, tb.nama_barang, br.nama_branch AS nama_branch_aktif
+    $qMasuk = "SELECT p.id_pengiriman AS id, p.tanggal_keluar AS tanggal_kirim, tb.nama_barang, 'PUSAT HO' AS nama_branch_aktif
                FROM barang_pengiriman p
-               LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-               LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-               WHERE p.branch_tujuan = $myBranchId AND p.status_pengiriman = 'Sudah diterima' ORDER BY p.id_pengiriman DESC LIMIT 15";
+               LEFT JOIN barang b ON p.id_barang = b.id
+               LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
+               WHERE p.branch_tujuan = $myBranchId ORDER BY p.id_pengiriman DESC LIMIT 10";
 }
 $barangMasukTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qMasuk));
 
-// --- Keluar Terbaru ---
+// --- Keluar Terbaru (Semua histori yang keluar) ---
 if ($isAdmin) {
     $qKeluar = "SELECT p.id_pengiriman, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_tujuan
                 FROM barang_pengiriman p
                 LEFT JOIN barang b ON p.id_barang = b.id
                 LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
                 LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch
-                WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman DESC LIMIT 15";
+                ORDER BY p.id_pengiriman DESC LIMIT 10";
 } else {
     $qKeluar = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, 'Kantor Pusat' AS nama_branch_tujuan
                 FROM pengiriman_cabang_ho p
                 LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-                WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
+                WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 }
 $barangKeluarTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qKeluar));
 
-// --- Bermasalah ---
-$qBermasalah = "SELECT b.id, b.serial_number, b.keterangan_masalah, tb.nama_barang, br.nama_branch AS nama_branch_aktif
-                FROM barang b
-                LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-                LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
-                WHERE b.id_branch = $myBranchId AND b.bermasalah = 'Iya' ORDER BY b.id DESC LIMIT 15";
+// --- Bermasalah (Mengikuti Rule $whereLokasi) ---
+$qBermasalah = "SELECT barang.id, barang.serial_number, barang.keterangan_masalah, tb.nama_barang, br.nama_branch AS nama_branch_aktif
+                FROM barang 
+                LEFT JOIN tb_barang tb ON barang.id_barang = tb.id_barang
+                LEFT JOIN tb_branch br ON barang.id_branch = br.id_branch
+                WHERE $whereLokasi AND barang.bermasalah = 'Iya' ORDER BY barang.id DESC LIMIT 10";
 $barangBermasalah = fetchAllAssoc(mysqli_query($koneksi, $qBermasalah));
 
-// --- Belum Diterima ---
+// --- Belum Diterima (Dalam Perjalanan) ---
 if ($isAdmin) {
     $qTransit = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, tb.nama_barang, br.nama_branch AS nama_branch_asal, 'Kantor Pusat' AS nama_branch_tujuan
                  FROM pengiriman_cabang_ho p
                  LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
                  LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-                 WHERE p.status_pengiriman = 'Menunggu persetujuan admin' ORDER BY p.id_pengiriman_ho DESC LIMIT 15";
+                 WHERE p.status_pengiriman IN ('Menunggu persetujuan admin', 'Sedang dikemas', 'Sedang perjalanan') ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 } else {
     $qTransit = "SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_asal, 'Cabang Saya' AS nama_branch_tujuan
                  FROM barang_pengiriman p
                  LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
                  LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-                 WHERE p.branch_tujuan = $myBranchId AND p.status_pengiriman = 'Sedang perjalanan' ORDER BY p.id_pengiriman DESC LIMIT 15";
+                 WHERE p.branch_tujuan = $myBranchId AND p.status_pengiriman = 'Sedang perjalanan' ORDER BY p.id_pengiriman DESC LIMIT 10";
 }
 $pengirimanBelumDiterima = fetchAllAssoc(mysqli_query($koneksi, $qTransit));
 

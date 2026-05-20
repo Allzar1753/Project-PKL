@@ -37,6 +37,8 @@ if (!empty($user['id_branch'])) {
 }
 
 $mainMenuActive = isMenuActive('/dashboard/') || isMenuActive('/Barang/') || isMenuActive('/Riwayat/') || isMenuActive('/laporan/');
+$isMonitoringPage = isMenuActive('/monitoring/');
+$monitoringMenuActive = $isMonitoringPage;
 $isUsersPage = strpos($currentPath, '/users/index.php') !== false || strpos($currentPath, '/users/create.php') !== false || strpos($currentPath, '/users/edit.php') !== false;
 $isAccessPage = strpos($currentPath, '/users/role_permissions.php') !== false || strpos($currentPath, '/users/user_permissions.php') !== false;
 $adminMenuActive = $isUsersPage || $isAccessPage;
@@ -287,6 +289,34 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
             </div>
         </div>
 
+        <!-- ============================================== -->
+        <!-- MENU KHUSUS MONITORING ASSET HO -->
+        <!-- ============================================== -->
+        <?php if (is_admin()): ?>
+        <div class="sidebar-group mt-3">
+            <button type="button" class="sidebar-group-button <?= $monitoringMenuActive ? 'is-open' : '' ?>" data-menu-target="monitoringMenu">
+                <span class="sidebar-group-button-left">
+                    <span class="sidebar-group-icon"><i class="bi bi-display"></i></span>
+                    <span class="ms-2">Monitoring HO</span>
+                </span>
+                <i class="bi bi-chevron-down sidebar-group-arrow"></i>
+            </button>
+            <div id="monitoringMenu" class="sidebar-submenu <?= $monitoringMenuActive ? 'show' : '' ?>">
+                <div class="sidebar-submenu-inner">
+                    <ul class="sidebar-menu">
+                        <li>
+                            <a href="<?= h(base_url('monitoring/index.php')) ?>" class="sidebar-link <?= isMenuActive('/monitoring/') ? 'active' : '' ?>">
+                                <span class="sidebar-icon"><i class="bi bi-pc-display-horizontal"></i></span>
+                                <span>Data Asset</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        <!-- ============================================== -->
+
         <!-- Administrator Group -->
         <?php if (can('users.view') || can('role_permissions.manage')): ?>
         <div class="sidebar-group mt-3">
@@ -349,6 +379,7 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         const storageSidebar = 'itasset-sidebar-hidden';
         const storageMain = 'itasset-menu-main';
         const storageAdmin = 'itasset-menu-admin';
+        const storageMonitoring = 'itasset-menu-monitoring';
 
         if (content) content.classList.add('content-with-sidebar');
 
@@ -391,7 +422,10 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         document.querySelectorAll('.sidebar-group-button').forEach(btn => {
             const targetId = btn.getAttribute('data-menu-target');
             const submenu = document.getElementById(targetId);
-            const storageKey = targetId === 'mainMenu' ? storageMain : storageAdmin;
+            let storageKey;
+                    if (targetId === 'mainMenu') storageKey = storageMain;
+                    else if (targetId === 'adminMenu') storageKey = storageAdmin;
+                    else if (targetId === 'monitoringMenu') storageKey = storageMonitoring;            
 
             if (localStorage.getItem(storageKey) === 'open') {
                 submenu.classList.add('show');

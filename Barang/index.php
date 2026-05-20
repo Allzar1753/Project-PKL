@@ -107,11 +107,16 @@ if ($isAdmin) {
 $stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') " : " AND barang.status IN ('Tersedia','Diterima') ";
 
 if ($isAdmin) {
-    $whereLokasi = "barang.id_branch = $myBranchId";
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
-    $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman = 'Sudah diterima HO'");
+    // [PERBAIKAN]: Admin HO melihat semua stok master (1=1). 
+    // Barang otomatis akan hilang dari tabel ini jika sudah masuk pengiriman (di-filter oleh $excludeTransitSql)
+    $whereLokasi = "barang.id IS NOT NULL";
+
+    // Pastikan query COUNT juga menggunakan $whereLokasi agar angkanya sinkron dengan tabel
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql $stokAktifSql");
+    $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
+
     $whereLokasi = "barang.id_branch = $myBranchId";
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
@@ -129,17 +134,19 @@ if ($filter === 'keluar') {
                      WHERE 1=1 $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     } else {
         $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, 'Pusat HO' AS info_branch
+                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, 'Pusat HO' AS info_branch, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
+                     LEFT JOIN barang b ON p.serial_number = b.serial_number
                      WHERE p.branch_asal = $myBranchId $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     }
 } elseif ($filter === 'masuk') {
     if ($isAdmin) {
         $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, br.nama_branch AS info_branch
+                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, br.nama_branch AS info_branch, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
+                     LEFT JOIN barang b ON p.serial_number = b.serial_number
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     } else {
@@ -151,6 +158,7 @@ if ($filter === 'keluar') {
                      WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     }
 } else {
+    // INI ADALAH BAGIAN YANG TERHAPUS SEBELUMNYA
     $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, barang.user, barang.keterangan_masalah, barang.status,
                     tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
              FROM barang
@@ -637,7 +645,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                 <label class="toolbar-label">Filter Tampilan</label>
                                 <div class="mode-switch">
                                     <a href="index.php?cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnSemua ?>">
-                                        <i class="bi bi-grid-fill me-2"></i>Stok Tersedia
+                                        <i class="bi bi-grid-fill me-2"></i>Asset Tersedia
                                     </a>
                                     <a href="index.php?filter=masuk&cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnMasuk ?>">
                                         <i class="bi bi-box-arrow-in-down me-2"></i>Logistik Masuk

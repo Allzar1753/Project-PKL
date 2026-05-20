@@ -74,8 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtUpdateBarang = mysqli_prepare($koneksi, "UPDATE barang SET 
                 id_branch = ?,
                 status = 'Tersedia',
-                user = ?,
-                user_id = ?,
                 bermasalah = 'Tidak',
                 keterangan_masalah = NULL,
                 id_status = 4
@@ -85,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Gagal menyiapkan update barang: ' . mysqli_error($koneksi));
             }
 
-            mysqli_stmt_bind_param($stmtUpdateBarang, 'isii', $myBranchId, $nama_penerima, $userId, $id_barang_pk);
+            mysqli_stmt_bind_param($stmtUpdateBarang, 'ii', $myBranchId, $id_barang_pk);
             mysqli_stmt_execute($stmtUpdateBarang);
 
             if (mysqli_stmt_affected_rows($stmtUpdateBarang) <= 0) {
@@ -94,8 +92,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmtFallback = mysqli_prepare($koneksi, "UPDATE barang SET 
                     id_branch = ?,
                     status = 'Tersedia',
-                    user = ?,
-                    user_id = ?,
                     bermasalah = 'Tidak',
                     keterangan_masalah = NULL,
                     id_status = 4
@@ -105,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Gagal menyiapkan fallback update barang: ' . mysqli_error($koneksi));
                 }
 
-                mysqli_stmt_bind_param($stmtFallback, 'isis', $myBranchId, $nama_penerima, $userId, $serialNumber);
+                mysqli_stmt_bind_param($stmtFallback, 'is', $myBranchId, $serialNumber);
                 mysqli_stmt_execute($stmtFallback);
                 if (mysqli_stmt_affected_rows($stmtFallback) <= 0) {
                     throw new Exception('Gagal update data barang cabang.');

@@ -82,9 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ==========================================
 // HANDLE TAMPILAN FORM (METODE GET)
 // ==========================================
+// HANYA QUERY BARANG SAJA YANG DIBUTUHKAN DI AWAL
 $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang ASC");
-$merk   = mysqli_query($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
-$tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
 ?>
 
 <form id="formCreateCabang" action="create_cabang.php" method="POST" enctype="multipart/form-data">
@@ -108,7 +107,8 @@ $tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC")
 
         <div class="col-md-6">
             <label class="form-label fw-bold">Nama Barang <span class="text-danger">*</span></label>
-            <select name="id_barang" class="form-control select2" required>
+            <!-- DITAMBAHKAN ID id_barang -->
+            <select name="id_barang" id="id_barang" class="form-control select2" required>
                 <option value="">Pilih Barang...</option>
                 <?php while ($row = mysqli_fetch_assoc($barang)): ?>
                     <option value="<?= (int) $row['id_barang'] ?>"><?= h($row['nama_barang']) ?></option>
@@ -118,21 +118,17 @@ $tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC")
 
         <div class="col-md-6">
             <label class="form-label fw-bold">Merk <span class="text-danger">*</span></label>
-            <select name="id_merk" class="form-control select2" required>
-                <option value="">Pilih Merk...</option>
-                <?php while ($row = mysqli_fetch_assoc($merk)): ?>
-                    <option value="<?= (int) $row['id_merk'] ?>"><?= h($row['nama_merk']) ?></option>
-                <?php endwhile; ?>
+            <!-- DITAMBAHKAN ID id_merk DAN DIKOSONGKAN -->
+            <select name="id_merk" id="id_merk" class="form-control select2" required>
+                <option value="">Pilih Barang Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
             <label class="form-label fw-bold">Tipe <span class="text-danger">*</span></label>
-            <select name="id_tipe" class="form-control select2" required>
-                <option value="">Pilih Tipe...</option>
-                <?php while ($row = mysqli_fetch_assoc($tipe)): ?>
-                    <option value="<?= (int) $row['id_tipe'] ?>"><?= h($row['nama_tipe']) ?></option>
-                <?php endwhile; ?>
+            <!-- DITAMBAHKAN ID id_tipe DAN DIKOSONGKAN -->
+            <select name="id_tipe" id="id_tipe" class="form-control select2" required>
+                <option value="">Pilih Merk Dulu...</option>
             </select>
         </div>
 
@@ -168,6 +164,59 @@ $tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC")
                 $('#previewFotoCabang').attr('src', e.target.result).fadeIn();
             };
             reader.readAsDataURL(this.files[0]);
+        });
+
+        // ==========================================
+        // DYNAMIC DROPDOWN AJAX
+        // ==========================================
+        
+        // 1. Kategori Barang Diubah
+        $(document).off('change', '#id_barang').on('change', '#id_barang', function() {
+            var id_barang = $(this).val();
+
+            $('#id_merk').html('<option value="">Sedang memuat... </option>').trigger('change');
+            $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+
+            if (id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: {
+                        action: 'get_merk',
+                        id_barang: id_barang
+                    },
+                    success: function(response) {
+                        $('#id_merk').html(response).trigger('change');
+                    }
+                });
+            } else {
+                $('#id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+            }
+        });
+
+        // 2. Merk Diubah
+        $(document).off('change', '#id_merk').on('change', '#id_merk', function() {
+            var id_barang = $('#id_barang').val();
+            var id_merk = $(this).val();
+
+            $('#id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+
+            if (id_merk && id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: {
+                        action: 'get_tipe',
+                        id_barang: id_barang,
+                        id_merk: id_merk
+                    },
+                    success: function(response) {
+                        $('#id_tipe').html(response).trigger('change');
+                    }
+                });
+            } else {
+                $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            }
         });
     });
 </script>

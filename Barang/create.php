@@ -1,4 +1,5 @@
 <?php
+
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -87,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $no_asset      = esc($koneksi, $_POST['no_asset']); 
+    $no_asset      = esc($koneksi, $_POST['no_asset']);
     $id_barang     = (int) $_POST['id_barang'];
     $id_merk       = (int) $_POST['id_merk'];
     $serial_number = esc($koneksi, $_POST['serial_number']);
@@ -104,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user          = esc($koneksi, $_POST['user']); // Inputan manual nama user
 
     // Mengambil ID sistem admin yang sedang login untuk dicatat ke database
-    $user_id_sistem = (int) current_user_id(); 
+    $user_id_sistem = (int) current_user_id();
 
     $keterangan_masalah = ($bermasalah === 'Iya') ? esc($koneksi, $_POST['keterangan_masalah'] ?? '') : null;
     if ($bermasalah === 'Iya' && empty($keterangan_masalah)) {
@@ -123,40 +124,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!empty($no_asset)) {
-        $barangPair = ['monitor', 'cpu'];
+        $getBarangInput = mysqli_query($koneksi, "SELECT nama_barang FROM tb_barang WHERE id_barang = $id_barang LIMIT 1");
+        $dataBarangInput = mysqli_fetch_assoc($getBarangInput);
+        $namaBarangInput = strtolower(trim($dataBarangInput['nama_barang']));
+
+        $pasanganDiizinkan = ['monitor', 'cpu'];
+        $inputAdalahPasangan = in_array($namaBarangInput, $pasanganDiizinkan, true);
+
         $cekNoAsset = mysqli_query($koneksi, "
-            SELECT b.no_asset, tb.nama_barang
-            FROM barang b
+            SELECT b.id, tb.nama_barang
+            FROM barang b 
             INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang
-            WHERE b.no_asset = '$no_asset'
+            WHERE b.no_asset = '$no_asset' 
         ");
 
         if (mysqli_num_rows($cekNoAsset) > 0) {
             $barangSudahAda = [];
-            $inputAdalahPair = in_array($namaBarangInput, $barangPair, true);
 
             while ($row = mysqli_fetch_assoc($cekNoAsset)) {
-                $namaBarangDb = strtolower(trim($row['nama_barang']));
-                $barangSudahAda[] = $namaBarangDb;
+                $namaDb = strtolower(trim($row['nama_barang']));
+                $barangSudahAda[] = $namaDb;
 
-                if ($namaBarangDb === $namaBarangInput) {
-                    echo json_encode(['status' => 'error', 'message' => "Barang '$namaBarangInput' sudah terdaftar pada No Asset ini"]);
-                    exit;
-                }
-
-                if (!in_array($namaBarangDb, $barangPair, true)) {
-                    echo json_encode(['status' => 'error', 'message' => 'No Asset sudah digunakan oleh perangkat lain']);
+                if (!in_array($namaDb, $pasanganDiizinkan, true)) {
+                    echo json_encode(['status' => 'error',  'message' => "No asset '$no_asset' Sudah memiliki " . ucwords($namaBarangInput) . " terdaftar."]);
                     exit;
                 }
             }
 
-            if (!$inputAdalahPair) {
-                echo json_encode(['status' => 'error', 'message' => 'No Asset sudah terdaftar']);
+            if (!$inputAdalahPasangan) {
+                echo json_encode(['status' => 'error', 'message' => "$no_asset' khusus digunakan untuk pasangan CPU & Monitor."]);
                 exit;
             }
 
-            if (count(array_unique($barangSudahAda)) >= 2) {
-                echo json_encode(['status' => 'error', 'message' => 'No Asset ini sudah lengkap (Monitor & CPU)']);
+            if (count($barangSudahAda) >= 2) {
+                echo json_encode(['status' => 'error', 'message' => "No Asset '$no_asset' ini sudah lengkap terisi oleh (Monitor & CPU)."]);
                 exit;
             }
         }
@@ -186,10 +187,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($detailBarang) {
             $fotoPath = (!empty($detailBarang['foto']) && is_file(__DIR__ . '/../assets/images/' . $detailBarang['foto'])) ? __DIR__ . '/../assets/images/' . $detailBarang['foto'] : null;
             kirimEmailKeBranchInti([
-                'branch' => $detailBarang['nama_branch'], 'no_asset' => $detailBarang['no_asset'] ?: '-', 'serial_number' => $detailBarang['serial_number'],
-                'nama_barang' => $detailBarang['nama_barang'], 'merk' => $detailBarang['nama_merk'], 'tipe' => $detailBarang['nama_tipe'],
-                'jenis' => $detailBarang['nama_jenis'], 'tanggal_terima' => $detailBarang['tanggal_terima'], 'user' => $detailBarang['user'],
-                'bermasalah' => $detailBarang['bermasalah'], 'foto_path' => $fotoPath
+                'branch' => $detailBarang['nama_branch'],
+                'no_asset' => $detailBarang['no_asset'] ?: '-',
+                'serial_number' => $detailBarang['serial_number'],
+                'nama_barang' => $detailBarang['nama_barang'],
+                'merk' => $detailBarang['nama_merk'],
+                'tipe' => $detailBarang['nama_tipe'],
+                'jenis' => $detailBarang['nama_jenis'],
+                'tanggal_terima' => $detailBarang['tanggal_terima'],
+                'user' => $detailBarang['user'],
+                'bermasalah' => $detailBarang['bermasalah'],
+                'foto_path' => $fotoPath
             ]);
         }
 
@@ -223,9 +231,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label>Barang <span class="text-danger">*</span></label>
-            <select name="id_barang" class="form-control select2" required>
+            <select name="id_barang" id="id_barang" class="form-control select2" required>
                 <option value="">Pilih Barang...</option>
-                <?php mysqli_data_seek($barang, 0); while ($row = mysqli_fetch_assoc($barang)): ?>
+                <?php mysqli_data_seek($barang, 0);
+                while ($row = mysqli_fetch_assoc($barang)): ?>
                     <option value="<?= (int) $row['id_barang'] ?>"><?= h($row['nama_barang']) ?></option>
                 <?php endwhile; ?>
             </select>
@@ -233,21 +242,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label>Merk <span class="text-danger">*</span></label>
-            <select name="id_merk" class="form-control select2" required>
+            <select name="id_merk" id="id_merk" class="form-control select2" required>
                 <option value="">Pilih Merk...</option>
-                <?php mysqli_data_seek($merk, 0); while ($row = mysqli_fetch_assoc($merk)): ?>
-                    <option value="<?= (int) $row['id_merk'] ?>"><?= h($row['nama_merk']) ?></option>
-                <?php endwhile; ?>
             </select>
         </div>
 
         <div class="col-md-6">
             <label>Tipe <span class="text-danger">*</span></label>
-            <select name="id_tipe" class="form-control select2" required>
+            <select name="id_tipe" id="id_tipe" class="form-control select2" required>
                 <option value="">Pilih Tipe...</option>
-                <?php mysqli_data_seek($tipe, 0); while ($row = mysqli_fetch_assoc($tipe)): ?>
-                    <option value="<?= (int) $row['id_tipe'] ?>"><?= h($row['nama_tipe']) ?></option>
-                <?php endwhile; ?>
             </select>
         </div>
 
@@ -255,7 +258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label>Jenis <span class="text-danger">*</span></label>
             <select name="id_jenis" class="form-control select2" required>
                 <option value="">Pilih Jenis...</option>
-                <?php mysqli_data_seek($jenis, 0); while ($row = mysqli_fetch_assoc($jenis)): ?>
+                <?php mysqli_data_seek($jenis, 0);
+                while ($row = mysqli_fetch_assoc($jenis)): ?>
                     <option value="<?= (int) $row['id_jenis'] ?>"><?= h($row['nama_jenis']) ?></option>
                 <?php endwhile; ?>
             </select>
@@ -270,7 +274,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label>Branch <span class="text-danger">*</span></label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
-                <?php mysqli_data_seek($branch, 0); while ($row = mysqli_fetch_assoc($branch)): ?>
+                <?php mysqli_data_seek($branch, 0);
+                while ($row = mysqli_fetch_assoc($branch)): ?>
                     <option value="<?= (int) $row['id_branch'] ?>"><?= h($row['nama_branch']) ?></option>
                 <?php endwhile; ?>
             </select>
@@ -314,6 +319,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <script>
     $(document).ready(function() {
+
+        // 1. SCRIPT UNTUK KETERANGAN MASALAH
         $('#bermasalahSelect').on('change', function() {
             if ($(this).val() === 'Iya') {
                 $('#keteranganMasalahDiv').slideDown();
@@ -324,6 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
 
+        // 2. SCRIPT UNTUK PREVIEW FOTO
         $('#fotoInput').change(function() {
             if (!this.files || !this.files[0]) return;
             let reader = new FileReader();
@@ -332,5 +340,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             };
             reader.readAsDataURL(this.files[0]);
         });
+
+        // 3. SCRIPT DYNAMIC DROPDOWN (BARANG -> MERK -> TIPE)
+
+        // A. Ketika Barang Dipilih
+        $(document).off('change', '#id_barang').on('change', '#id_barang', function() {
+            var id_barang = $(this).val();
+
+            // Set loading state dan reset tipe
+            $('#id_merk').html('<option value="">Sedang memuat... </option>').trigger('change');
+            $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+
+            if (id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: {
+                        action: 'get_merk',
+                        id_barang: id_barang
+                    },
+                    success: function(response) {
+                        $('#id_merk').html(response).trigger('change');
+                    }
+                });
+            } else {
+                $('#id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+            }
+        });
+
+        // B. Ketika Merk Dipilih
+        $(document).off('change', '#id_merk').on('change', '#id_merk', function() {
+            var id_barang = $('#id_barang').val();
+            var id_merk = $(this).val();
+
+            // Set loading state
+            $('#id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+
+            if (id_merk && id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: {
+                        action: 'get_tipe',
+                        id_barang: id_barang,
+                        id_merk: id_merk
+                    },
+                    success: function(response) {
+                        $('#id_tipe').html(response).trigger('change');
+                    }
+                });
+            } else {
+                $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            }
+        });
+
     });
 </script>

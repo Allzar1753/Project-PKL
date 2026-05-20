@@ -49,8 +49,14 @@ function jsonResponse(string $status, string $message): void
     echo json_encode(['status' => $status, 'message' => $message]);
     exit;
 }
-function jsonError(string $message): void { jsonResponse('error', $message); }
-function jsonSuccess(string $message): void { jsonResponse('success', $message); }
+function jsonError(string $message): void
+{
+    jsonResponse('error', $message);
+}
+function jsonSuccess(string $message): void
+{
+    jsonResponse('success', $message);
+}
 
 function getBarangById(mysqli $koneksi, int $id): ?array
 {
@@ -98,7 +104,7 @@ function ensureBarangAccess(array $barang, ?array $pengirimanTerakhir): void
     $branchTujuan = (int) ($pengirimanTerakhir['branch_tujuan'] ?? 0);
     $statusPengiriman = (string) ($pengirimanTerakhir['status_pengiriman'] ?? '');
     $sedangDikirim = !empty($pengirimanTerakhir) && $statusPengiriman !== STATUS_SUDAH_DITERIMA;
-    
+
     if ($barangBranchId === $myBranchId) return;
     if ($sedangDikirim && $branchTujuan === $myBranchId) return;
     http_response_code(403);
@@ -126,20 +132,9 @@ function ensureUserCanReceive(?array $pengirimanTerakhir): void
     }
 }
 
-function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, string $serialNumber): ?string
+function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, string $serialNumber, int $id_barang_input): ?string
 {
-    $stmtCurrent = mysqli_prepare($koneksi, "SELECT tb.nama_barang FROM barang b INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE b.id = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmtCurrent, 'i', $id);
-    mysqli_stmt_execute($stmtCurrent);
-    $resultCurrent = mysqli_stmt_get_result($stmtCurrent);
-    $currentRow = mysqli_fetch_assoc($resultCurrent) ?: null;
-    mysqli_stmt_close($stmtCurrent);
-
-    if (!$currentRow) return "Data barang saat ini tidak ditemukan.";
-
-    $namaBarangInput = strtolower(trim($currentRow['nama_barang']));
-    $pasanganBarang = ['monitor', 'cpu'];
-
+    // 1. Cek duplikat Serial Number (Kecuali ID milik sendiri)
     $stmSerial = mysqli_prepare($koneksi, "SELECT id FROM barang WHERE serial_number = ? AND id != ? LIMIT 1");
     mysqli_stmt_bind_param($stmSerial, 'si', $serialNumber, $id);
     mysqli_stmt_execute($stmSerial);
@@ -149,37 +144,50 @@ function validateDuplicateBarang(mysqli $koneksi, int $id, string $noAsset, stri
 
     if ($serialDuplikat) return "Serial Number sudah digunakan oleh data lain.";
 
+    // 2. Cek duplikat No Asset (Logika Pasangan CPU & Monitor)
     if (!empty($noAsset)) {
-        $stmtAsset = mysqli_prepare($koneksi, "SELECT b.id, b.no_asset, tb.nama_barang FROM barang b INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE b.no_asset = ? AND b.id != ?");
+        // Ambil nama barang yang sedang diinput
+        $qInput = mysqli_query($koneksi, "SELECT nama_barang FROM tb_barang WHERE id_barang = $id_barang_input LIMIT 1");
+        $rowInput = mysqli_fetch_assoc($qInput);
+        if (!$rowInput) return "Kategori Master Barang tidak ditemukan.";
+        $namaInput = strtolower(trim($rowInput['nama_barang']));
+
+        $pasanganDiizinkan = ['monitor', 'cpu'];
+        $inputAdalahPasangan = in_array($namaInput, $pasanganDiizinkan, true);
+
+        // Cari No Asset yang sama di database (Kecuali ID milik sendiri)
+        $stmtAsset = mysqli_prepare($koneksi, "SELECT b.id, tb.nama_barang FROM barang b INNER JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE b.no_asset = ? AND b.id != ?");
         mysqli_stmt_bind_param($stmtAsset, 'si', $noAsset, $id);
         mysqli_stmt_execute($stmtAsset);
         $resultAsset = mysqli_stmt_get_result($stmtAsset);
 
         $barangSudahAda = [];
-        $inputTermasukPasangan = in_array($namaBarangInput, $pasanganBarang, true);
-
         while ($row = mysqli_fetch_assoc($resultAsset)) {
-            $namaBarangDB = strtolower(trim($row['nama_barang']));
-            $barangSudahAda[] = $namaBarangDB;
+            $namaDb = strtolower(trim($row['nama_barang']));
+            $barangSudahAda[] = $namaDb;
 
-            if ($namaBarangDB === $namaBarangInput) {
+            // ATURAN 1: Jika No Asset dipakai barang selain CPU/Monitor (Misal: Notebook)
+            if (!in_array($namaDb, $pasanganDiizinkan, true)) {
                 mysqli_stmt_close($stmtAsset);
-                return "Barang tersebut sudah tersedia di daftar barang.";
+                return "No Asset '$noAsset' sudah digunakan secara eksklusif oleh perangkat " . ucwords($namaDb);
             }
-            if (!in_array($namaBarangDB, $pasanganBarang, true)) {
+            // ATURAN 2: Jika No Asset dipakai CPU, dan mau diinput CPU lagi (Bentrokan sesama jenis)
+            if ($namaDb === $namaInput) {
                 mysqli_stmt_close($stmtAsset);
-                return "No Asset sudah digunakan oleh data lain.";
+                return "No Asset '$noAsset' Sudah terdaftar " . ucwords($namaInput);
             }
         }
         mysqli_stmt_close($stmtAsset);
 
-        $barangSudahAda = array_unique($barangSudahAda);
         if (count($barangSudahAda) > 0) {
-            if (!$inputTermasukPasangan) return "No Asset sudah digunakan oleh data lain.";
-            if (count($barangSudahAda) >= 2) return "No Asset ini sudah dipakai untuk Monitor dan CPU.";
+            // ATURAN 3: Jika No Asset dipakai CPU, tapi mau diinput Notebook
+            if (!$inputAdalahPasangan) return "No Asset '$noAsset' khusus digunakan untuk pasangan CPU & Monitor.";
+
+            // ATURAN 4: Jika No Asset sudah terisi 2 barang (CPU dan Monitor sudah lengkap)
+            if (count($barangSudahAda) >= 2) return "No Asset '$noAsset' ini sudah lengkap terisi oleh (Monitor & CPU).";
         }
     }
-    return null;
+    return null; // Lolos semua validasi
 }
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
@@ -210,8 +218,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         require_permission($koneksi, 'barang.kirim');
     }
 
-    $merkOptions = getSelectOptions($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
-    $tipeOptions = getSelectOptions($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
+    // Load Data Kategori Barang
+    $barangOptions = getSelectOptions($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang ASC");
+
+    // Pre-load data Merk & Tipe sesuai ID barang yang sedang di-edit
+    $currentIdBarang = (int)$barang['id_barang'];
+    $merkOptions = getSelectOptions($koneksi, "SELECT DISTINCT m.id_merk, m.nama_merk FROM tb_tipe t JOIN tb_merk m ON t.id_merk = m.id_merk WHERE t.id_barang = $currentIdBarang ORDER BY m.nama_merk ASC");
+
+    $currentIdMerk = (int)$barang['id_merk'];
+    $tipeOptions = getSelectOptions($koneksi, "SELECT id_tipe, nama_tipe FROM tb_tipe WHERE id_barang = $currentIdBarang AND id_merk = $currentIdMerk ORDER BY nama_tipe ASC");
+
     $jenisOptions = getSelectOptions($koneksi, "SELECT * FROM tb_jenis ORDER BY nama_jenis ASC");
     $branchOptions = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
     $tujuanOptions = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
@@ -230,30 +246,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <label class="form-label">Serial Number<span class="text-danger">*</span></label>
                     <input type="text" name="serial_number" class="form-control" value="<?= h($barang['serial_number'] ?? '') ?>" placeholder="Wajib diisi!" required>
                 </div>
+
+                <div class="col-md-6">
+                    <label class="form-label">Barang<span class="text-danger">*</span></label>
+                    <select name="id_barang" id="update_id_barang" class="form-control select2" required>
+                        <option value="">Pilih Barang...</option>
+                        <?php foreach ($barangOptions as $b): ?>
+                            <option value="<?= (int) $b['id_barang'] ?>" <?= (int) $b['id_barang'] === (int) $barang['id_barang'] ? 'selected' : '' ?>><?= h($b['nama_barang']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Merk<span class="text-danger">*</span></label>
-                    <select name="id_merk" class="form-control select2">
+                    <select name="id_merk" id="update_id_merk" class="form-control select2" required>
+                        <option value="">Pilih Merk...</option>
                         <?php foreach ($merkOptions as $m): ?>
                             <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= h($m['nama_merk']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Tipe<span class="text-danger">*</span></label>
-                    <select name="id_tipe" class="form-control select2">
+                    <select name="id_tipe" id="update_id_tipe" class="form-control select2" required>
+                        <option value="">Pilih Tipe...</option>
                         <?php foreach ($tipeOptions as $t): ?>
                             <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= h($t['nama_tipe']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Jenis<span class="text-danger">*</span></label>
-                    <select name="id_jenis" class="form-control select2">
+                    <select name="id_jenis" class="form-control select2" required>
+                        <option value="">Pilih Jenis...</option>
                         <?php foreach ($jenisOptions as $j): ?>
                             <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= h($j['nama_jenis']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Branch Lokasi Saat Ini</label>
                     <select name="id_branch" class="form-control select2">
@@ -262,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                
+
                 <div class="col-md-6">
                     <label class="form-label">User Pengguna<span class="text-danger">*</span></label>
                     <input type="text" name="user" class="form-control" value="<?= h($barang['user'] ?? '') ?>" required>
@@ -270,22 +303,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                 <div class="col-md-6">
                     <label class="form-label">Status Bermasalah<span class="text-danger">*</span></label>
-                    <select name="bermasalah" class="form-control">
+                    <select name="bermasalah" id="updateBermasalahSelect" class="form-control" required>
                         <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>Tidak</option>
                         <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>Iya</option>
                     </select>
                 </div>
+
+                <div class="col-md-6" id="updateKeteranganMasalahDiv" style="<?= ($barang['bermasalah'] === 'Iya') ? '' : 'display:none;' ?>">
+                    <label class="form-label">Keterangan Masalah</label>
+                    <textarea name="keterangan_masalah" class="form-control" placeholder="Jelaskan masalah barang"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
+                </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Tanggal Terima</label>
-                    <input type="date" name="tanggal_terima" class="form-control" value="<?= h($barang['tanggal_terima'] ?? '') ?>" min="<?= date('Y-m-d') ?>">
+                    <input type="date" name="tanggal_terima" class="form-control" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label">Update Foto Barang</label>
                     <input type="file" name="foto" class="form-control">
                 </div>
             </div>
 
-            <!-- TOMBOL KHUSUS EDIT MASTER -->
             <div class="mt-4 text-end">
                 <button type="submit" class="btn btn-warning"><i class="bi bi-save me-1"></i> Simpan Perubahan</button>
             </div>
@@ -325,7 +364,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     </div>
                 </div>
 
-                <!-- TOMBOL KHUSUS KIRIM LOGISTIK -->
                 <div class="mt-4 text-end">
                     <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i> Kirim Logistik</button>
                 </div>
@@ -348,7 +386,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     </div>
                 </div>
 
-                <!-- TOMBOL KHUSUS TERIMA LOGISTIK -->
                 <div class="mt-4 text-end">
                     <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i> Konfirmasi Terima</button>
                 </div>
@@ -358,6 +395,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             <?php endif; ?>
         <?php endif; ?>
     </form>
+
+    <script>
+        $(document).ready(function() {
+            // SCRIPT TOGGLE KETERANGAN MASALAH
+            $('#updateBermasalahSelect').on('change', function() {
+                if ($(this).val() === 'Iya') {
+                    $('#updateKeteranganMasalahDiv').slideDown();
+                    $('textarea[name="keterangan_masalah"]').attr('required', true);
+                } else {
+                    $('#updateKeteranganMasalahDiv').slideUp();
+                    $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+                }
+            });
+
+            // SCRIPT AJAX DYNAMIC DROPDOWN
+            $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
+                var id_barang = $(this).val();
+
+                $('#update_id_merk').html('<option value="">Sedang memuat... </option>').trigger('change');
+                $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+
+                if (id_barang) {
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_merk',
+                            id_barang: id_barang
+                        },
+                        success: function(response) {
+                            $('#update_id_merk').html(response).trigger('change');
+                        }
+                    });
+                } else {
+                    $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+                }
+            });
+
+            $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
+                var id_barang = $('#update_id_barang').val();
+                var id_merk = $(this).val();
+
+                $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+
+                if (id_merk && id_barang) {
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_tipe',
+                            id_barang: id_barang,
+                            id_merk: id_merk
+                        },
+                        success: function(response) {
+                            $('#update_id_tipe').html(response).trigger('change');
+                        }
+                    });
+                } else {
+                    $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+                }
+            });
+        });
+    </script>
 <?php
     exit;
 }
@@ -392,26 +492,24 @@ if ($formType === 'penerimaan') {
     }
 } elseif ($formType === 'master') {
     $tanggalTerima = $_POST['tanggal_terima'] ?? '';
-    if ($tanggalTerima !== '' && $tanggalTerima < date('Y-m-d')) {
-        jsonError("Tanggal terima tidak boleh tanggal yang lampau.");
-    }
+
     $noAsset = trim((string)$_POST['no_asset']);
     $serialNumber = trim((string)$_POST['serial_number']);
-    $duplicate = validateDuplicateBarang($koneksi, $id, $noAsset, $serialNumber);
+    $duplicate = validateDuplicateBarang($koneksi, $id, $noAsset, $serialNumber, (int)$_POST['id_barang']);
     if ($duplicate) jsonError($duplicate);
 
     $upload = uploadImage('foto');
     $fotoBaru = $upload['status'] === 'success' ? $upload['filename'] : null;
-    
-    // Mendapatkan ID user yang sedang login untuk dicatat sebagai Updater
+
+    $keteranganMasalah = ($_POST['bermasalah'] === 'Iya') ? ($_POST['keterangan_masalah'] ?? null) : null;
     $user_id_sistem = (int) current_user_id();
 
     mysqli_begin_transaction($koneksi);
     try {
-        // Query UPDATE otomatis memasukkan user_id sistem dan user manual
-        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
-        // s=string, i=int. Total 12 variabel -> ssiiiisissii
-        mysqli_stmt_bind_param($stmt, 'ssiiiisissii', $noAsset, $serialNumber, $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem, $_POST['bermasalah'], $_POST['tanggal_terima'], $fotoBaru, $id);
+        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
+
+        mysqli_stmt_bind_param($stmt, 'ssiiiiiisssssi', $noAsset, $serialNumber, $_POST['id_barang'], $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem, $_POST['bermasalah'], $keteranganMasalah, $tanggalTerima, $fotoBaru, $id);
+
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
         jsonSuccess("Data berhasil diupdate.");
@@ -436,8 +534,7 @@ if ($formType === 'penerimaan') {
         mysqli_stmt_execute($stmt);
 
         mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE id = $id");
-        
-        // Kirim notifikasi ke user cabang tujuan bahwa barang sedang dikirim
+
         $newPengirimanId = (int) mysqli_insert_id($koneksi);
         $targetBranch = (int) ($_POST['tujuan'] ?? 0);
         if ($targetBranch > 0) {

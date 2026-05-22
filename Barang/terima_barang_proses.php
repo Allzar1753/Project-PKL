@@ -70,12 +70,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id_barang_pk = (int)$rowB['id_barang'];
             $serialNumber = $rowB['serial_number'];
             $userId = current_user_id() ? (int) current_user_id() : 0;
+            $branchUser = mysqli_real_escape_string($koneksi, $nama_user_login);
 
             $stmtUpdateBarang = mysqli_prepare($koneksi, "UPDATE barang SET 
                 id_branch = ?,
+                user = ?,
+                user_id = ?,
                 status = 'Tersedia',
                 bermasalah = 'Tidak',
                 keterangan_masalah = NULL,
+                tanggal_terima = ?,
                 id_status = 4
                 WHERE id = ?");
 
@@ -83,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Gagal menyiapkan update barang: ' . mysqli_error($koneksi));
             }
 
-            mysqli_stmt_bind_param($stmtUpdateBarang, 'ii', $myBranchId, $id_barang_pk);
+            mysqli_stmt_bind_param($stmtUpdateBarang, 'isisi', $myBranchId, $branchUser, $userId, $tanggal_diterima, $id_barang_pk);
             mysqli_stmt_execute($stmtUpdateBarang);
 
             if (mysqli_stmt_affected_rows($stmtUpdateBarang) <= 0) {
@@ -91,9 +95,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmtFallback = mysqli_prepare($koneksi, "UPDATE barang SET 
                     id_branch = ?,
+                    user = ?,
+                    user_id = ?,
                     status = 'Tersedia',
                     bermasalah = 'Tidak',
                     keterangan_masalah = NULL,
+                    tanggal_terima = ?,
                     id_status = 4
                     WHERE serial_number = ? LIMIT 1");
 
@@ -101,12 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Gagal menyiapkan fallback update barang: ' . mysqli_error($koneksi));
                 }
 
-                mysqli_stmt_bind_param($stmtFallback, 'is', $myBranchId, $serialNumber);
-                mysqli_stmt_execute($stmtFallback);
-                if (mysqli_stmt_affected_rows($stmtFallback) <= 0) {
-                    throw new Exception('Gagal update data barang cabang.');
-                }
-                mysqli_stmt_close($stmtFallback);
+                mysqli_stmt_bind_param($stmtFallback, 'isiss', $myBranchId, $branchUser, $userId, $tanggal_diterima, $serialNumber);
             } else {
                 mysqli_stmt_close($stmtUpdateBarang);
             }

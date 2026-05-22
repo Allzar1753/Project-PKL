@@ -13,7 +13,7 @@ require_admin();
 $user_id = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 
 // Query untuk mengambil info cabang/user
-$query_user = mysqli_query($koneksi, "SELECT u.username, b.nama_branch FROM users u JOIN tb_branch b ON u.id_branch = b.id_branch WHERE u.id = '$user_id'");
+$query_user = mysqli_query($koneksi, "SELECT u.username, u.id_branch, b.nama_branch FROM users u JOIN tb_branch b ON u.id_branch = b.id_branch WHERE u.id = '$user_id'");
 $data_user = mysqli_fetch_assoc($query_user);
 
 if (!$data_user) {
@@ -21,18 +21,22 @@ if (!$data_user) {
     exit;
 }
 
+$branch_id = (int) $data_user['id_branch'];
+
 // Query mengambil detail barang milik cabang tersebut
-// Kita JOIN ke tabel master (merk, tipe, status) agar tampil nama, bukan ID
+// Kita JOIN ke tabel master (barang, merk, tipe, status) agar tampil nama, bukan ID
 $query_barang = "SELECT 
                     brg.*, 
+                    tb.nama_barang,
                     m.nama_merk, 
                     t.nama_tipe,
                     s.nama_status
                  FROM barang brg
+                 LEFT JOIN tb_barang tb ON brg.id_barang = tb.id_barang
                  LEFT JOIN tb_merk m ON brg.id_merk = m.id_merk
                  LEFT JOIN tb_tipe t ON brg.id_tipe = t.id_tipe
                  LEFT JOIN tb_status s ON brg.id_status = s.id_status
-                 WHERE brg.user_id = '$user_id'";
+                 WHERE brg.id_branch = '$branch_id'";
 $result_barang = mysqli_query($koneksi, $query_barang);
 ?>
 
@@ -160,7 +164,7 @@ $result_barang = mysqli_query($koneksi, $query_barang);
                             <td class="text-muted"><?= $no++ ?></td>
                             <td>
                                 <!-- Nama Barang & No Asset (Identitas) -->
-                                <div class="fw-bold text-uppercase" style="font-size: 0.85rem; color: #555;">CPU</div> <!-- Hardcoded CPU sebagai contoh, atau ambil dari kategori jika ada -->
+                                <div class="fw-bold text-uppercase" style="font-size: 0.85rem; color: #555;"><?= h($row['nama_barang'] ?? 'UNKNOWN') ?></div>
                                 <div class="asset-id"><?= h($row['no_asset']) ?></div>
                                 <div class="sn-text">SN: <?= h($row['serial_number']) ?></div>
                             </td>

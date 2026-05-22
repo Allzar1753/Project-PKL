@@ -34,7 +34,7 @@ function shippingBadge(string $status): string
     } elseif ($s === 'sedang perjalanan') {
         $class = 'bg-primary';
         $icon  = 'bi-truck';
-    } elseif ($s === 'sudah diterima' || $s === 'sudah diterima ho') {
+    } elseif (in_array($s, ['sudah diterima', 'sudah diterima ho', 'selesai'], true)) {
         $class = 'bg-success';
         $icon  = 'bi-check-circle';
     }
@@ -150,18 +150,32 @@ if ($filter === 'keluar') {
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     } else {
+        // PERBAIKAN: Mengambil b.user (Nama Pemilik Master) bukan p.nama_penerima (Nama penerima paket)
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch, p.nama_penerima as pemilik_barang
+                            b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch, 
+                            b.user as pemilik_barang 
                      FROM barang_pengiriman p
                      JOIN barang b ON p.id_barang = b.id
                      JOIN tb_barang ON b.id_barang = tb_barang.id_barang
                      WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     }
 } else {
-    // INI ADALAH BAGIAN YANG TERHAPUS SEBELUMNYA
-    $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, barang.user, barang.keterangan_masalah, barang.status,
-                    tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
-             FROM barang
+    // --- PERBAIKAN QUERY ASSET TERSEDIA ---
+    // Subquery untuk mengambil nama user dari riwayat logistik terakhir
+    if ($isAdmin) {
+        // Admin HO: Ambil pengirim terakhir dari Cabang
+        $subqueryLastUser = "(SELECT pemilik_barang FROM pengiriman_cabang_ho WHERE serial_number = barang.serial_number ORDER BY id_pengiriman_ho DESC LIMIT 1)";
+    } else {
+        // User Cabang: Ambil penerima terakhir dari HO
+        $subqueryLastUser = "(SELECT nama_penerima FROM barang_pengiriman WHERE id_barang = barang.id ORDER BY id_pengiriman DESC LIMIT 1)";
+    }
+
+    $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, 
+                        barang.user AS master_user, 
+                        $subqueryLastUser AS last_logistic_user,
+                        barang.keterangan_masalah, barang.status,
+                        tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
+                 FROM barang
                  JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
                  LEFT JOIN tb_merk m ON barang.id_merk = m.id_merk
                  LEFT JOIN tb_tipe t ON barang.id_tipe = t.id_tipe
@@ -748,9 +762,13 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                         <?php else: ?><div class="thumb-placeholder"><i class="bi bi-receipt"></i></div><?php endif; ?>
                                                     </td>
                                                     <td class="text-center pe-4">
-                                                        <!-- [REVISI ALUR]: Menampilkan tombol biru icon truk di tab Logistik Keluar agar pop up info bisa dipanggil -->
                                                         <?php if ($isAdmin): ?>
-                                                            <button class="btn btn-info btn-sm text-white btnLogistik" data-id="<?= $data['id_barang'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Detail Status Logistik"><i class="bi bi-truck"></i></button>
+                                                            <?php $logisticStatus = strtolower(trim($data['status_pengiriman'] ?? '')); ?>
+                                                            <?php if (in_array($logisticStatus, ['sedang perjalanan', 'menunggu persetujuan admin'], true)): ?>
+                                                                <button type="button" class="btn btn-info btn-sm text-white btnLogistikStatus" data-id="<?= $data['id_transaksi'] ?>" data-status="<?= h($logisticStatus) ?>" title="Informasi status logistik"><i class="bi bi-truck"></i></button>
+                                                            <?php else: ?>
+                                                                <button type="button" class="btn btn-success btn-sm text-white" disabled title="Pengiriman selesai"><i class="bi bi-lock-fill"></i></button>
+                                                            <?php endif; ?>
                                                         <?php else: ?>
                                                             <i class="bi bi-lock-fill text-muted"></i>
                                                         <?php endif; ?>
@@ -762,8 +780,11 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                         <div class="meta-line text-muted">Tipe: <?= h($data['nama_tipe'] ?? '-') ?></div>
                                                     </td>
                                                     <td>
-                                                        <?php if ($isAdmin): ?><div class="meta-line fw-bold"><i class="bi bi-geo-alt me-1 text-danger"></i><?= h($data['info_branch']) ?></div><?php endif; ?>
-                                                        <div class="meta-line"><i class="bi bi-person me-1"></i><?= h($data['user'] ?: 'No User') ?></div>
+                                                        <?php
+                                                        // Logika: Tampilkan master_user. Jika kosong, tampilkan dari logistik terakhir. Jika kosong juga, tulis 'No User'.
+                                                        $namaTampil = !empty($data['master_user']) ? $data['master_user'] : (!empty($data['last_logistic_user']) ? $data['last_logistic_user'] : 'No User');
+                                                        ?>
+                                                        <div class="meta-line"><i class="bi bi-person me-1"></i><?= h($namaTampil) ?></div>
                                                     </td>
                                                     <td>
                                                         <?= barangBadge($data['bermasalah']) ?>
@@ -1018,6 +1039,27 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             });
         });
 
+        $(document).on('click', '.btnLogistikStatus', function() {
+            const status = $(this).data('status');
+            if (status === 'sedang perjalanan' || status === 'menunggu persetujuan admin') {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Pengiriman belum selesai',
+                    text: 'Barang sedang dalam perjalanan. User belum melakukan konfirmasi penerimaan.',
+                    confirmButtonColor: '#ff7a00',
+                    confirmButtonText: 'Tutup'
+                });
+            } else {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pengiriman selesai',
+                    text: 'Barang sudah diterima dan proses logistik sudah selesai.',
+                    confirmButtonColor: '#28a745',
+                    confirmButtonText: 'Tutup'
+                });
+            }
+        });
+
         /**
          * KONFIRMASI PENERIMAAN (LOGISTIK MASUK)
          */
@@ -1118,7 +1160,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                 if (result.isConfirmed) {
                     $.getJSON('delete.php', {
                         id: id
-                    }, function(res) {
+                    }, function(res) {  
                         if (res.status === 'success') {
                             Swal.fire('Dihapus!', res.message, 'success').then(() => location.reload());
                         } else {

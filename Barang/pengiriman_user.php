@@ -1,4 +1,9 @@
 <?php
+// JURUS 1: Tangkap semua sampah output (spasi kosong/error) sejak baris pertama
+ob_start();
+// JURUS 2: Matikan tampilan error bawaan PHP agar tidak merusak JSON
+error_reporting(0);
+
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
@@ -17,11 +22,11 @@ $myBranchId = (int) current_user_branch_id();
 // HANDLE AJAX REQUEST (UNTUK MENCARI SERIAL NUMBER)
 // ==========================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_sn') {
+    if (ob_get_length()) ob_clean(); // Sapu bersih sebelum cetak JSON
     header('Content-Type: application/json');
+
     $idBarangPilih = (int)($_GET['id_barang'] ?? 0);
-    
-    // Ambil SN dari tabel barang berdasarkan cabang, id_barang, 
-    // dan pastikan barang tersebut belum pernah diajukan pengiriman
+
     $query_sn = "
         SELECT serial_number, `user` 
         FROM barang 
@@ -33,12 +38,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_sn') {
               AND status_pengiriman NOT IN ('Ditolak', 'Selesai')
         )
     ";
-    
+
     $stmt_sn = mysqli_prepare($koneksi, $query_sn);
     mysqli_stmt_bind_param($stmt_sn, 'iii', $idBarangPilih, $myBranchId, $myBranchId);
     mysqli_stmt_execute($stmt_sn);
     $result_sn = mysqli_stmt_get_result($stmt_sn);
-    
+
     $data_sn = [];
     while ($row = mysqli_fetch_assoc($result_sn)) {
         $data_sn[] = $row;
@@ -47,16 +52,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_sn') {
     exit;
 }
 
-function h($v): string {
+function h($v): string
+{
     return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 }
-function jsonResponse(string $status, string $message): void {
+
+// JURUS 3: Modifikasi fungsi jsonResponse agar anti-gagal
+function jsonResponse(string $status, string $message): void
+{
+    if (ob_get_length()) ob_clean(); // Sapu bersih semua output nyasar sebelum JSON
     header('Content-Type: application/json');
     echo json_encode(['status' => $status, 'message' => $message]);
     exit;
 }
 
-function uploadImage($fieldName, $targetDir = "../assets/images/"): array {
+function uploadImage($fieldName, $targetDir = "../assets/images/"): array
+{
     if (empty($_FILES[$fieldName]['name'])) return ['status' => 'empty'];
     $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
@@ -70,15 +81,15 @@ function uploadImage($fieldName, $targetDir = "../assets/images/"): array {
     return ['status' => 'success', 'filename' => $filename];
 }
 
-function getJakartaBranch(mysqli $koneksi): ?array {
+function getJakartaBranch(mysqli $koneksi): ?array
+{
     $res = mysqli_query($koneksi, "SELECT id_branch, nama_branch FROM tb_branch WHERE LOWER(TRIM(nama_branch)) IN ('jakarta','cabang jakarta','ho jakarta','head office jakarta') ORDER BY id_branch ASC LIMIT 1");
     return $res ? (mysqli_fetch_assoc($res) ?: null) : null;
 }
 
-// FUNGSI DIUPDATE: Hanya ambil jenis barang yang ada di cabang saat ini
-function getBarangBranchOptions(mysqli $koneksi, int $branchId): array {
+function getBarangBranchOptions(mysqli $koneksi, int $branchId): array
+{
     $rows = [];
-    // Join dengan tabel barang untuk memfilter berdasarkan id_branch
     $query = "
         SELECT DISTINCT tb.id_barang, tb.nama_barang 
         FROM tb_barang tb
@@ -92,7 +103,8 @@ function getBarangBranchOptions(mysqli $koneksi, int $branchId): array {
     return $rows;
 }
 
-function createAdminNotification(mysqli $koneksi, string $title, string $message, ?string $link): void {
+function createAdminNotification(mysqli $koneksi, string $title, string $message, ?string $link): void
+{
     $stmt = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, title, message, link, is_read) VALUES ('admin', ?, ?, ?, 0)");
     if (!$stmt) return;
     mysqli_stmt_bind_param($stmt, 'sss', $title, $message, $link);
@@ -101,7 +113,7 @@ function createAdminNotification(mysqli $koneksi, string $title, string $message
 }
 
 $jakartaBranch = getJakartaBranch($koneksi);
-if (!$jakartaBranch) exit('HO Jakarta tidak ditemukan');
+if (!$jakartaBranch) jsonResponse('error', 'HO Jakarta tidak ditemukan');
 
 // ==========================================
 // HANDLE PROSES DATA POST
@@ -117,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cekSN_pengiriman = mysqli_query($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE serial_number = '$serial_number' AND status_pengiriman NOT IN ('Ditolak', 'Selesai')");
     if (mysqli_num_rows($cekSN_pengiriman) > 0) {
-        jsonResponse('error', 'Serial number sudah sedang diajukan pengiriman atau belum selesai proses sebelumnya.');
+        jsonResponse('error', 'Serial number ini sudah diajukan pengiriman dan belum selesai.');
     }
 
     if ($idBarang <= 0) jsonResponse('error', 'Jenis barang wajib dipilih');
@@ -126,8 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($jasa === '') jsonResponse('error', 'Jasa pengiriman wajib dipilih');
     if ($serial_number === '') jsonResponse('error', 'Serial number wajib dipilih');
     if ($catatan_user === '') jsonResponse('error', 'Keterangan kerusakan wajib diisi');
-    
-    // Hanya 1 pengajuan pending per serial number barang per cabang (mencegah dobel)
+
     $stmtPending = mysqli_prepare($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE serial_number = ? AND branch_asal = ? AND COALESCE(status_pengiriman,'') = ? LIMIT 1");
     if ($stmtPending) {
         $statusPending = STATUS_MENUNGGU_PERSETUJUAN;
@@ -148,11 +159,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         (id_barang, serial_number, pemilik_barang, branch_asal, branch_tujuan, tanggal_pengajuan, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, catatan_user, dibuat_oleh)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
+
     if (!$stmt) jsonResponse('error', 'Gagal menyiapkan penyimpanan pengiriman.');
 
     $dibuatOleh = current_user_id() ? (int) current_user_id() : null;
     $branchTujuan = (int) ($jakartaBranch['id_branch'] ?? 0);
     $statusPengiriman = STATUS_MENUNGGU_PERSETUJUAN;
+
+    // Fallback if null photo (menghindari warning di versi PHP baru)
+    $fotoBind = $foto !== null ? $foto : '';
+
     mysqli_stmt_bind_param(
         $stmt,
         'issiissssssi',
@@ -164,16 +180,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tanggal,
         $jasa,
         $resi,
-        $foto,
+        $fotoBind,
         $statusPengiriman,
         $catatan_user,
         $dibuatOleh
     );
+
     if (!mysqli_stmt_execute($stmt)) jsonResponse('error', 'Gagal menyimpan pengiriman: ' . mysqli_stmt_error($stmt));
     mysqli_stmt_close($stmt);
 
-    // AUTO-LOCK: Otomatis kunci barang saat dikirim (tidak perlu menunggu approve admin)
-    $stmtLock = mysqli_prepare($koneksi, "UPDATE barang SET status = 'Terkunci', id_branch = id_branch WHERE serial_number = ?");
+    // AUTO-LOCK
+    $stmtLock = mysqli_prepare($koneksi, "UPDATE barang SET id_status = 3 WHERE serial_number = ?");
     if ($stmtLock) {
         mysqli_stmt_bind_param($stmtLock, 's', $serial_number);
         mysqli_stmt_execute($stmtLock);
@@ -198,13 +215,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         '../Barang/pengiriman_approval.php'
     );
 
-    jsonResponse('success', 'Pengiriman berhasil diajukan. Barang otomatis dikunci. Notifikasi sudah masuk ke admin HO.');
+    jsonResponse('success', 'Pengiriman berhasil diajukan. Barang telah dikunci. Notifikasi masuk ke admin HO.');
+    // Ingat, proses berhenti di dalam jsonResponse (ada exit), jadi HTML form tidak akan ikut tercetak saat AJAX POST.
 }
 
-// Mengambil list barang HANYA yang ada di branch user
+// Bersihkan output lagi khusus sebelum mencetak tampilan HTML jika ini request GET biasa (Load Modal)
+if (ob_get_length()) ob_clean();
+
 $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 ?>
 
+<!-- HTML Form di Bawah Ini -->
 <form id="formPengirimanUser" method="POST" enctype="multipart/form-data">
     <div class="row g-3">
         <div class="col-12">
@@ -231,7 +252,6 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 
         <div class="col-md-6 mb-3">
             <label>Serial Number / Service Tag <span class="text-danger">*</span></label>
-            <!-- Diubah dari Input menjadi Select Dropdown -->
             <select name="serial_number" id="serial_number_select" class="form-select select2" required>
                 <option value="">Pilih Jenis Barang Dulu...</option>
             </select>
@@ -240,7 +260,6 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 
         <div class="col-md-6 mb-3">
             <label>Pemilik Barang (User) <span class="text-danger">*</span></label>
-            <!-- Menambahkan ID agar mudah dikontrol oleh JavaScript -->
             <input type="text" name="pemilik_barang" id="pemilik_barang_input" class="form-control" required placeholder="Akan terisi otomatis" readonly style="background-color: #f8f9fa;">
         </div>
 
@@ -291,55 +310,47 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 </form>
 
 <script>
-$(document).ready(function() {
-    // Ketika Jenis Barang berubah
-    $('#id_barang_select').on('change', function() {
-        var idBarang = $(this).val();
-        var snSelect = $('#serial_number_select');
-        var pemilikInput = $('#pemilik_barang_input');
-        
-        // Kosongkan form ke default state
-        snSelect.html('<option value="">Loading...</option>');
-        pemilikInput.val('');
+    $(document).ready(function() {
+        $('#id_barang_select').on('change', function() {
+            var idBarang = $(this).val();
+            var snSelect = $('#serial_number_select');
+            var pemilikInput = $('#pemilik_barang_input');
 
-        if (idBarang) {
-            // Panggil file ini sendiri menggunakan AJAX dengan parameter action=get_sn
-            $.ajax({
-                url: 'pengiriman_user.php?action=get_sn&id_barang=' + idBarang,
-                type: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    var options = '<option value="">Pilih Serial Number...</option>';
-                    if (data.length > 0) {
-                        $.each(data, function(index, item) {
-                            // Simpan data user di attribute 'data-user' agar gampang diambil
-                            options += '<option value="' + item.serial_number + '" data-user="' + item.user + '">' + item.serial_number + '</option>';
-                        });
-                    } else {
-                        options = '<option value="">Tidak ada aset tersedia/Telah dikirim</option>';
+            snSelect.html('<option value="">Loading...</option>');
+            pemilikInput.val('');
+
+            if (idBarang) {
+                $.ajax({
+                    url: 'pengiriman_user.php?action=get_sn&id_barang=' + idBarang,
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function(data) {
+                        var options = '<option value="">Pilih Serial Number...</option>';
+                        if (data.length > 0) {
+                            $.each(data, function(index, item) {
+                                options += '<option value="' + item.serial_number + '" data-user="' + item.user + '">' + item.serial_number + '</option>';
+                            });
+                        } else {
+                            options = '<option value="">Tidak ada aset tersedia/Telah dikirim</option>';
+                        }
+                        snSelect.html(options);
+                    },
+                    error: function() {
+                        snSelect.html('<option value="">Gagal mengambil data</option>');
                     }
-                    snSelect.html(options);
-                },
-                error: function() {
-                    snSelect.html('<option value="">Gagal mengambil data</option>');
-                }
-            });
-        } else {
-            snSelect.html('<option value="">Pilih Jenis Barang Dulu...</option>');
-        }
-    });
+                });
+            } else {
+                snSelect.html('<option value="">Pilih Jenis Barang Dulu...</option>');
+            }
+        });
 
-    // Ketika Serial Number dipilih
-    $('#serial_number_select').on('change', function() {
-        // Ambil value dari attribute data-user pada option yang di-select
-        var selectedUser = $(this).find(':selected').data('user');
-        
-        // Isi ke input text Pemilik Barang
-        if (selectedUser) {
-            $('#pemilik_barang_input').val(selectedUser);
-        } else {
-            $('#pemilik_barang_input').val('');
-        }
+        $('#serial_number_select').on('change', function() {
+            var selectedUser = $(this).find(':selected').data('user');
+            if (selectedUser) {
+                $('#pemilik_barang_input').val(selectedUser);
+            } else {
+                $('#pemilik_barang_input').val('');
+            }
+        });
     });
-});
 </script>

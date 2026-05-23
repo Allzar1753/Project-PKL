@@ -176,6 +176,20 @@ if (!function_exists('ensure_system_schema')) {
             mysqli_query($koneksi, "ALTER TABLE pengiriman_cabang_ho ADD COLUMN catatan_admin VARCHAR(255) NULL AFTER catatan_user");
         }
 
+        mysqli_query($koneksi, "CREATE TABLE IF NOT EXISTS tb_ekspedisi (
+            id_ekspedisi INT AUTO_INCREMENT PRIMARY KEY,
+            nama_ekspedisi VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_tb_ekspedisi_nama (nama_ekspedisi)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        if (mysqli_num_rows(mysqli_query($koneksi, "SELECT 1 FROM tb_ekspedisi LIMIT 1")) === 0) {
+            mysqli_query($koneksi, "INSERT IGNORE INTO tb_ekspedisi (nama_ekspedisi) VALUES
+                ('SAP Express'),
+                ('PCP Express')");
+        }
+
         mysqli_query($koneksi, "CREATE TABLE IF NOT EXISTS password_resets (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,

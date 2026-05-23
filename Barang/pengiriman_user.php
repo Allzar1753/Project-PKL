@@ -139,6 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($serial_number === '') jsonResponse('error', 'Serial number wajib dipilih');
     if ($catatan_user === '') jsonResponse('error', 'Keterangan kerusakan wajib diisi');
 
+    $pdfGenerated = trim((string) ($_POST['pdf_generated'] ?? '0'));
+    if ($pdfGenerated !== '1') {
+        jsonResponse('error', 'Silakan cetak/unduh PDF surat pengiriman terlebih dahulu sebelum melanjutkan.');
+    }
+
     $stmtPending = mysqli_prepare($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE serial_number = ? AND branch_asal = ? AND COALESCE(status_pengiriman,'') = ? LIMIT 1");
     if ($stmtPending) {
         $statusPending = STATUS_MENUNGGU_PERSETUJUAN;
@@ -222,82 +227,191 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Bersihkan output lagi khusus sebelum mencetak tampilan HTML jika ini request GET biasa (Load Modal)
 if (ob_get_length()) ob_clean();
 
+function getBranchName(mysqli $koneksi, int $branchId): string
+{
+    $stmt = mysqli_prepare($koneksi, 'SELECT nama_branch FROM tb_branch WHERE id_branch = ? LIMIT 1');
+    if (!$stmt) return '';
+    mysqli_stmt_bind_param($stmt, 'i', $branchId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = mysqli_fetch_assoc($res) ?: null;
+    mysqli_stmt_close($stmt);
+    return (string) ($row['nama_branch'] ?? '');
+}
+
+$branchName = getBranchName($koneksi, $myBranchId);
+$currentUserName = (string) ((current_user()['username'] ?? current_user()['name']) ?? '');
+
 $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 ?>
 
-<!-- HTML Form di Bawah Ini -->
 <form id="formPengirimanUser" method="POST" enctype="multipart/form-data">
-    <div class="row g-3">
-        <div class="col-12">
-            <div class="alert alert-info mb-0">
-                <b>Catatan:</b> Ini input pengiriman baru dari cabang ke HO Jakarta untuk barang yang perlu diperbaiki.
-                Setelah diajukan, admin HO akan memproses dan memberi persetujuan saat barang sudah diterima.
+    <div class="mb-4">
+        <div class="d-flex gap-2 flex-wrap">
+            <span id="stepLabel1" class="badge rounded-pill bg-primary">1. Surat Pengiriman</span>
+            <span id="stepLabel2" class="badge rounded-pill bg-secondary text-white">2. Form Pengiriman</span>
+        </div>
+    </div>
+
+    <div id="pengirimanStep1">
+        <div class="alert alert-info">Isi data surat pengiriman terlebih dahulu, lalu cetak/download PDF. Setelah itu lanjut ke form pengiriman ke HO Jakarta.</div>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label">Deskripsi Barang<span class="text-danger">*</span></label>
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="receipt_table">
+                        <thead>
+                            <tr>
+                                <th style="width:6%;">NO</th>
+                                <th>DESKRIPSI BARANG</th>
+                                <th>HOSTNAME</th>
+                                <th style="width:8%;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="row-no">1</td>
+                                <td><input type="text" class="form-control row-desc" placeholder="Deskripsi item"></td>
+                                <td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)"></td>
+                                <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2">
+                    <button type="button" id="btnAddRow" class="btn btn-sm btn-secondary">Tambah Baris</button>
+                </div>
+                <div class="form-text mt-1">Tekan Enter saat fokus di kolom deskripsi untuk menambah baris baru.</div>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Qty</label>
+                <input type="number" id="receipt_qty" class="form-control" value="1" min="1">
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">Catatan</label>
+                <input type="text" id="receipt_catatan" class="form-control" placeholder="Catatan singkat untuk surat pengiriman">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">ATTN</label>
+                <input type="text" id="receipt_attn" class="form-control" placeholder="ATTN tujuan" value="<?= h($branchName) ?>">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Asuransi</label>
+                <input type="text" id="receipt_asuransi" class="form-control" placeholder="Contoh: Rp. 8.000.000">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Charge</label>
+                <input type="text" id="receipt_charge" class="form-control" placeholder="Charge / Biaya">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">User / Cabang</label>
+                <input type="text" id="receipt_user" class="form-control" placeholder="Nama cabang atau user" value="<?= h($branchName) ?>">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Penerima</label>
+                <input type="text" id="receipt_penerima" class="form-control" placeholder="Nama penerima">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ekspedisi<span class="text-danger">*</span></label>
+                <select id="receipt_ekspedisi" class="form-control select2" required>
+                    <option value="">Pilih Ekspedisi...</option>
+                    <option value="SAP Express">SAP Express</option>
+                    <option value="PCP Express">PCP Express</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Pengirim</label>
+                <input type="text" id="receipt_pengirim" class="form-control" placeholder="Nama pengirim" value="<?= h($currentUserName) ?>">
             </div>
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Jenis Barang Rusak <span class="text-danger">*</span></label>
-            <select name="id_barang" id="id_barang_select" class="form-select select2" required>
-                <option value="">Pilih Jenis Barang...</option>
-                <?php foreach ($barangList as $b): ?>
-                    <option value="<?= (int) $b['id_barang'] ?>"><?= h($b['nama_barang']) ?></option>
-                <?php endforeach; ?>
-            </select>
+        <div class="mt-4 text-end">
+            <button type="button" id="btnGeneratePdf" class="btn btn-primary"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Download PDF & Lanjutkan</button>
+        </div>
+    </div>
+
+    <div id="pengirimanStep2" style="display:none;">
+        <input type="hidden" name="pdf_generated" id="pdf_generated" value="0">
+        <input type="hidden" name="receipt_description" id="receipt_description_hidden">
+        <input type="hidden" name="receipt_hostname" id="receipt_hostname_hidden">
+        <input type="hidden" name="receipt_qty" id="receipt_qty_hidden">
+        <input type="hidden" name="receipt_catatan" id="receipt_catatan_hidden">
+        <input type="hidden" name="receipt_attn" id="receipt_attn_hidden">
+        <input type="hidden" name="receipt_asuransi" id="receipt_asuransi_hidden">
+        <input type="hidden" name="receipt_charge" id="receipt_charge_hidden">
+        <input type="hidden" name="receipt_user" id="receipt_user_hidden">
+        <input type="hidden" name="receipt_penerima" id="receipt_penerima_hidden">
+        <input type="hidden" name="receipt_ekspedisi" id="receipt_ekspedisi_hidden">
+        <input type="hidden" name="receipt_pengirim" id="receipt_pengirim_hidden">
+
+        <div class="alert alert-secondary">Form pengiriman ke HO Jakarta hanya muncul setelah surat pengiriman berhasil dibuat/ditampilkan.</div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Jenis Barang Rusak <span class="text-danger">*</span></label>
+                <select name="id_barang" id="id_barang_select" class="form-select select2" required>
+                    <option value="">Pilih Jenis Barang...</option>
+                    <?php foreach ($barangList as $b): ?>
+                        <option value="<?= (int) $b['id_barang'] ?>"><?= h($b['nama_barang']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Tujuan</label>
+                <input type="text" class="form-control" value="<?= h($jakartaBranch['nama_branch']) ?>" readonly>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label>Serial Number / Service Tag <span class="text-danger">*</span></label>
+                <select name="serial_number" id="serial_number_select" class="form-select select2" required>
+                    <option value="">Pilih Jenis Barang Dulu...</option>
+                </select>
+                <small class="text-muted">Pilih SN yang tersedia di cabang Anda.</small>
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label>Pemilik Barang (User) <span class="text-danger">*</span></label>
+                <input type="text" name="pemilik_barang" id="pemilik_barang_input" class="form-control" required placeholder="Akan terisi otomatis" readonly style="background-color: #f8f9fa;">
+            </div>
+
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Keterangan Kerusakan <span class="text-danger">*</span></label>
+                <textarea name="catatan_user" class="form-control" rows="3" placeholder="Jelaskan kerusakan barang dengan jelas" required></textarea>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Tanggal Kirim</label>
+                <input type="date" name="tanggal_keluar" class="form-control" required value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Jasa Pengiriman</label>
+                <select name="jasa_pengiriman" class="form-control select2" required>
+                    <option value="">Pilih Jasa Pengiriman...</option>
+                    <option value="SAP Express">SAP Express</option>
+                    <option value="PCP Express">PCP Express</option>
+                </select>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Nomor Resi Keluar</label>
+                <input type="text" name="nomor_resi_keluar" class="form-control" placeholder="Isi nomor resi dari ekspedisi" required>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Foto Resi / Bukti Kirim</label>
+                <input type="file" name="foto_resi_keluar" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Status Pengiriman</label>
+                <input type="text" class="form-control" value="<?= h(STATUS_MENUNGGU_PERSETUJUAN) ?>" readonly>
+            </div>
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Tujuan</label>
-            <input type="text" class="form-control" value="<?= h($jakartaBranch['nama_branch']) ?>" readonly>
-        </div>
-
-        <div class="col-md-6 mb-3">
-            <label>Serial Number / Service Tag <span class="text-danger">*</span></label>
-            <select name="serial_number" id="serial_number_select" class="form-select select2" required>
-                <option value="">Pilih Jenis Barang Dulu...</option>
-            </select>
-            <small class="text-muted">Pilih SN yang tersedia di cabang Anda.</small>
-        </div>
-
-        <div class="col-md-6 mb-3">
-            <label>Pemilik Barang (User) <span class="text-danger">*</span></label>
-            <input type="text" name="pemilik_barang" id="pemilik_barang_input" class="form-control" required placeholder="Akan terisi otomatis" readonly style="background-color: #f8f9fa;">
-        </div>
-
-        <div class="col-md-6 mb-3">
-            <label class="form-label">Keterangan Kerusakan <span class="text-danger">*</span></label>
-            <textarea name="catatan_user" class="form-control" rows="3" placeholder="Jelaskan kerusakan barang dengan jelas" required></textarea>
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Tanggal Kirim</label>
-            <input type="date" name="tanggal_keluar" class="form-control" required value="<?= date('Y-m-d') ?>" min="<?= date('Y-m-d') ?>">
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Jasa Pengiriman</label>
-            <select name="jasa_pengiriman" class="form-control select2" required>
-                <option value="">Pilih Jasa Pengiriman...</option>
-                <option value="SAP Express">SAP Express</option>
-                <option value="PCP Express">PCP Express</option>
-            </select>
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Nomor Resi Keluar</label>
-            <input type="text" name="nomor_resi_keluar" class="form-control" placeholder="Isi nomor resi dari ekspedisi" required>
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Foto Resi / Bukti Kirim</label>
-            <input type="file" name="foto_resi_keluar" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Status Pengiriman</label>
-            <input type="text" class="form-control" value="<?= h(STATUS_MENUNGGU_PERSETUJUAN) ?>" readonly>
-        </div>
-
-        <div class="col-12 text-end">
+        <div class="mt-4 text-end">
+            <button type="button" id="btnBackToStep1" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-left me-1"></i> Kembali</button>
             <button type="submit" class="btn btn-warning w-100 fw-bold rounded-3" id="btnSimpanPengirimanUser">
                 <span class="btn-text">Ajukan Pengiriman ke HO Jakarta</span>
                 <span class="btn-loading d-none">
@@ -310,7 +424,113 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 </form>
 
 <script>
+    function validateReceiptStep() {
+        let hasDescription = false;
+        $('#receipt_table tbody tr').each(function() {
+            if ($(this).find('.row-desc').val().trim()) {
+                hasDescription = true;
+            }
+        });
+
+        if (!hasDescription) {
+            Swal.fire('Validasi', 'Deskripsi barang harus diisi minimal satu baris.', 'warning');
+            return false;
+        }
+        if (!$('#receipt_ekspedisi').val()) {
+            Swal.fire('Validasi', 'Pilih ekspedisi terlebih dahulu.', 'warning');
+            return false;
+        }
+        if (!$('#receipt_pengirim').val().trim()) {
+            Swal.fire('Validasi', 'Nama pengirim harus diisi.', 'warning');
+            return false;
+        }
+        return true;
+    }
+
+    function moveToStep2() {
+        const descs = [];
+        const hosts = [];
+        $('#receipt_table tbody tr').each(function() {
+            descs.push($(this).find('.row-desc').val().trim());
+            hosts.push($(this).find('.row-host').val().trim());
+        });
+
+        $('#receipt_description_hidden').val(descs.join('\n'));
+        $('#receipt_hostname_hidden').val(hosts.join('||'));
+        $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
+        $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
+        $('#receipt_attn_hidden').val($('#receipt_attn').val().trim());
+        $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
+        $('#receipt_charge_hidden').val($('#receipt_charge').val().trim());
+        $('#receipt_user_hidden').val($('#receipt_user').val().trim());
+        $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
+        $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
+        $('#receipt_pengirim_hidden').val($('#receipt_pengirim').val().trim());
+        $('#pdf_generated').val('1');
+
+        $('#pengirimanStep1').hide();
+        $('#pengirimanStep2').show();
+        $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
+        $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
+    }
+
     $(document).ready(function() {
+        $('#btnAddRow').on('click', function() {
+            const rowCount = $('#receipt_table tbody tr').length + 1;
+            $('#receipt_table tbody').append(`
+                <tr>
+                    <td class="row-no">${rowCount}</td>
+                    <td><input type="text" class="form-control row-desc" placeholder="Deskripsi item"></td>
+                    <td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)"></td>
+                    <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>
+                </tr>
+            `);
+        });
+
+        $(document).on('click', '.btn-remove-row', function() {
+            if ($('#receipt_table tbody tr').length === 1) return;
+            $(this).closest('tr').remove();
+            $('#receipt_table tbody tr').each(function(index) {
+                $(this).find('.row-no').text(index + 1);
+            });
+        });
+
+        $('#btnGeneratePdf').on('click', function() {
+            if (!validateReceiptStep()) return;
+
+            const descs = [];
+            const hosts = [];
+            $('#receipt_table tbody tr').each(function() {
+                descs.push($(this).find('.row-desc').val().trim());
+                hosts.push($(this).find('.row-host').val().trim());
+            });
+
+            const params = {
+                'description[]': descs,
+                'hostname[]': hosts,
+                qty: $('#receipt_qty').val().trim(),
+                catatan: $('#receipt_catatan').val().trim(),
+                attn: $('#receipt_attn').val().trim(),
+                asuransi: $('#receipt_asuransi').val().trim(),
+                charge: $('#receipt_charge').val().trim(),
+                user: $('#receipt_user').val().trim(),
+                penerima: $('#receipt_penerima').val().trim(),
+                ekspedisi: $('#receipt_ekspedisi').val().trim(),
+                pengirim: $('#receipt_pengirim').val().trim()
+            };
+
+            const query = $.param(params);
+            window.open('print_pengiriman.php?' + query, '_blank');
+            moveToStep2();
+        });
+
+        $('#btnBackToStep1').on('click', function() {
+            $('#pengirimanStep2').hide();
+            $('#pengirimanStep1').show();
+            $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
+            $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
+        });
+
         $('#id_barang_select').on('change', function() {
             var idBarang = $(this).val();
             var snSelect = $('#serial_number_select');
@@ -344,7 +564,7 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
             }
         });
 
-        $('#serial_number_select').on('change', function() {
+        $(document).on('change', '#serial_number_select', function() {
             var selectedUser = $(this).find(':selected').data('user');
             if (selectedUser) {
                 $('#pemilik_barang_input').val(selectedUser);

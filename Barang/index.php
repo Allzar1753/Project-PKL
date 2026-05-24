@@ -106,19 +106,41 @@ if ($isAdmin) {
 
 $stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') " : " AND barang.status IN ('Tersedia','Diterima') ";
 
+// =========================================================================
+// LOGIKA SINKRONISASI DATA (ADMIN HO = ID 40)
+// =========================================================================
+
+// Tentukan ID Branch HO kamu di sini agar mudah diubah nanti
+$idBranchHO = 40; 
+
 if ($isAdmin) {
-    // [PERBAIKAN]: Admin HO melihat semua stok master (1=1). 
-    // Barang otomatis akan hilang dari tabel ini jika sudah masuk pengiriman (di-filter oleh $excludeTransitSql)
-    $whereLokasi = "barang.id IS NOT NULL";
-
-    // Pastikan query COUNT juga menggunakan $whereLokasi agar angkanya sinkron dengan tabel
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql $stokAktifSql");
-    $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho");
+    /** 
+     * ADMIN HO: Hanya melihat barang yang fisiknya ada di HO (id_branch = 40)
+     * Data akan hilang dari sini jika sedang dikirim (transit) ke cabang.
+     */
+    $whereLokasi = "barang.id_branch = $idBranchHO"; 
+    
+    // Barang disembunyikan jika sedang dalam perjalanan keluar dari HO
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    
+    // Summary Card Admin HO
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
+    $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
-} else {
 
+} else {
+    /**
+     * USER CABANG: Hanya melihat barang di cabangnya sendiri.
+     */
     $whereLokasi = "barang.id_branch = $myBranchId";
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE id_branch = $myBranchId $excludeTransitSql $stokAktifSql");
+    
+    // Sembunyikan barang jika sedang dikirim ke HO (masuk pengiriman_cabang_ho) 
+    // atau sedang dikirim dari HO ke Cabang (barang_pengiriman)
+    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
+    
+    // Summary Card User Cabang
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
 }
@@ -149,15 +171,20 @@ if ($filter === 'keluar') {
                      LEFT JOIN barang b ON p.serial_number = b.serial_number
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
-    } else {
-        // PERBAIKAN: Mengambil b.user (Nama Pemilik Master) bukan p.nama_penerima (Nama penerima paket)
+   } else {
+        // SISI USER - LOGISTIK MASUK
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch, 
-                            b.user as pemilik_barang 
+                            b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
+                            CASE
+    WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user
+    WHEN p.nama_penerima IS NOT NULL AND p.nama_penerima != ''  THEN p.nama_penerima
+    ELSE 'Belum Ada Pemilik'
+END AS pemilik_barang
                      FROM barang_pengiriman p
                      JOIN barang b ON p.id_barang = b.id
                      JOIN tb_barang ON b.id_barang = tb_barang.id_barang
-                     WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
+                     WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman 
+                     ORDER BY p.id_pengiriman DESC";
     }
 } else {
     // --- PERBAIKAN QUERY ASSET TERSEDIA ---
@@ -781,8 +808,15 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     </td>
                                                     <td>
                                                         <?php
-                                                        // Logika: Tampilkan master_user. Jika kosong, tampilkan dari logistik terakhir. Jika kosong juga, tulis 'No User'.
-                                                        $namaTampil = !empty($data['master_user']) ? $data['master_user'] : (!empty($data['last_logistic_user']) ? $data['last_logistic_user'] : 'No User');
+                                                        // Kita pastikan master_user bukan string "0", bukan null, dan bukan kosong.
+if ($data['master_user'] !== "0" && !empty($data['master_user'])) {
+    $namaTampil = $data['master_user'];
+} elseif (!empty($data['last_logistic_user'])) {
+    // Fallback ini hanya dipakai jika benar-benar tidak ada nama di master barang
+    $namaTampil = $data['last_logistic_user'];
+} else {
+    $namaTampil = 'No User';
+}
                                                         ?>
                                                         <div class="meta-line"><i class="bi bi-person me-1"></i><?= h($namaTampil) ?></div>
                                                     </td>

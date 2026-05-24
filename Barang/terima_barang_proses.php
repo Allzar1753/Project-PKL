@@ -42,9 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     mysqli_begin_transaction($koneksi);
+    mysqli_begin_transaction($koneksi);
     try {
-        // 1. Update tabel pengiriman
-        // Pastikan status_pengiriman yang bisa diupdate adalah 'Sedang perjalanan'
+        // 1. Update tabel pengiriman (Tetap seperti awal)
         $stmt = mysqli_prepare($koneksi, "
             UPDATE barang_pengiriman 
             SET status_pengiriman = 'Sudah diterima', 
@@ -61,21 +61,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_execute($stmt);
 
         if (mysqli_stmt_affected_rows($stmt) <= 0) {
-            throw new Exception('Gagal: Data pengiriman tidak valid, sudah dikonfirmasi, atau Anda tidak berhak memproses ini.');
+            throw new Exception('Gagal: Data pengiriman tidak valid atau sudah dikonfirmasi.');
         }
 
-        // 2. Update status barang agar kembali ke inventory cabang sebagai asset tersedia
+        // 2. Update status barang (BAGIAN YANG DIPERBAIKI)
         $qBarang = mysqli_query($koneksi, "SELECT bp.id_barang, b.serial_number FROM barang_pengiriman bp JOIN barang b ON bp.id_barang = b.id WHERE bp.id_pengiriman = $id_pengiriman");
         if ($rowB = mysqli_fetch_assoc($qBarang)) {
             $id_barang_pk = (int)$rowB['id_barang'];
             $serialNumber = $rowB['serial_number'];
-            $userId = current_user_id() ? (int) current_user_id() : 0;
-            $branchUser = mysqli_real_escape_string($koneksi, $nama_user_login);
 
+            // PERBAIKAN: Hapus 'user = ?' dan 'user_id = ?' agar pemilik asli (Zar) tidak berubah
             $stmtUpdateBarang = mysqli_prepare($koneksi, "UPDATE barang SET 
                 id_branch = ?,
-                user = ?,
-                user_id = ?,
                 status = 'Tersedia',
                 bermasalah = 'Tidak',
                 keterangan_masalah = NULL,
@@ -87,16 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Gagal menyiapkan update barang: ' . mysqli_error($koneksi));
             }
 
-            mysqli_stmt_bind_param($stmtUpdateBarang, 'isisi', $myBranchId, $branchUser, $userId, $tanggal_diterima, $id_barang_pk);
+            // Bind parameter disesuaikan (hanya 3 parameter: id_branch, tanggal_terima, id_barang)
+            mysqli_stmt_bind_param($stmtUpdateBarang, 'isi', $myBranchId, $tanggal_diterima, $id_barang_pk);
             mysqli_stmt_execute($stmtUpdateBarang);
 
+            // Jika update berdasarkan ID gagal, coba gunakan Serial Number (Fallback)
             if (mysqli_stmt_affected_rows($stmtUpdateBarang) <= 0) {
                 mysqli_stmt_close($stmtUpdateBarang);
 
                 $stmtFallback = mysqli_prepare($koneksi, "UPDATE barang SET 
                     id_branch = ?,
-                    user = ?,
-                    user_id = ?,
                     status = 'Tersedia',
                     bermasalah = 'Tidak',
                     keterangan_masalah = NULL,
@@ -104,24 +101,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     id_status = 4
                     WHERE serial_number = ? LIMIT 1");
 
-                if (!$stmtFallback) {
-                    throw new Exception('Gagal menyiapkan fallback update barang: ' . mysqli_error($koneksi));
-                }
-
-                mysqli_stmt_bind_param($stmtFallback, 'isiss', $myBranchId, $branchUser, $userId, $tanggal_diterima, $serialNumber);
+                // Bind parameter fallback (id_branch, tanggal_terima, serial_number)
+                mysqli_stmt_bind_param($stmtFallback, 'iss', $myBranchId, $tanggal_diterima, $serialNumber);
+                mysqli_stmt_execute($stmtFallback);
+                mysqli_stmt_close($stmtFallback);
             } else {
                 mysqli_stmt_close($stmtUpdateBarang);
             }
 
-            // 3. Tandai pengiriman cabang ke HO sebagai selesai apabila barang sudah kembali ke cabang
+            // 3. Update status pengiriman cabang ke HO (Tetap)
             $stmtCompleteHo = mysqli_prepare($koneksi, "UPDATE pengiriman_cabang_ho SET status_pengiriman = 'Selesai' WHERE branch_asal = ? AND serial_number = ? AND status_pengiriman = 'Sudah diterima HO'");
             if ($stmtCompleteHo) {
                 mysqli_stmt_bind_param($stmtCompleteHo, 'is', $myBranchId, $serialNumber);
                 mysqli_stmt_execute($stmtCompleteHo);
                 mysqli_stmt_close($stmtCompleteHo);
             }
-        } else {
-            throw new Exception('Data pengiriman barang tidak ditemukan.');
         }
 
         mysqli_commit($koneksi);

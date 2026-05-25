@@ -496,12 +496,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if ($(this).find('.row-desc').val().trim()) hasDescription = true;
             });
 
-            if (!qty || qty < 1) { Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning'); return false; }
-            if (!hasDescription) { Swal.fire('Validasi', 'Deskripsi barang harus diisi.', 'warning'); return false; }
-            if (!userCabang) { Swal.fire('Validasi', 'User / Cabang harus diisi.', 'warning'); return false; }
-            if (!penerima) { Swal.fire('Validasi', 'Penerima harus diisi.', 'warning'); return false; }
-            if (!ekspedisi) { Swal.fire('Validasi', 'Ekspedisi harus diisi.', 'warning'); return false; }
-            if (!pengirim) { Swal.fire('Validasi', 'Pengirim harus diisi.', 'warning'); return false; }
+            if (!qty || qty < 1) {
+                Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
+                return false;
+            }
+            if (!hasDescription) {
+                Swal.fire('Validasi', 'Deskripsi barang harus diisi.', 'warning');
+                return false;
+            }
+            if (!userCabang) {
+                Swal.fire('Validasi', 'User / Cabang harus diisi.', 'warning');
+                return false;
+            }
+            if (!penerima) {
+                Swal.fire('Validasi', 'Penerima harus diisi.', 'warning');
+                return false;
+            }
+            if (!ekspedisi) {
+                Swal.fire('Validasi', 'Ekspedisi harus diisi.', 'warning');
+                return false;
+            }
+            if (!pengirim) {
+                Swal.fire('Validasi', 'Pengirim harus diisi.', 'warning');
+                return false;
+            }
             return true;
         }
 
@@ -573,7 +591,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $tr.find('.row-desc').focus();
             }
 
-            $('#btnAddRow').on('click', function() { addRow(); });
+            $('#btnAddRow').on('click', function() {
+                addRow();
+            });
 
             $(document).on('click', '.btn-remove-row', function() {
                 if ($('#receipt_table tbody tr').length <= 1) {
@@ -585,7 +605,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             });
 
             $(document).on('keydown', '.row-desc', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); addRow(); }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addRow();
+                }
             });
 
             $('#updateBermasalahSelect').on('change', function() {
@@ -603,8 +626,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
                 $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
                 if (id_barang) {
-                    $.ajax({ url: 'ajax_dropdown.php', type: 'POST', data: { action: 'get_merk', id_barang: id_barang },
-                        success: function(response) { $('#update_id_merk').html(response).trigger('change'); }
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_merk',
+                            id_barang: id_barang
+                        },
+                        success: function(response) {
+                            $('#update_id_merk').html(response).trigger('change');
+                        }
                     });
                 } else {
                     $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
@@ -616,8 +647,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 var id_merk = $(this).val();
                 $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
                 if (id_merk && id_barang) {
-                    $.ajax({ url: 'ajax_dropdown.php', type: 'POST', data: { action: 'get_tipe', id_barang: id_barang, id_merk: id_merk },
-                        success: function(response) { $('#update_id_tipe').html(response).trigger('change'); }
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_tipe',
+                            id_barang: id_barang,
+                            id_merk: id_merk
+                        },
+                        success: function(response) {
+                            $('#update_id_tipe').html(response).trigger('change');
+                        }
                     });
                 } else {
                     $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
@@ -660,15 +700,21 @@ if ($formType === 'penerimaan') {
         // ✅ FIX: user diupdate ke nama_penerima HANYA saat barang sudah benar-benar diterima
         $branchTujuan       = (int) $pengirimanTerakhir['branch_tujuan'];
         $namaPenerimaBersih = mysqli_real_escape_string($koneksi, $namaPenerima);
-        mysqli_query($koneksi, "UPDATE barang SET id_status = 4, id_branch = $branchTujuan, user = '$namaPenerimaBersih' WHERE id = $id");
+        $branchTujuan = (int) $pengirimanTerakhir['branch_tujuan'];
 
+// ✅ JANGAN update kolom user — nama_penerima hanya untuk tanda terima kiriman
+// user tetap seperti semula (pemilik asli barang)
+mysqli_query($koneksi, "UPDATE barang SET 
+    id_status = 4, 
+    id_branch = $branchTujuan, 
+    status = 'Tersedia'
+    WHERE id = $id");
         mysqli_commit($koneksi);
         jsonSuccess("Penerimaan barang berhasil dikonfirmasi.");
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
         jsonError($e->getMessage());
     }
-
 } elseif ($formType === 'master') {
     $tanggalTerima = $_POST['tanggal_terima'] ?? '';
     $noAsset       = trim((string) $_POST['no_asset']);
@@ -685,10 +731,23 @@ if ($formType === 'penerimaan') {
     mysqli_begin_transaction($koneksi);
     try {
         $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
-        mysqli_stmt_bind_param($stmt, 'ssiiiiiisssssi',
-            $noAsset, $serialNumber, $_POST['id_barang'], $_POST['id_merk'], $_POST['id_tipe'],
-            $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem,
-            $_POST['bermasalah'], $keteranganMasalah, $tanggalTerima, $fotoBaru, $id
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ssiiiiiisssssi',
+            $noAsset,
+            $serialNumber,
+            $_POST['id_barang'],
+            $_POST['id_merk'],
+            $_POST['id_tipe'],
+            $_POST['id_jenis'],
+            $_POST['id_branch'],
+            $_POST['user'],
+            $user_id_sistem,
+            $_POST['bermasalah'],
+            $keteranganMasalah,
+            $tanggalTerima,
+            $fotoBaru,
+            $id
         );
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
@@ -697,7 +756,6 @@ if ($formType === 'penerimaan') {
         mysqli_rollback($koneksi);
         jsonError($e->getMessage());
     }
-
 } elseif ($formType === 'logistik') {
     // ----------------------------------------------------------------
     // LOGISTIK: Barang baru dikirim, status jadi "Sedang perjalanan".
@@ -717,16 +775,26 @@ if ($formType === 'penerimaan') {
     mysqli_begin_transaction($koneksi);
     try {
         // ✅ Tambahkan kolom nama_penerima ke INSERT agar tersimpan di record pengiriman
-        $stmt = mysqli_prepare($koneksi,
+        $stmt = mysqli_prepare(
+            $koneksi,
             "INSERT INTO barang_pengiriman
                 (id_barang, branch_asal, branch_tujuan, tanggal_keluar, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, nama_penerima)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $asal = (int) $barang['id_branch'];
         $st   = STATUS_SEDANG_PERJALANAN;
-        mysqli_stmt_bind_param($stmt, 'iiissssss',
-            $id, $asal, $_POST['tujuan'], $_POST['tanggal_keluar'],
-            $_POST['jasa_pengiriman'], $_POST['nomor_resi'], $upload['filename'], $st, $namaPenerimaKirim
+        mysqli_stmt_bind_param(
+            $stmt,
+            'iiissssss',
+            $id,
+            $asal,
+            $_POST['tujuan'],
+            $_POST['tanggal_keluar'],
+            $_POST['jasa_pengiriman'],
+            $_POST['nomor_resi'],
+            $upload['filename'],
+            $st,
+            $namaPenerimaKirim
         );
         mysqli_stmt_execute($stmt);
 
@@ -740,7 +808,8 @@ if ($formType === 'penerimaan') {
             $title   = 'Pengiriman dalam perjalanan';
             $message = 'Barang dengan resi ' . mysqli_real_escape_string($koneksi, $_POST['nomor_resi']) . ' sedang dalam perjalanan ke cabang Anda.';
             $link    = '../Barang/index.php?filter=masuk';
-            $stmtNotif = mysqli_prepare($koneksi,
+            $stmtNotif = mysqli_prepare(
+                $koneksi,
                 "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)"
             );
             if ($stmtNotif) {

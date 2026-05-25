@@ -191,10 +191,10 @@ END AS pemilik_barang
     // Subquery untuk mengambil nama user dari riwayat logistik terakhir
     if ($isAdmin) {
         // Admin HO: Ambil pengirim terakhir dari Cabang
-        $subqueryLastUser = "(SELECT pemilik_barang FROM pengiriman_cabang_ho WHERE serial_number = barang.serial_number ORDER BY id_pengiriman_ho DESC LIMIT 1)";
+        $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
         // User Cabang: Ambil penerima terakhir dari HO
-        $subqueryLastUser = "(SELECT nama_penerima FROM barang_pengiriman WHERE id_barang = barang.id ORDER BY id_pengiriman DESC LIMIT 1)";
+        $subqueryLastUser = "(SELECT bp.nama_penerima FROM barang_pengiriman bp WHERE bp.id_barang = barang.id AND bp.branch_tujuan = $myBranchId AND bp.status_pengiriman = 'Sudah diterima' AND bp.nama_penerima IS NOT NULL AND bp.nama_penerima != '' AND bp.nama_penerima != '0' ORDER BY bp.id_pengiriman DESC LIMIT 1)";
     }
 
     $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, 
@@ -808,15 +808,16 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     </td>
                                                     <td>
                                                         <?php
-                                                        // Kita pastikan master_user bukan string "0", bukan null, dan bukan kosong.
-if ($data['master_user'] !== "0" && !empty($data['master_user'])) {
-    $namaTampil = $data['master_user'];
-} elseif (!empty($data['last_logistic_user'])) {
-    // Fallback ini hanya dipakai jika benar-benar tidak ada nama di master barang
-    $namaTampil = $data['last_logistic_user'];
-} else {
-    $namaTampil = 'No User';
-}
+                                                        $userMaster = trim((string)($data['master_user'] ?? ''));
+                                                        $userLogistic = trim((string)($data['last_logistic_user'] ?? ''));
+
+                                                        if ($userMaster !== '' && $userMaster !== '0') {
+                                                            $namaTampil = $userMaster;
+                                                        } elseif ($userLogistic !== '' && $userLogistic !== '0') {
+                                                            $namaTampil = $userLogistic;
+                                                        } else { 
+                                                            $namaTampil = 'No User';
+                                                        }
                                                         ?>
                                                         <div class="meta-line"><i class="bi bi-person me-1"></i><?= h($namaTampil) ?></div>
                                                     </td>

@@ -126,17 +126,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sn = $dataSN['serial_number'];
             $catatanUser = trim((string) ($dataSN['catatan_user'] ?? ''));
 
+            $stmtPemilik = mysqli_prepare($koneksi, "SELECT pemilik_barang FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ? LIMIT 1");
+            mysqli_stmt_bind_param($stmtPemilik, 'i', $idPengiriman);
+            mysqli_stmt_execute($stmtPemilik);
+            $resPemilik = mysqli_stmt_get_result($stmtPemilik);
+            $dataPemilik = mysqli_fetch_assoc($resPemilik);
+            mysqli_stmt_close($stmtPemilik);
+
+            $pemilikBarang = trim((string) ($dataPemilik['pemilik_barang'] ?? ''));
+
             $queryUpdateBarang = "UPDATE barang SET 
-        id_branch = ?, 
-        status = 'Diterima', 
-        bermasalah = 'Iya', 
-        keterangan_masalah = ?,
-        id_status = 5
-        WHERE serial_number = ?";
+                id_branch = ?, 
+                status = 'Diterima', 
+                bermasalah = 'Iya', 
+                keterangan_masalah = ?,
+                id_status = 5,
+                `user` = CASE WHEN ? != '' AND ? != '0' THEN ? ELSE `user` END
+                WHERE serial_number = ?";
 
             $stmtUpdate = mysqli_prepare($koneksi, $queryUpdateBarang);
             if ($stmtUpdate) {
-                mysqli_stmt_bind_param($stmtUpdate, 'iss', $jakartaBranchId, $catatanUser, $sn);
+                mysqli_stmt_bind_param($stmtUpdate, 'isssss', $jakartaBranchId, $catatanUser, $pemilikBarang, $pemilikBarang, $pemilikBarang, $sn);
                 mysqli_stmt_execute($stmtUpdate);
                 mysqli_stmt_close($stmtUpdate);
             }

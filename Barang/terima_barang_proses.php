@@ -72,39 +72,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // PERBAIKAN: Hapus 'user = ?' dan 'user_id = ?' agar pemilik asli (Zar) tidak berubah
             $stmtUpdateBarang = mysqli_prepare($koneksi, "UPDATE barang SET 
-                id_branch = ?,
-                status = 'Tersedia',
-                bermasalah = 'Tidak',
-                keterangan_masalah = NULL,
-                tanggal_terima = ?,
-                id_status = 4
-                WHERE id = ?");
+    id_branch = ?,
+    status = 'Tersedia',
+    bermasalah = 'Tidak',
+    keterangan_masalah = NULL,
+    tanggal_terima = ?,
+    id_status = 4
+    WHERE id = ?");
 
-            if (!$stmtUpdateBarang) {
-                throw new Exception('Gagal menyiapkan update barang: ' . mysqli_error($koneksi));
-            }
+mysqli_stmt_bind_param($stmtUpdateBarang, 'isi', 
+    $myBranchId, 
+    $tanggal_diterima, 
+    $id_barang_pk
+);
 
-            // Bind parameter disesuaikan (hanya 3 parameter: id_branch, tanggal_terima, id_barang)
-            mysqli_stmt_bind_param($stmtUpdateBarang, 'isi', $myBranchId, $tanggal_diterima, $id_barang_pk);
             mysqli_stmt_execute($stmtUpdateBarang);
-
             // Jika update berdasarkan ID gagal, coba gunakan Serial Number (Fallback)
             if (mysqli_stmt_affected_rows($stmtUpdateBarang) <= 0) {
                 mysqli_stmt_close($stmtUpdateBarang);
 
                 $stmtFallback = mysqli_prepare($koneksi, "UPDATE barang SET 
-                    id_branch = ?,
-                    status = 'Tersedia',
-                    bermasalah = 'Tidak',
-                    keterangan_masalah = NULL,
-                    tanggal_terima = ?,
-                    id_status = 4
-                    WHERE serial_number = ? LIMIT 1");
+    id_branch = ?,
+    status = 'Tersedia',
+    bermasalah = 'Tidak',
+    keterangan_masalah = NULL,
+    tanggal_terima = ?,
+    id_status = 4
+    WHERE serial_number = ? LIMIT 1");
 
-                // Bind parameter fallback (id_branch, tanggal_terima, serial_number)
-                mysqli_stmt_bind_param($stmtFallback, 'iss', $myBranchId, $tanggal_diterima, $serialNumber);
-                mysqli_stmt_execute($stmtFallback);
-                mysqli_stmt_close($stmtFallback);
+mysqli_stmt_bind_param($stmtFallback, 'iss', 
+    $myBranchId, 
+    $tanggal_diterima, 
+    $serialNumber
+);
             } else {
                 mysqli_stmt_close($stmtUpdateBarang);
             }

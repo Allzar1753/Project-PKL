@@ -111,34 +111,33 @@ $stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR ba
 // =========================================================================
 
 // Tentukan ID Branch HO kamu di sini agar mudah diubah nanti
-$idBranchHO = 40; 
+$idBranchHO = 40;
 
 if ($isAdmin) {
     /** 
      * ADMIN HO: Hanya melihat barang yang fisiknya ada di HO (id_branch = 40)
      * Data akan hilang dari sini jika sedang dikirim (transit) ke cabang.
      */
-    $whereLokasi = "barang.id_branch = $idBranchHO"; 
-    
+    $whereLokasi = "barang.id_branch = $idBranchHO";
+
     // Barang disembunyikan jika sedang dalam perjalanan keluar dari HO
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
-    
+
     // Summary Card Admin HO
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
-
 } else {
     /**
      * USER CABANG: Hanya melihat barang di cabangnya sendiri.
      */
     $whereLokasi = "barang.id_branch = $myBranchId";
-    
+
     // Sembunyikan barang jika sedang dikirim ke HO (masuk pengiriman_cabang_ho) 
     // atau sedang dikirim dari HO ke Cabang (barang_pengiriman)
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
     $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
-    
+
     // Summary Card User Cabang
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
@@ -171,20 +170,29 @@ if ($filter === 'keluar') {
                      LEFT JOIN barang b ON p.serial_number = b.serial_number
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
-   } else {
+    } else {
         // SISI USER - LOGISTIK MASUK
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
-                            b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
-                            CASE
-    WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user
-    WHEN p.nama_penerima IS NOT NULL AND p.nama_penerima != ''  THEN p.nama_penerima
-    ELSE 'Belum Ada Pemilik'
-END AS pemilik_barang
-                     FROM barang_pengiriman p
-                     JOIN barang b ON p.id_barang = b.id
-                     JOIN tb_barang ON b.id_barang = tb_barang.id_barang
-                     WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman 
-                     ORDER BY p.id_pengiriman DESC";
+                        b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
+                        CASE
+                            WHEN b.`user` IS NOT NULL AND b.`user` != '' AND b.`user` != '0' 
+                                THEN b.`user`
+                            ELSE (
+                                SELECT pch.pemilik_barang 
+                                FROM pengiriman_cabang_ho pch 
+                                WHERE pch.serial_number = b.serial_number
+                                  AND pch.pemilik_barang IS NOT NULL
+                                  AND pch.pemilik_barang != ''
+                                  AND pch.pemilik_barang != '0'
+                                ORDER BY pch.id_pengiriman_ho DESC 
+                                LIMIT 1
+                            )
+                        END AS pemilik_barang
+                 FROM barang_pengiriman p
+                 JOIN barang b ON p.id_barang = b.id
+                 JOIN tb_barang ON b.id_barang = tb_barang.id_barang
+                 WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman 
+                 ORDER BY p.id_pengiriman DESC";
     }
 } else {
     // --- PERBAIKAN QUERY ASSET TERSEDIA ---
@@ -193,8 +201,8 @@ END AS pemilik_barang
         // Admin HO: Ambil pengirim terakhir dari Cabang
         $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
-        // User Cabang: Ambil penerima terakhir dari HO
-        $subqueryLastUser = "(SELECT bp.nama_penerima FROM barang_pengiriman bp WHERE bp.id_barang = barang.id AND bp.branch_tujuan = $myBranchId AND bp.status_pengiriman = 'Sudah diterima' AND bp.nama_penerima IS NOT NULL AND bp.nama_penerima != '' AND bp.nama_penerima != '0' ORDER BY bp.id_pengiriman DESC LIMIT 1)";
+        // User Cabang: Disamakan dengan logic Logistik Masuk (Ambil dari histori HO)
+        $subqueryLastUser = "(SELECT pch.pemilik_barang FROM pengiriman_cabang_ho pch WHERE pch.serial_number = barang.serial_number AND pch.pemilik_barang IS NOT NULL AND pch.pemilik_barang != '' AND pch.pemilik_barang != '0' ORDER BY pch.id_pengiriman_ho DESC LIMIT 1)";
     }
 
     $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, 
@@ -815,7 +823,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                             $namaTampil = $userMaster;
                                                         } elseif ($userLogistic !== '' && $userLogistic !== '0') {
                                                             $namaTampil = $userLogistic;
-                                                        } else { 
+                                                        } else {
                                                             $namaTampil = 'No User';
                                                         }
                                                         ?>
@@ -1195,7 +1203,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                 if (result.isConfirmed) {
                     $.getJSON('delete.php', {
                         id: id
-                    }, function(res) {  
+                    }, function(res) {
                         if (res.status === 'success') {
                             Swal.fire('Dihapus!', res.message, 'success').then(() => location.reload());
                         } else {

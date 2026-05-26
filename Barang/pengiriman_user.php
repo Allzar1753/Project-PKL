@@ -21,6 +21,102 @@ $myBranchId = (int) current_user_branch_id();
 // ==========================================
 // HANDLE AJAX REQUEST (UNTUK MENCARI SERIAL NUMBER)
 // ==========================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_barang_by_user') {
+    if (ob_get_length()) ob_clean();
+    header('Content-Type: application/json');
+
+    $username = mysqli_real_escape_string($koneksi, trim($_GET['username'] ?? ''));
+
+    // Prioritas 1
+    $deskripsi = ''; // ← definisikan dulu
+    $qBarangUser = mysqli_query($koneksi, "
+        SELECT CONCAT(m.nama_merk, ' ', t.nama_tipe) AS deskripsi
+        FROM barang b
+        JOIN tb_merk m ON b.id_merk = m.id_merk
+        JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+        WHERE b.`user` = '$username'
+          AND b.id_branch = $myBranchId
+        ORDER BY b.id DESC LIMIT 1
+    ");
+    $rowBarangUser = mysqli_fetch_assoc($qBarangUser) ?: [];
+    $deskripsi = $rowBarangUser['deskripsi'] ?? '';
+
+    // Prioritas 2
+    if (empty($deskripsi)) {
+        $qFallback = mysqli_query($koneksi, "
+            SELECT CONCAT(m.nama_merk, ' ', t.nama_tipe) AS deskripsi
+            FROM pengiriman_cabang_ho p
+            JOIN barang b ON p.serial_number = b.serial_number
+            JOIN tb_merk m ON b.id_merk = m.id_merk
+            JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+            WHERE p.pemilik_barang = '$username'
+              AND p.branch_asal = $myBranchId
+            ORDER BY p.id_pengiriman_ho DESC LIMIT 1
+        ");
+        $rowFallback = mysqli_fetch_assoc($qFallback) ?: [];
+        $deskripsi = $rowFallback['deskripsi'] ?? '';
+    }
+
+    // Prioritas 3
+    if (empty($deskripsi)) {
+        $qAllBarang = mysqli_query($koneksi, "
+            SELECT CONCAT(m.nama_merk, ' ', t.nama_tipe) AS deskripsi
+            FROM barang b
+            JOIN tb_merk m ON b.id_merk = m.id_merk
+            JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+            WHERE b.id_branch = $myBranchId
+            ORDER BY b.id DESC LIMIT 1
+        ");
+        $rowAll = mysqli_fetch_assoc($qAllBarang) ?: [];
+        $deskripsi = $rowAll['deskripsi'] ?? '';
+    }
+
+    echo json_encode(['deskripsi' => $deskripsi]); // ← echo SEKALI di akhir
+    exit;
+}
+
+
+if (isset($_GET['action']) && $_GET['action'] === 'get_user_by_branch') {
+    if (ob_get_length()) ob_clean();
+    header('Content-Type: application/json');
+
+    $idBranch = (int)($_GET['id_branch'] ?? 0);
+
+    // Prioritas 1: cari user role 'user'
+    $username = ''; // ← definisikan dulu
+    $qUserBranch = mysqli_query($koneksi, "
+        SELECT u.username FROM users u
+        WHERE u.id_branch = $idBranch AND u.`role` = 'user'
+        ORDER BY u.id ASC LIMIT 1
+    ");
+    $rowUserBranch = mysqli_fetch_assoc($qUserBranch) ?: [];
+    $username = $rowUserBranch['username'] ?? '';
+
+    // Prioritas 2: fallback ke admin
+    if (empty($username)) {
+        $qAdminBranch = mysqli_query($koneksi, "
+            SELECT u.username FROM users u
+            WHERE u.id_branch = $idBranch AND u.`role` = 'admin'
+            ORDER BY u.id ASC LIMIT 1
+        ");
+        $rowAdminBranch = mysqli_fetch_assoc($qAdminBranch) ?: [];
+        $username = $rowAdminBranch['username'] ?? '';
+    }
+
+    // Prioritas 3: fallback nama branch
+    if (empty($username)) {
+        $qBranchName = mysqli_query($koneksi, "
+            SELECT nama_branch FROM tb_branch WHERE id_branch = $idBranch LIMIT 1
+        ");
+        $rowBranchName = mysqli_fetch_assoc($qBranchName) ?: [];
+        $username = $rowBranchName['nama_branch'] ?? '';
+    }
+
+    echo json_encode(['username' => $username]); // ← echo SEKALI di akhir
+    exit;
+}
+
+
 if (isset($_GET['action']) && $_GET['action'] === 'get_sn') {
     if (ob_get_length()) ob_clean(); // Sapu bersih sebelum cetak JSON
     header('Content-Type: application/json');
@@ -241,8 +337,59 @@ function getBranchName(mysqli $koneksi, int $branchId): string
 
 $branchName = getBranchName($koneksi, $myBranchId);
 $currentUserName = (string) ((current_user()['username'] ?? current_user()['name']) ?? '');
-
 $barangList = getBarangBranchOptions($koneksi, $myBranchId);
+
+// Ambil nama pemilik aset dari barang.user dan pengiriman_cabang_ho.pemilik_barang
+$qUserCabang = mysqli_query($koneksi, "
+    SELECT DISTINCT nama_user, nama_branch
+    FROM (
+        -- Dari barang.user langsung
+        SELECT 
+            b.`user` AS nama_user,
+            br.nama_branch
+        FROM barang b
+        JOIN tb_branch br ON b.id_branch = br.id_branch
+        WHERE b.id_branch = $myBranchId
+          AND b.`user` IS NOT NULL
+          AND b.`user` != ''
+          AND b.`user` != '0'
+        
+        UNION
+        
+        -- Dari pengiriman_cabang_ho.pemilik_barang (fallback)
+        SELECT 
+            p.pemilik_barang AS nama_user,
+            br.nama_branch
+        FROM pengiriman_cabang_ho p
+        JOIN tb_branch br ON p.branch_asal = br.id_branch
+        WHERE p.branch_asal = $myBranchId
+          AND p.pemilik_barang IS NOT NULL
+          AND p.pemilik_barang != ''
+          AND p.pemilik_barang != '0'
+    ) AS gabungan
+    ORDER BY nama_user ASC
+");
+$daftarUserCabang = [];
+while ($row = mysqli_fetch_assoc($qUserCabang)) {
+    $daftarUserCabang[] = [
+        'username'    => $row['nama_user'],
+        'nama_branch' => $row['nama_branch']
+    ];
+}
+
+$qBranchList = mysqli_query($koneksi, "SELECT id_branch, nama_branch FROM tb_branch ORDER BY nama_branch ASC");
+$branchList = [];
+while ($rowB = mysqli_fetch_assoc($qBranchList)) {
+    $branchList[] = $rowB;
+}
+
+$qAdminHO = mysqli_query($koneksi, "
+    SELECT u.username FROM users u
+    WHERE u.`role` = 'admin'
+    ORDER BY u.id ASC LIMIT 1"
+);
+$rowAdminHO = mysqli_fetch_assoc($qAdminHO) ?: [];
+$namaAdminHO = $rowAdminHO['username'] ?? 'Admin HO';
 ?>
 
 <form id="formPengirimanUser" method="POST" enctype="multipart/form-data">
@@ -256,6 +403,8 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
     <div id="pengirimanStep1">
         <div class="alert alert-info">Isi data surat pengiriman terlebih dahulu, lalu cetak/download PDF. Setelah itu lanjut ke form pengiriman ke HO Jakarta.</div>
         <div class="row g-3">
+
+            <!-- Deskripsi Barang — otomatis dari user yang dipilih, tidak bisa edit -->
             <div class="col-12">
                 <label class="form-label">Deskripsi Barang<span class="text-danger">*</span></label>
                 <div class="table-responsive">
@@ -265,23 +414,17 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
                                 <th style="width:6%;">NO</th>
                                 <th>DESKRIPSI BARANG</th>
                                 <th>HOSTNAME</th>
-                                <th style="width:8%;"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td class="row-no">1</td>
-                                <td><input type="text" class="form-control row-desc" placeholder="Deskripsi item"></td>
+                                <td><input type="text" class="form-control row-desc" placeholder="Otomatis dari pilihan user..." readonly style="background:#f9f9f9;"></td>
                                 <td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)"></td>
-                                <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="mt-2">
-                    <button type="button" id="btnAddRow" class="btn btn-sm btn-secondary">Tambah Baris</button>
-                </div>
-                <div class="form-text mt-1">Tekan Enter saat fokus di kolom deskripsi untuk menambah baris baru.</div>
             </div>
 
             <div class="col-md-4">
@@ -292,26 +435,51 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
                 <label class="form-label">Catatan</label>
                 <input type="text" id="receipt_catatan" class="form-control" placeholder="Catatan singkat untuk surat pengiriman">
             </div>
-            <div class="col-md-6">
-                <label class="form-label">ATTN</label>
-                <input type="text" id="receipt_attn" class="form-control" placeholder="ATTN tujuan" value="<?= h($branchName) ?>">
-            </div>
+
             <div class="col-md-6">
                 <label class="form-label">Asuransi</label>
                 <input type="text" id="receipt_asuransi" class="form-control" placeholder="Contoh: Rp. 8.000.000">
             </div>
+
+            <!-- Charge — dropdown tb_branch, saat dipilih auto-fill Penerima -->
             <div class="col-md-6">
-                <label class="form-label">Charge</label>
-                <input type="text" id="receipt_charge" class="form-control" placeholder="Charge / Biaya">
+                <label class="form-label">Charge (Branch Penanggung)</label>
+                <select id="receipt_charge" class="form-control select2">
+                    <option value="">-- Pilih Branch --</option>
+                    <?php foreach ($branchList as $br): ?>
+                        <option value="<?= (int)$br['id_branch'] ?>"
+                            data-nama="<?= h($br['nama_branch']) ?>">
+                            <?= h($br['nama_branch']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
+
+            <!-- User/Cabang — dropdown user di cabang ini, saat dipilih auto-fill Deskripsi -->
             <div class="col-md-6">
-                <label class="form-label">User / Cabang</label>
-                <input type="text" id="receipt_user" class="form-control" placeholder="Nama cabang atau user" value="<?= h($branchName) ?>">
+                <label class="form-label">User / Cabang<span class="text-danger">*</span></label>
+                <select id="receipt_user_select" class="form-control select2">
+                    <option value="">-- Pilih User --</option>
+                    <?php foreach ($daftarUserCabang as $uc): ?>
+                        <option value="<?= h($uc['username']) ?>"
+                            data-branch="<?= h($uc['nama_branch']) ?>">
+                            <?= h($uc['username']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <input type="hidden" id="receipt_user" value="">
+                <input type="hidden" id="receipt_user_branch" value="<?= h($branchName) ?>">
             </div>
+
+            <!-- Penerima — auto-fill dari Charge, tidak bisa edit -->
             <div class="col-md-6">
                 <label class="form-label">Penerima</label>
-                <input type="text" id="receipt_penerima" class="form-control" placeholder="Nama penerima">
+                <input type="text" id="receipt_penerima" class="form-control"
+                    placeholder="Otomatis dari pilihan Charge..." readonly
+                    style="background:#f9f9f9;">
+                <small class="text-muted">Otomatis dari akun user branch yang dipilih</small>
             </div>
+
             <div class="col-md-6">
                 <label class="form-label">Ekspedisi<span class="text-danger">*</span></label>
                 <select id="receipt_ekspedisi" class="form-control select2" required>
@@ -320,14 +488,21 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
                     <option value="PCP Express">PCP Express</option>
                 </select>
             </div>
+
+            <!-- Pengirim — nama user login + nama branch cabang, readonly -->
             <div class="col-md-6">
                 <label class="form-label">Pengirim</label>
-                <input type="text" id="receipt_pengirim" class="form-control" placeholder="Nama pengirim" value="<?= h($currentUserName) ?>">
+                <input type="text" id="receipt_pengirim" class="form-control"
+                    value="<?= h($currentUserName) ?>" readonly
+                    style="background:#f9f9f9;">
+                <small class="text-muted">Pengirim: <?= h($currentUserName) ?> (<?= h($branchName) ?>)</small>
             </div>
-        </div>
 
+        </div>
         <div class="mt-4 text-end">
-            <button type="button" id="btnGeneratePdf" class="btn btn-primary"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Download PDF & Lanjutkan</button>
+            <button type="button" id="btnGeneratePdf" class="btn btn-primary">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i> Download PDF & Lanjutkan
+            </button>
         </div>
     </div>
 
@@ -424,77 +599,98 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 </form>
 
 <script>
-    function validateReceiptStep() {
-        let hasDescription = false;
-        $('#receipt_table tbody tr').each(function() {
-            if ($(this).find('.row-desc').val().trim()) {
-                hasDescription = true;
-            }
-        });
+    // Data user cabang dari PHP
+    const daftarUserCabang = <?= json_encode($daftarUserCabang) ?>;
+    const branchName = <?= json_encode($branchName) ?>;
+    const currentUserName = <?= json_encode($currentUserName) ?>;
+    const namaAdminHO = <?= json_encode($namaAdminHO) ?>;
 
-        if (!hasDescription) {
-            Swal.fire('Validasi', 'Deskripsi barang harus diisi minimal satu baris.', 'warning');
+    function validateReceiptStep() {
+        // Cek user sudah dipilih
+        const userSelected = $('#receipt_user_select').val();
+        if (!userSelected) {
+            Swal.fire('Validasi', 'Pilih User / Cabang terlebih dahulu.', 'warning');
             return false;
         }
         if (!$('#receipt_ekspedisi').val()) {
             Swal.fire('Validasi', 'Pilih ekspedisi terlebih dahulu.', 'warning');
             return false;
         }
-        if (!$('#receipt_pengirim').val().trim()) {
-            Swal.fire('Validasi', 'Nama pengirim harus diisi.', 'warning');
-            return false;
-        }
         return true;
     }
 
-    function moveToStep2() {
-        const descs = [];
-        const hosts = [];
-        $('#receipt_table tbody tr').each(function() {
-            descs.push($(this).find('.row-desc').val().trim());
-            hosts.push($(this).find('.row-host').val().trim());
-        });
-
-        $('#receipt_description_hidden').val(descs.join('\n'));
-        $('#receipt_hostname_hidden').val(hosts.join('||'));
-        $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
-        $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
-        $('#receipt_attn_hidden').val($('#receipt_attn').val().trim());
-        $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
-        $('#receipt_charge_hidden').val($('#receipt_charge').val().trim());
-        $('#receipt_user_hidden').val($('#receipt_user').val().trim());
-        $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
-        $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
-        $('#receipt_pengirim_hidden').val($('#receipt_pengirim').val().trim());
-        $('#pdf_generated').val('1');
-
-        $('#pengirimanStep1').hide();
-        $('#pengirimanStep2').show();
-        $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
-        $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
-    }
-
     $(document).ready(function() {
-        $('#btnAddRow').on('click', function() {
-            const rowCount = $('#receipt_table tbody tr').length + 1;
-            $('#receipt_table tbody').append(`
-                <tr>
-                    <td class="row-no">${rowCount}</td>
-                    <td><input type="text" class="form-control row-desc" placeholder="Deskripsi item"></td>
-                    <td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)"></td>
-                    <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>
-                </tr>
-            `);
-        });
 
-        $(document).on('click', '.btn-remove-row', function() {
-            if ($('#receipt_table tbody tr').length === 1) return;
-            $(this).closest('tr').remove();
-            $('#receipt_table tbody tr').each(function(index) {
-                $(this).find('.row-no').text(index + 1);
+        // ✅ Auto-fill deskripsi barang saat user dipilih
+        // Mengambil barang yang dimiliki user tersebut via AJAX
+        $('#receipt_user_select').on('select2:select', function(e) {
+            const username = e.params.data.id;
+            const branchVal = $(e.params.data.element).data('branch');
+
+            $('#receipt_user').val(username);
+            $('#receipt_user_branch').val(branchVal || branchName);
+
+            // Kosongkan dulu
+            $('#receipt_table tbody tr .row-desc').val('Memuat...');
+
+            // Ambil barang milik user ini via AJAX
+            $.ajax({
+                url: 'pengiriman_user.php?action=get_barang_by_user&username=' + encodeURIComponent(username),
+                type: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    if (data && data.deskripsi) {
+                        $('#receipt_table tbody tr:first .row-desc').val(data.deskripsi);
+                    } else {
+                        $('#receipt_table tbody tr:first .row-desc').val('');
+                    }
+                },
+                error: function() {
+                    $('#receipt_table tbody tr:first .row-desc').val('');
+                }
             });
         });
 
+        $('#receipt_user_select').on('select2:unselect', function() {
+            $('#receipt_user').val('');
+            $('#receipt_table tbody tr:first .row-desc').val('');
+        });
+
+        // ✅ Auto-fill penerima saat Charge dipilih
+        $('#receipt_charge').on('select2:select', function(e) {
+            const idBranch = parseInt(e.params.data.id, 10);
+
+            // Cari user yang ada di branch tersebut
+            const found = daftarUserCabang.find(u => parseInt(u.id_branch, 10) === idBranch);
+
+            // Jika branch tujuan adalah HO, tampilkan nama admin HO
+            // Jika branch lain, tampilkan nama user branch tersebut
+            // Untuk pengiriman ke HO, penerima = nama admin HO
+            const namaBranch = $(e.params.data.element).data('nama');
+
+            // Ambil user dari branch yang dipilih via AJAX
+            $.ajax({
+                url: 'pengiriman_user.php?action=get_user_by_branch&id_branch=' + idBranch,
+                type: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    if (data && data.username) {
+                        $('#receipt_penerima').val(data.username);
+                    } else {
+                        $('#receipt_penerima').val(namaBranch || '');
+                    }
+                },
+                error: function() {
+                    $('#receipt_penerima').val('');
+                }
+            });
+        });
+
+        $('#receipt_charge').on('select2:unselect', function() {
+            $('#receipt_penerima').val('');
+        });
+
+        // ✅ Download PDF & lanjut ke Step 2
         $('#btnGeneratePdf').on('click', function() {
             if (!validateReceiptStep()) return;
 
@@ -505,23 +701,43 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
                 hosts.push($(this).find('.row-host').val().trim());
             });
 
+            const pengirimLabel = currentUserName + ' (' + branchName + ')';
+
             const params = {
                 'description[]': descs,
                 'hostname[]': hosts,
                 qty: $('#receipt_qty').val().trim(),
                 catatan: $('#receipt_catatan').val().trim(),
-                attn: $('#receipt_attn').val().trim(),
                 asuransi: $('#receipt_asuransi').val().trim(),
-                charge: $('#receipt_charge').val().trim(),
-                user: $('#receipt_user').val().trim(),
+                charge: $('#receipt_charge option:selected').text().trim(),
+                user: $('#receipt_user').val().trim() || $('#receipt_user_select').val(),
                 penerima: $('#receipt_penerima').val().trim(),
                 ekspedisi: $('#receipt_ekspedisi').val().trim(),
-                pengirim: $('#receipt_pengirim').val().trim()
+                pengirim: currentUserName,
+                pengirim_branch: branchName,
+                is_admin: '0'
             };
 
-            const query = $.param(params);
-            window.open('print_pengiriman.php?' + query, '_blank');
-            moveToStep2();
+            window.open('print_pengiriman.php?' + $.param(params), '_blank');
+
+            // Simpan ke hidden fields
+            $('#receipt_description_hidden').val(descs.join('\n'));
+            $('#receipt_hostname_hidden').val(hosts.join('||'));
+            $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
+            $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
+            $('#receipt_attn_hidden').val('');
+            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
+            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim());
+            $('#receipt_user_hidden').val($('#receipt_user').val().trim());
+            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
+            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
+            $('#receipt_pengirim_hidden').val(currentUserName);
+            $('#pdf_generated').val('1');
+
+            $('#pengirimanStep1').hide();
+            $('#pengirimanStep2').show();
+            $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
+            $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
         });
 
         $('#btnBackToStep1').on('click', function() {
@@ -531,13 +747,12 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
             $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
         });
 
+        // ✅ Auto-fill pemilik barang saat serial number dipilih (Step 2)
         $('#id_barang_select').on('change', function() {
             var idBarang = $(this).val();
             var snSelect = $('#serial_number_select');
-            var pemilikInput = $('#pemilik_barang_input');
-
             snSelect.html('<option value="">Loading...</option>');
-            pemilikInput.val('');
+            $('#pemilik_barang_input').val('');
 
             if (idBarang) {
                 $.ajax({
@@ -547,11 +762,11 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
                     success: function(data) {
                         var options = '<option value="">Pilih Serial Number...</option>';
                         if (data.length > 0) {
-                            $.each(data, function(index, item) {
+                            $.each(data, function(i, item) {
                                 options += '<option value="' + item.serial_number + '" data-user="' + item.user + '">' + item.serial_number + '</option>';
                             });
                         } else {
-                            options = '<option value="">Tidak ada aset tersedia/Telah dikirim</option>';
+                            options = '<option value="">Tidak ada aset tersedia</option>';
                         }
                         snSelect.html(options);
                     },
@@ -566,11 +781,7 @@ $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 
         $(document).on('change', '#serial_number_select', function() {
             var selectedUser = $(this).find(':selected').data('user');
-            if (selectedUser) {
-                $('#pemilik_barang_input').val(selectedUser);
-            } else {
-                $('#pemilik_barang_input').val('');
-            }
+            $('#pemilik_barang_input').val(selectedUser || '');
         });
     });
 </script>

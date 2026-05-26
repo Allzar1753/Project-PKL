@@ -218,6 +218,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $branchOptions    = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
     $tujuanOptions    = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
     $ekspedisiOptions = getSelectOptions($koneksi, "SELECT * FROM tb_ekspedisi ORDER BY nama_ekspedisi ASC");
+
+    // ✅ TAMBAHAN: Ambil data lengkap barang untuk print
+    $qDetailBarang = mysqli_query($koneksi, "
+    SELECT tb.nama_barang, m.nama_merk, t.nama_tipe, br.nama_branch AS nama_branch_barang
+    FROM barang b
+    JOIN tb_barang tb ON b.id_barang = tb.id_barang
+    LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
+    LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+    LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
+    WHERE b.id = {$barang['id']}
+    LIMIT 1
+");
+    $detailBarang = mysqli_fetch_assoc($qDetailBarang) ?: [];
+    $namaBarangAuto = ($detailBarang['nama_merk'] ?? '') . ' ' . ($detailBarang['nama_tipe'] ?? '');
+    $namaBranchBarang = $detailBarang['nama_branch_barang'] ?? '';
+
+    // ✅ TAMBAHAN: Ambil nama branch user yang login (untuk pengirim cabang)
+    $currentUser    = current_user();
+    $currentUserId  = (int)($currentUser['id'] ?? 0);
+    $qUserBranch = mysqli_query($koneksi, "
+    SELECT u.username, br.nama_branch 
+    FROM users u
+    LEFT JOIN tb_branch br ON u.id_branch = br.id_branch
+    WHERE u.id = $currentUserId LIMIT 1
+");
+    $dataUserBranch = mysqli_fetch_assoc($qUserBranch) ?: [];
+    $qTipeBarang = mysqli_query($koneksi, "
+    SELECT CONCAT(m.nama_merk, ' ', t.nama_tipe) AS deskripsi_auto,
+           b.`user` AS pemilik_barang,
+           b.serial_number
+    FROM barang b
+    JOIN tb_merk m ON b.id_merk = m.id_merk
+    JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+    WHERE b.id = {$barang['id']}
+    LIMIT 1
+");
+    $dataTipe      = mysqli_fetch_assoc($qTipeBarang) ?: [];
+    $deskripsiAuto = $dataTipe['deskripsi_auto'] ?? '';
+    $serialBarang  = $dataTipe['serial_number'] ?? '';
+
+    $pemilikBarang = $dataTipe['pemilik_barang'] ?? '';
+    if (empty($pemilikBarang) || $pemilikBarang === '0') {
+        $snEscaped = mysqli_real_escape_string($koneksi, $serialBarang);
+        $qPemilik = mysqli_query($koneksi, "
+        SELECT pemilik_barang 
+        FROM pengiriman_cabang_ho 
+        WHERE serial_number = '$snEscaped'
+          AND pemilik_barang IS NOT NULL
+          AND pemilik_barang != ''
+          AND pemilik_barang != '0'
+        ORDER BY id_pengiriman_ho DESC LIMIT 1
+    ");
+        $rowPemilik    = mysqli_fetch_assoc($qPemilik) ?: [];
+        $pemilikBarang = $rowPemilik['pemilik_barang'] ?? '';
+    }
+
+
+    $qUserCabang = mysqli_query($koneksi, "SELECT u.username, u.id_branch, br.nama_branch 
+FROM users u
+JOIN tb_branch br ON u.id_branch = br.id_branch
+WHERE u.`role` = 'user'
+ORDER BY br.nama_branch ASC
+");
+    $daftarUserCabang = [];
+    while ($row = mysqli_fetch_assoc($qUserCabang)) {
+        $daftarUserCabang[] = $row;
+    }
+    $namaBranchPengirim = $dataUserBranch['nama_branch'] ?? '';
 ?>
     <form id="formUpdate" enctype="multipart/form-data">
         <input type="hidden" name="id" value="<?= (int) $barang['id'] ?>">
@@ -364,24 +432,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             <input type="text" id="receipt_catatan" class="form-control" placeholder="Catatan singkat untuk surat pengiriman">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">ATTN</label>
-                            <input type="text" id="receipt_attn" class="form-control" placeholder="ATTN tujuan" value="<?= h($barang['user'] ?: '') ?>">
-                        </div>
-                        <div class="col-md-6">
                             <label class="form-label">Asuransi</label>
                             <input type="text" id="receipt_asuransi" class="form-control" placeholder="Contoh: Rp. 8.000.000">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Charge</label>
-                            <input type="text" id="receipt_charge" class="form-control" placeholder="Charge / Biaya">
+                            <label class="form-label">Charge (Branch Penanggung)</label>
+                            <select id="receipt_charge" class="form-control select2">
+                                <option value="">-- Pilih Branch --</option>
+                                <?php foreach ($branchOptions as $br): ?>
+                                    <option value="<?= (int)$br['id_branch'] ?>" data-label="<?= h($br['nama_branch']) ?>">
+                                        <?= h($br['nama_branch']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">User / Cabang</label>
-                            <input type="text" id="receipt_user" class="form-control" placeholder="User cabang / nama pemakai" value="<?= h($barang['user'] ?: '') ?>" required>
+                            <input type="text" id="receipt_user" class="form-control"
+                                value="<?= h($pemilikBarang) ?>" readonly
+                                style="background:#f9f9f9;">
+                            <small class="text-muted">Otomatis dari data pemilik asset</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Penerima</label>
-                            <input type="text" id="receipt_penerima" class="form-control" placeholder="Nama penerima" value="<?= h($barang['user'] ?: '') ?>">
+                            <input type="text" id="receipt_penerima" class="form-control"
+                                placeholder="Otomatis saat tujuan dipilih..." readonly
+                                style="background:#f9f9f9;">
+                            <small class="text-muted">Otomatis dari akun user cabang tujuan</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Pengirim</label>
+                            <input type="text" id="receipt_pengirim" class="form-control"
+                                value="Pak Deni" readonly
+                                style="background:#f9f9f9;">
+                            <small class="text-muted">Pengirim Head Office</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Ekspedisi<span class="text-danger">*</span></label>
@@ -391,10 +475,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                     <option value="<?= h($ex['nama_ekspedisi']) ?>"><?= h($ex['nama_ekspedisi']) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Pengirim</label>
-                            <input type="text" id="receipt_pengirim" class="form-control" placeholder="Nama pengirim" value="<?= h(current_user()['username'] ?? '') ?>">
                         </div>
                     </div>
                     <div class="mt-4 text-end">
@@ -416,7 +496,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <input type="hidden" name="receipt_user" id="receipt_user_hidden">
                     <input type="hidden" name="receipt_ekspedisi" id="receipt_ekspedisi_hidden">
                     <input type="hidden" name="receipt_pengirim" id="receipt_pengirim_hidden">
-
+                    <input type="hidden" name="receipt_penerima_branch" id="receipt_penerima_branch">
                     <div class="alert alert-secondary">Form pengiriman cabang hanya muncul setelah surat pengiriman berhasil dibuat / ditampilkan.</div>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -484,187 +564,194 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     </form>
 
     <script>
-        function validateReceiptStep() {
-            const qty = parseInt($('#receipt_qty').val(), 10);
-            const penerima = $('#receipt_penerima').val().trim();
-            const ekspedisi = $('#receipt_ekspedisi').val().trim();
-            const pengirim = $('#receipt_pengirim').val().trim();
-            const userCabang = $('#receipt_user').val().trim();
-            let hasDescription = false;
+    function validateReceiptStep() {
+        const qty = parseInt($('#receipt_qty').val(), 10);
+        const ekspedisi = $('#receipt_ekspedisi').val().trim();
 
-            $('#receipt_table tbody tr').each(function() {
-                if ($(this).find('.row-desc').val().trim()) hasDescription = true;
-            });
+        if (!qty || qty < 1) {
+            Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
+            return false;
+        }
+        if (!ekspedisi) {
+            Swal.fire('Validasi', 'Ekspedisi harus diisi.', 'warning');
+            return false;
+        }
+        return true;
+    }
 
-            if (!qty || qty < 1) {
-                Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
-                return false;
-            }
-            if (!hasDescription) {
-                Swal.fire('Validasi', 'Deskripsi barang harus diisi.', 'warning');
-                return false;
-            }
-            if (!userCabang) {
-                Swal.fire('Validasi', 'User / Cabang harus diisi.', 'warning');
-                return false;
-            }
-            if (!penerima) {
-                Swal.fire('Validasi', 'Penerima harus diisi.', 'warning');
-                return false;
-            }
-            if (!ekspedisi) {
-                Swal.fire('Validasi', 'Ekspedisi harus diisi.', 'warning');
-                return false;
-            }
-            if (!pengirim) {
-                Swal.fire('Validasi', 'Pengirim harus diisi.', 'warning');
-                return false;
-            }
-            return true;
+    $(document).ready(function() {
+
+        const userCabangData = <?= json_encode($daftarUserCabang) ?>;
+
+        // ✅ Auto-fill deskripsi barang otomatis
+        const deskripsiAuto = <?= json_encode($deskripsiAuto) ?>;
+        if (deskripsiAuto) {
+            $('#receipt_table tbody tr:first').find('.row-desc').val(deskripsiAuto);
         }
 
-        $(document).ready(function() {
-            $('#btnGeneratePdf').on('click', function() {
-                if (!validateReceiptStep()) return;
-                const descs = [];
-                const hosts = [];
-                $('#receipt_table tbody tr').each(function() {
-                    descs.push($(this).find('.row-desc').val().trim());
-                    hosts.push($(this).find('.row-host').val().trim());
-                });
-
-                const paramsObj = {
-                    'description[]': descs,
-                    'hostname[]': hosts,
-                    'qty': $('#receipt_qty').val().trim(),
-                    'catatan': $('#receipt_catatan').val().trim(),
-                    'user': $('#receipt_user').val().trim(),
-                    'attn': $('#receipt_attn').val().trim(),
-                    'asuransi': $('#receipt_asuransi').val().trim(),
-                    'charge': $('#receipt_charge').val().trim(),
-                    'penerima': $('#receipt_penerima').val().trim(),
-                    'ekspedisi': $('#receipt_ekspedisi').val().trim(),
-                    'pengirim': $('#receipt_pengirim').val().trim()
-                };
-
-                window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
-
-                $('#receipt_description_hidden').val(descs.join('\n'));
-                $('#receipt_hostname_hidden').val(hosts.join('||'));
-                $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
-                $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
-                $('#receipt_user_hidden').val($('#receipt_user').val().trim());
-                $('#receipt_attn_hidden').val($('#receipt_attn').val().trim());
-                $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
-                $('#receipt_charge_hidden').val($('#receipt_charge').val().trim());
-                $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
-                $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
-                $('#receipt_pengirim_hidden').val($('#receipt_pengirim').val().trim());
-                $('#pdf_generated').val('1');
-                $('#logistikStep1').hide();
-                $('#logistikStep2').show();
-                $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
-                $('#stepLabel2').removeClass('bg-secondary').addClass('bg-primary');
-            });
-
-            $('#btnBackToStep1').on('click', function() {
-                $('#logistikStep2').hide();
-                $('#logistikStep1').show();
-                $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
-                $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
-            });
-
-            function renumberRows() {
-                $('#receipt_table tbody tr').each(function(i) {
-                    $(this).find('.row-no').text(i + 1);
-                });
+        // ✅ Fungsi auto-fill penerima berdasarkan id branch
+        function autoFillPenerima(idBranch) {
+            const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
+            if (found) {
+                $('#receipt_penerima').val(found.username);
+                $('#receipt_penerima_branch').val(found.nama_branch);
+                $('#receipt_penerima_hidden').val(found.username);
+            } else {
+                $('#receipt_penerima').val('');
+                $('#receipt_penerima_branch').val('');
+                $('#receipt_penerima_hidden').val('');
             }
+        }
 
-            function addRow(desc = '', host = '') {
-                const $tr = $('<tr>');
-                $tr.append('<td class="row-no"></td>');
-                $tr.append('<td><input type="text" class="form-control row-desc" placeholder="Deskripsi item" value="' + $('<div/>').text(desc).html() + '"></td>');
-                $tr.append('<td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)" value="' + $('<div/>').text(host).html() + '"></td>');
-                $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>');
-                $('#receipt_table tbody').append($tr);
-                renumberRows();
-                $tr.find('.row-desc').focus();
-            }
-
-            $('#btnAddRow').on('click', function() {
-                addRow();
-            });
-
-            $(document).on('click', '.btn-remove-row', function() {
-                if ($('#receipt_table tbody tr').length <= 1) {
-                    $(this).closest('tr').find('input').val('');
-                } else {
-                    $(this).closest('tr').remove();
-                    renumberRows();
-                }
-            });
-
-            $(document).on('keydown', '.row-desc', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addRow();
-                }
-            });
-
-            $('#updateBermasalahSelect').on('change', function() {
-                if ($(this).val() === 'Iya') {
-                    $('#updateKeteranganMasalahDiv').slideDown();
-                    $('textarea[name="keterangan_masalah"]').attr('required', true);
-                } else {
-                    $('#updateKeteranganMasalahDiv').slideUp();
-                    $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-                }
-            });
-
-            $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
-                var id_barang = $(this).val();
-                $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
-                $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-                if (id_barang) {
-                    $.ajax({
-                        url: 'ajax_dropdown.php',
-                        type: 'POST',
-                        data: {
-                            action: 'get_merk',
-                            id_barang: id_barang
-                        },
-                        success: function(response) {
-                            $('#update_id_merk').html(response).trigger('change');
-                        }
-                    });
-                } else {
-                    $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
-                }
-            });
-
-            $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
-                var id_barang = $('#update_id_barang').val();
-                var id_merk = $(this).val();
-                $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
-                if (id_merk && id_barang) {
-                    $.ajax({
-                        url: 'ajax_dropdown.php',
-                        type: 'POST',
-                        data: {
-                            action: 'get_tipe',
-                            id_barang: id_barang,
-                            id_merk: id_merk
-                        },
-                        success: function(response) {
-                            $('#update_id_tipe').html(response).trigger('change');
-                        }
-                    });
-                } else {
-                    $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-                }
-            });
+        // ✅ Event Charge — pakai select2:select karena menggunakan Select2
+        $('#receipt_charge').on('select2:select', function(e) {
+            const idBranch = e.params.data.id;
+            autoFillPenerima(idBranch);
+            // Sync ke dropdown tujuan di Step 2
+            $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
         });
-    </script>
+
+        $('#receipt_charge').on('select2:unselect', function() {
+            $('#receipt_penerima').val('');
+            $('#receipt_penerima_branch').val('');
+            $('#receipt_penerima_hidden').val('');
+        });
+
+        // ✅ Event tujuan di Step 2 (jika diubah manual)
+        $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
+            autoFillPenerima(e.params.data.id);
+        });
+
+        $('#btnGeneratePdf').on('click', function() {
+            if (!validateReceiptStep()) return;
+
+            const descs = [];
+            const hosts = [];
+            $('#receipt_table tbody tr').each(function() {
+                descs.push($(this).find('.row-desc').val().trim());
+                hosts.push($(this).find('.row-host').val().trim());
+            });
+
+            const paramsObj = {
+                'description[]': descs,
+                'hostname[]': hosts,
+                'qty': $('#receipt_qty').val().trim(),
+                'catatan': $('#receipt_catatan').val().trim(),
+                'user': $('#receipt_user').val().trim(),
+                'asuransi': $('#receipt_asuransi').val().trim(),
+                'charge': $('#receipt_charge option:selected').text().trim(),
+                'penerima': $('#receipt_penerima').val().trim(),
+                'penerima_branch': $('#receipt_penerima_branch').val().trim(),
+                'ekspedisi': $('#receipt_ekspedisi').val().trim(),
+                'pengirim': 'Pak Deni',
+                'pengirim_branch': 'Head Office',
+                'nama_barang_auto': '<?= h($deskripsiAuto) ?>',
+                'is_admin': '1'
+            };
+
+            window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
+
+            // Simpan ke hidden fields
+            $('#receipt_description_hidden').val(descs.join('\n'));
+            $('#receipt_hostname_hidden').val(hosts.join('||'));
+            $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
+            $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
+            $('#receipt_user_hidden').val($('#receipt_user').val().trim());
+            $('#receipt_attn_hidden').val('');
+            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
+            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim());
+            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
+            $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim());
+            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
+            $('#receipt_pengirim_hidden').val('Pak Deni');
+            $('#pdf_generated').val('1');
+
+            $('#logistikStep1').hide();
+            $('#logistikStep2').show();
+            $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
+            $('#stepLabel2').removeClass('bg-secondary').addClass('bg-primary');
+        });
+
+        $('#btnBackToStep1').on('click', function() {
+            $('#logistikStep2').hide();
+            $('#logistikStep1').show();
+            $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
+            $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
+        });
+
+        function renumberRows() {
+            $('#receipt_table tbody tr').each(function(i) {
+                $(this).find('.row-no').text(i + 1);
+            });
+        }
+
+        function addRow(desc = '', host = '') {
+            const $tr = $('<tr>');
+            $tr.append('<td class="row-no"></td>');
+            $tr.append('<td><input type="text" class="form-control row-desc" placeholder="Deskripsi item" value="' + $('<div/>').text(desc).html() + '"></td>');
+            $tr.append('<td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)" value="' + $('<div/>').text(host).html() + '"></td>');
+            $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>');
+            $('#receipt_table tbody').append($tr);
+            renumberRows();
+            $tr.find('.row-desc').focus();
+        }
+
+        $('#btnAddRow').on('click', function() { addRow(); });
+
+        $(document).on('click', '.btn-remove-row', function() {
+            if ($('#receipt_table tbody tr').length <= 1) {
+                $(this).closest('tr').find('input').val('');
+            } else {
+                $(this).closest('tr').remove();
+                renumberRows();
+            }
+        });
+
+        $(document).on('keydown', '.row-desc', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); addRow(); }
+        });
+
+        $('#updateBermasalahSelect').on('change', function() {
+            if ($(this).val() === 'Iya') {
+                $('#updateKeteranganMasalahDiv').slideDown();
+                $('textarea[name="keterangan_masalah"]').attr('required', true);
+            } else {
+                $('#updateKeteranganMasalahDiv').slideUp();
+                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+            }
+        });
+
+        $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
+            var id_barang = $(this).val();
+            $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
+            $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            if (id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php', type: 'POST',
+                    data: { action: 'get_merk', id_barang: id_barang },
+                    success: function(response) { $('#update_id_merk').html(response).trigger('change'); }
+                });
+            } else {
+                $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+            }
+        });
+
+        $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
+            var id_barang = $('#update_id_barang').val();
+            var id_merk = $(this).val();
+            $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+            if (id_merk && id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php', type: 'POST',
+                    data: { action: 'get_tipe', id_barang: id_barang, id_merk: id_merk },
+                    success: function(response) { $('#update_id_tipe').html(response).trigger('change'); }
+                });
+            } else {
+                $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            }
+        });
+    });
+</script>
 <?php
     exit;
 }
@@ -702,9 +789,9 @@ if ($formType === 'penerimaan') {
         $namaPenerimaBersih = mysqli_real_escape_string($koneksi, $namaPenerima);
         $branchTujuan = (int) $pengirimanTerakhir['branch_tujuan'];
 
-// ✅ JANGAN update kolom user — nama_penerima hanya untuk tanda terima kiriman
-// user tetap seperti semula (pemilik asli barang)
-mysqli_query($koneksi, "UPDATE barang SET 
+        // ✅ JANGAN update kolom user — nama_penerima hanya untuk tanda terima kiriman
+        // user tetap seperti semula (pemilik asli barang)
+        mysqli_query($koneksi, "UPDATE barang SET 
     id_status = 4, 
     id_branch = $branchTujuan, 
     status = 'Tersedia'

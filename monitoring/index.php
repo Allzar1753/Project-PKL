@@ -24,7 +24,19 @@ $query = "SELECT
             COUNT(brg.id) AS total_asset
           FROM users u
           JOIN tb_branch b ON u.id_branch = b.id_branch
-          LEFT JOIN barang brg ON u.id = brg.user_id
+          -- Relasi diubah menggunakan id_branch agar terhubung dengan cabang yang tepat
+          LEFT JOIN barang brg ON b.id_branch = brg.id_branch
+              -- Menghitung barang yang tersedia/diterima, DAN tetap menghitung yang bermasalah (rusak)
+              AND (brg.status IN ('Tersedia', 'Diterima') OR brg.bermasalah = 'Iya')
+              -- Mengecualikan barang yang sedang dikirim dari HO ke Cabang (transit)
+              AND brg.id NOT IN (
+                  SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan'
+              )
+              -- Mengecualikan barang yang sedang dikirim dari Cabang ke HO (rusak/retur)
+              AND brg.serial_number NOT IN (
+                  SELECT serial_number FROM pengiriman_cabang_ho 
+                  WHERE branch_asal = b.id_branch AND status_pengiriman NOT IN ('Ditolak', 'Selesai')
+              )
           WHERE u.role = 'user'
           GROUP BY u.id, u.username, u.email, b.nama_branch
           ORDER BY total_asset DESC";

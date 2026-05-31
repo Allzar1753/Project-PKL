@@ -219,269 +219,258 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $tujuanOptions    = getSelectOptions($koneksi, "SELECT * FROM tb_branch ORDER BY nama_branch ASC");
     $ekspedisiOptions = getSelectOptions($koneksi, "SELECT * FROM tb_ekspedisi ORDER BY nama_ekspedisi ASC");
 
-    // ✅ TAMBAHAN: Ambil data lengkap barang untuk print
+    // Ambil data lengkap barang
     $qDetailBarang = mysqli_query($koneksi, "
-    SELECT tb.nama_barang, m.nama_merk, t.nama_tipe, br.nama_branch AS nama_branch_barang
-    FROM barang b
-    JOIN tb_barang tb ON b.id_barang = tb.id_barang
-    LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
-    LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
-    LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
-    WHERE b.id = {$barang['id']}
-    LIMIT 1
-");
+        SELECT tb.nama_barang, m.nama_merk, t.nama_tipe, br.nama_branch AS nama_branch_barang
+        FROM barang b
+        JOIN tb_barang tb ON b.id_barang = tb.id_barang
+        LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
+        LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
+        LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
+        WHERE b.id = {$barang['id']}
+        LIMIT 1
+    ");
     $detailBarang = mysqli_fetch_assoc($qDetailBarang) ?: [];
-    $namaBarangAuto = ($detailBarang['nama_merk'] ?? '') . ' ' . ($detailBarang['nama_tipe'] ?? '');
-    $namaBranchBarang = $detailBarang['nama_branch_barang'] ?? '';
+    
+    // LOGIKA FILTER NAMA BARANG (Mencegah nama merek terulang: DELL DELL PRO -> DELL PRO)
+    $merk = trim(strtoupper($detailBarang['nama_merk'] ?? ''));
+    $tipe = trim(strtoupper($detailBarang['nama_tipe'] ?? ''));
+    if (strpos($tipe, $merk) === 0) {
+        $namaBarangAuto = $tipe;
+    } else {
+        $namaBarangAuto = $merk . ' ' . $tipe;
+    }
+    
+    $deskripsiAuto = $namaBarangAuto;
+    $serialBarang  = $barang['serial_number'] ?? '';
 
-    // ✅ TAMBAHAN: Ambil nama branch user yang login (untuk pengirim cabang)
-    $currentUser    = current_user();
-    $currentUserId  = (int)($currentUser['id'] ?? 0);
-    $qUserBranch = mysqli_query($koneksi, "
-    SELECT u.username, br.nama_branch 
-    FROM users u
-    LEFT JOIN tb_branch br ON u.id_branch = br.id_branch
-    WHERE u.id = $currentUserId LIMIT 1
-");
-    $dataUserBranch = mysqli_fetch_assoc($qUserBranch) ?: [];
-    $qTipeBarang = mysqli_query($koneksi, "
-    SELECT CONCAT(m.nama_merk, ' ', t.nama_tipe) AS deskripsi_auto,
-           b.`user` AS pemilik_barang,
-           b.serial_number
-    FROM barang b
-    JOIN tb_merk m ON b.id_merk = m.id_merk
-    JOIN tb_tipe t ON b.id_tipe = t.id_tipe
-    WHERE b.id = {$barang['id']}
-    LIMIT 1
-");
-    $dataTipe      = mysqli_fetch_assoc($qTipeBarang) ?: [];
-    $deskripsiAuto = $dataTipe['deskripsi_auto'] ?? '';
-    $serialBarang  = $dataTipe['serial_number'] ?? '';
-
-    $pemilikBarang = $dataTipe['pemilik_barang'] ?? '';
+    // Ambil data Pemilik (User)
+    $pemilikBarang = $barang['user'] ?? '';
     if (empty($pemilikBarang) || $pemilikBarang === '0') {
         $snEscaped = mysqli_real_escape_string($koneksi, $serialBarang);
-        $qPemilik = mysqli_query($koneksi, "
-        SELECT pemilik_barang 
-        FROM pengiriman_cabang_ho 
-        WHERE serial_number = '$snEscaped'
-          AND pemilik_barang IS NOT NULL
-          AND pemilik_barang != ''
-          AND pemilik_barang != '0'
-        ORDER BY id_pengiriman_ho DESC LIMIT 1
-    ");
+        $qPemilik = mysqli_query($koneksi, "SELECT pemilik_barang FROM pengiriman_cabang_ho WHERE serial_number = '$snEscaped' AND pemilik_barang IS NOT NULL AND pemilik_barang != '' AND pemilik_barang != '0' ORDER BY id_pengiriman_ho DESC LIMIT 1");
         $rowPemilik    = mysqli_fetch_assoc($qPemilik) ?: [];
         $pemilikBarang = $rowPemilik['pemilik_barang'] ?? '';
     }
 
-
-    $qUserCabang = mysqli_query($koneksi, "SELECT u.username, u.id_branch, br.nama_branch 
-FROM users u
-JOIN tb_branch br ON u.id_branch = br.id_branch
-WHERE u.`role` = 'user'
-ORDER BY br.nama_branch ASC
-");
+    $qUserCabang = mysqli_query($koneksi, "SELECT u.username, u.id_branch, br.nama_branch FROM users u JOIN tb_branch br ON u.id_branch = br.id_branch WHERE u.`role` = 'user' ORDER BY br.nama_branch ASC");
     $daftarUserCabang = [];
     while ($row = mysqli_fetch_assoc($qUserCabang)) {
         $daftarUserCabang[] = $row;
     }
-    $namaBranchPengirim = $dataUserBranch['nama_branch'] ?? '';
 ?>
+
+    <style>
+        .fw-black { font-weight: 900 !important; color: #000 !important; }
+        .label-bold { font-weight: 900 !important; color: #1a1a1a !important; text-transform: uppercase; font-size: 0.95rem; margin-bottom: 5px; }
+        .input-bold { font-weight: bold !important; color: #000 !important; border: 2px solid #ccc !important; }
+        .input-bold:focus { border-color: #000 !important; box-shadow: none !important; }
+        .card-header-bold { background-color: #212529 !important; color: #fff !important; font-weight: 900 !important; font-size: 1.1rem !important; letter-spacing: 1px; }
+        .table-dark-bold th { background-color: #212529 !important; color: #fff !important; font-weight: 900 !important; border: 2px solid #000 !important; }
+        .table-bordered-dark { border: 2px solid #000 !important; }
+        .table-bordered-dark td { border: 2px solid #000 !important; }
+    </style>
+
     <form id="formUpdate" enctype="multipart/form-data">
         <input type="hidden" name="id" value="<?= (int) $barang['id'] ?>">
 
         <?php if ($type === 'master'): ?>
+            <!-- FORM MASTER BARANG -->
             <input type="hidden" name="form_type" value="master">
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">No Asset</label>
-                    <input type="text" name="no_asset" class="form-control" value="<?= h($barang['no_asset'] ?? '') ?>" placeholder="Boleh dikosongkan">
+                    <label class="label-bold">No Asset</label>
+                    <input type="text" name="no_asset" class="form-control input-bold" value="<?= h($barang['no_asset'] ?? '') ?>" placeholder="Boleh dikosongkan">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Serial Number<span class="text-danger">*</span></label>
-                    <input type="text" name="serial_number" class="form-control" value="<?= h($barang['serial_number'] ?? '') ?>" placeholder="Wajib diisi!" required>
+                    <label class="label-bold">Serial Number<span class="text-danger">*</span></label>
+                    <input type="text" name="serial_number" class="form-control input-bold text-uppercase" value="<?= h($barang['serial_number'] ?? '') ?>" placeholder="Wajib diisi!" required>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Barang<span class="text-danger">*</span></label>
-                    <select name="id_barang" id="update_id_barang" class="form-control select2" required>
+                    <label class="label-bold">Barang<span class="text-danger">*</span></label>
+                    <select name="id_barang" id="update_id_barang" class="form-control select2 input-bold" required>
                         <option value="">Pilih Barang...</option>
                         <?php foreach ($barangOptions as $b): ?>
-                            <option value="<?= (int) $b['id_barang'] ?>" <?= (int) $b['id_barang'] === (int) $barang['id_barang'] ? 'selected' : '' ?>><?= h($b['nama_barang']) ?></option>
+                            <option value="<?= (int) $b['id_barang'] ?>" <?= (int) $b['id_barang'] === (int) $barang['id_barang'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_barang'])) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Merk<span class="text-danger">*</span></label>
-                    <select name="id_merk" id="update_id_merk" class="form-control select2" required>
+                    <label class="label-bold">Merk<span class="text-danger">*</span></label>
+                    <select name="id_merk" id="update_id_merk" class="form-control select2 input-bold" required>
                         <option value="">Pilih Merk...</option>
                         <?php foreach ($merkOptions as $m): ?>
-                            <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= h($m['nama_merk']) ?></option>
+                            <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= strtoupper(h($m['nama_merk'])) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Tipe<span class="text-danger">*</span></label>
-                    <select name="id_tipe" id="update_id_tipe" class="form-control select2" required>
+                    <label class="label-bold">Tipe<span class="text-danger">*</span></label>
+                    <select name="id_tipe" id="update_id_tipe" class="form-control select2 input-bold" required>
                         <option value="">Pilih Tipe...</option>
                         <?php foreach ($tipeOptions as $t): ?>
-                            <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= h($t['nama_tipe']) ?></option>
+                            <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= strtoupper(h($t['nama_tipe'])) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Jenis<span class="text-danger">*</span></label>
-                    <select name="id_jenis" class="form-control select2" required>
+                    <label class="label-bold">Jenis<span class="text-danger">*</span></label>
+                    <select name="id_jenis" class="form-control select2 input-bold" required>
                         <option value="">Pilih Jenis...</option>
                         <?php foreach ($jenisOptions as $j): ?>
-                            <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= h($j['nama_jenis']) ?></option>
+                            <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= strtoupper(h($j['nama_jenis'])) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Branch Lokasi Saat Ini</label>
-                    <select name="id_branch" class="form-control select2">
+                    <label class="label-bold">Branch Lokasi Saat Ini</label>
+                    <select name="id_branch" class="form-control select2 input-bold">
                         <?php foreach ($branchOptions as $b): ?>
-                            <option value="<?= (int) $b['id_branch'] ?>" <?= (int) $b['id_branch'] === (int) $barang['id_branch'] ? 'selected' : '' ?>><?= h($b['nama_branch']) ?></option>
+                            <option value="<?= (int) $b['id_branch'] ?>" <?= (int) $b['id_branch'] === (int) $barang['id_branch'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_branch'])) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">User Pengguna<span class="text-danger">*</span></label>
-                    <input type="text" name="user" class="form-control" value="<?= h($barang['user'] ?? '') ?>" required>
+                    <label class="label-bold">User Pengguna<span class="text-danger">*</span></label>
+                    <input type="text" name="user" class="form-control input-bold text-uppercase" value="<?= h($barang['user'] ?? '') ?>" required>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Status Bermasalah<span class="text-danger">*</span></label>
-                    <select name="bermasalah" id="updateBermasalahSelect" class="form-control" required>
-                        <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>Tidak</option>
-                        <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>Iya</option>
+                    <label class="label-bold">Status Bermasalah<span class="text-danger">*</span></label>
+                    <select name="bermasalah" id="updateBermasalahSelect" class="form-control input-bold" required>
+                        <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>TIDAK</option>
+                        <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>IYA</option>
                     </select>
                 </div>
-
                 <div class="col-md-6" id="updateKeteranganMasalahDiv" style="<?= ($barang['bermasalah'] === 'Iya') ? '' : 'display:none;' ?>">
-                    <label class="form-label">Keterangan Masalah</label>
-                    <textarea name="keterangan_masalah" class="form-control" placeholder="Jelaskan masalah barang"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
+                    <label class="label-bold">Keterangan Masalah</label>
+                    <textarea name="keterangan_masalah" class="form-control input-bold text-uppercase" placeholder="Jelaskan masalah barang"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Tanggal Terima</label>
-                    <input type="date" name="tanggal_terima" class="form-control" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
+                    <label class="label-bold">Tanggal Terima</label>
+                    <input type="date" name="tanggal_terima" class="form-control input-bold" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
                 </div>
-
                 <div class="col-md-6">
-                    <label class="form-label">Update Foto Barang</label>
-                    <input type="file" name="foto" class="form-control">
+                    <label class="label-bold">Update Foto Barang</label>
+                    <input type="file" name="foto" class="form-control input-bold">
                 </div>
             </div>
-
             <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-warning"><i class="bi bi-save me-1"></i> Simpan Perubahan</button>
+                <button type="submit" class="btn btn-warning btn-lg fw-black border-dark border-2 px-5"><i class="bi bi-save me-1"></i> SIMPAN PERUBAHAN</button>
             </div>
+
 
         <?php elseif ($type === 'logistik'): ?>
             <?php if (!$pernahDikirim || $sudahDiterima): ?>
+                
+                <!-- TAMPILAN PENGIRIMAN LOGISTIK (HO KE CABANG) -->
                 <div class="mb-4">
                     <div class="d-flex gap-2 flex-wrap">
-                        <span id="stepLabel1" class="badge rounded-pill bg-primary">1. Surat Pengiriman</span>
-                        <span id="stepLabel2" class="badge rounded-pill bg-secondary text-white">2. Form Pengiriman</span>
+                        <span id="stepLabel1" class="badge rounded-pill bg-primary fs-6 fw-bold px-3 py-2">1. Konsep Surat Tanda Terima</span>
+                        <span id="stepLabel2" class="badge rounded-pill bg-secondary text-white fs-6 fw-bold px-3 py-2">2. Form Upload Resi</span>
                     </div>
                 </div>
 
                 <div id="logistikStep1">
-                    <div class="alert alert-info">Isi data surat pengiriman terlebih dahulu, lalu cetak/download PDF. Setelah itu lanjut ke form pengiriman ke cabang.</div>
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label">Deskripsi Barang<span class="text-danger">*</span></label>
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="receipt_table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width:6%;">NO</th>
-                                            <th>DESKRIPSI BARANG</th>
-                                            <th>HOSTNAME</th>
-                                            <th style="width:6%;"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td class="row-no">1</td>
-                                            <td><input type="text" class="form-control row-desc" placeholder="Deskripsi item"></td>
-                                            <td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)"></td>
-                                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                    <div class="alert alert-info fw-black border-info border-2" style="background-color: #cff4fc;">
+                        <i class="bi bi-info-circle-fill me-2 text-primary"></i> Isi data Tanda Terima Pengiriman Barang terlebih dahulu, lalu CETAK TANDA TERIMA. Nanti otomatis diarahkan ke Form Pengiriman.
+                    </div>
+
+                    <div class="card border-dark mb-4 border-2">
+                        <div class="card-header card-header-bold text-center">
+                            TANDA TERIMA PENGIRIMAN BARANG - HO KE CABANG
+                        </div>
+                        <div class="card-body" style="background-color: #f8f9fa;">
+                            <div class="row g-4">
+                                <!-- Ekspedisi -->
+                                <div class="col-md-6">
+                                    <label class="label-bold">Ekspedisi<span class="text-danger">*</span></label>
+                                    <select id="receipt_ekspedisi" class="form-control select2 input-bold" required>
+                                        <option value="">-- PILIH EKSPEDISI --</option>
+                                        <?php foreach ($ekspedisiOptions as $ex): ?>
+                                            <option value="<?= strtoupper(h($ex['nama_ekspedisi'])) ?>"><?= strtoupper(h($ex['nama_ekspedisi'])) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                
+                                <!-- Charge / Branch Penanggung -->
+                                <div class="col-md-6">
+                                    <label class="label-bold">Charge (Branch Penanggung)</label>
+                                    <select id="receipt_charge" class="form-control select2 input-bold">
+                                        <option value="">-- PILIH BRANCH --</option>
+                                        <?php foreach ($branchOptions as $br): ?>
+                                            <option value="<?= (int)$br['id_branch'] ?>" data-label="<?= strtoupper(h($br['nama_branch'])) ?>">
+                                                TO HAP <?= strtoupper(h($br['nama_branch'])) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+
+                                <!-- Tabel Barang -->
+                                <div class="col-12 mt-4">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-bordered-dark" id="receipt_table">
+                                            <thead class="table-dark-bold text-center">
+                                                <tr>
+                                                    <th style="width:5%;">NO</th>
+                                                    <th>DESKRIPSI BARANG</th>
+                                                    <th>HOSTNAME</th>
+                                                    <th style="width:10%;">QTY</th>
+                                                    <th>CATATAN</th>
+                                                    <th style="width:5%;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;">1</td>
+                                                    <td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="<?= h($deskripsiAuto) ?>"></td>
+                                                    <td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..."></td>
+                                                    <td><input type="number" id="receipt_qty" class="form-control input-bold text-center fw-black" value="1" min="1" required></td>
+                                                    <td><input type="text" id="receipt_catatan" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>
+                                                    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="mt-2 text-start">
+                                        <button type="button" id="btnAddRow" class="btn btn-dark fw-bold border-2"><i class="bi bi-plus-lg me-1"></i> TAMBAH BARIS</button>
+                                    </div>
+                                </div>
+
+                                <!-- Detail Tambahan -->
+                                <div class="col-md-6">
+                                    <label class="label-bold">Asuransi</label>
+                                    <input type="text" id="receipt_asuransi" class="form-control input-bold text-uppercase">
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="label-bold">User (Pemilik Barang)</label>
+                                    <input type="text" id="receipt_user" class="form-control input-bold text-uppercase text-primary" placeholder="OTOMATIS SAAT CHARGE DIPILIH..." value="<?= strtoupper(h($pemilikBarang)) ?>">
+                                </div>
+
+                                <!-- Pengirim (Dikunci ke Deni Pratama / HO) -->
+                                <div class="col-md-6">
+                                    <label class="label-bold">Pengirim (HO)</label>
+                                    <input type="text" id="receipt_pengirim" class="form-control input-bold fw-black text-uppercase text-danger" value="DENI PRATAMA (IT HEAD OFFICE)" readonly style="background:#e9ecef;">
+                                </div>
+
+                                <!-- Penerima (Otomatis berdasarkan Charge/Tujuan) -->
+                                <div class="col-md-6">
+                                    <label class="label-bold">Penerima (Cabang Tujuan)</label>
+                                    <input type="text" id="receipt_penerima" class="form-control input-bold fw-black text-uppercase text-primary" placeholder="OTOMATIS SAAT CHARGE DIPILIH..." readonly style="background:#e9ecef;">
+                                    <small class="text-muted fw-bold">Otomatis dari user cabang tujuan</small>
+                                </div>
                             </div>
-                            <div class="mt-2">
-                                <button type="button" id="btnAddRow" class="btn btn-sm btn-secondary">Tambah Baris</button>
-                            </div>
-                            <div class="form-text mt-1">Tekan Enter saat fokus di kolom deskripsi untuk menambah baris baru.</div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Qty</label>
-                            <input type="number" id="receipt_qty" class="form-control" value="1" min="1" required>
-                        </div>
-                        <div class="col-md-8">
-                            <label class="form-label">Catatan</label>
-                            <input type="text" id="receipt_catatan" class="form-control" placeholder="Catatan singkat untuk surat pengiriman">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Asuransi</label>
-                            <input type="text" id="receipt_asuransi" class="form-control" placeholder="Contoh: Rp. 8.000.000">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Charge (Branch Penanggung)</label>
-                            <select id="receipt_charge" class="form-control select2">
-                                <option value="">-- Pilih Branch --</option>
-                                <?php foreach ($branchOptions as $br): ?>
-                                    <option value="<?= (int)$br['id_branch'] ?>" data-label="<?= h($br['nama_branch']) ?>">
-                                        <?= h($br['nama_branch']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">User / Cabang</label>
-                            <input type="text" id="receipt_user" class="form-control"
-                                value="<?= h($pemilikBarang) ?>" readonly
-                                style="background:#f9f9f9;">
-                            <small class="text-muted">Otomatis dari data pemilik asset</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Penerima</label>
-                            <input type="text" id="receipt_penerima" class="form-control"
-                                placeholder="Otomatis saat tujuan dipilih..." readonly
-                                style="background:#f9f9f9;">
-                            <small class="text-muted">Otomatis dari akun user cabang tujuan</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Pengirim</label>
-                            <input type="text" id="receipt_pengirim" class="form-control"
-                                value="Pak Deni" readonly
-                                style="background:#f9f9f9;">
-                            <small class="text-muted">Pengirim Head Office</small>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Ekspedisi<span class="text-danger">*</span></label>
-                            <select id="receipt_ekspedisi" class="form-control select2" required>
-                                <option value="">Pilih Ekspedisi...</option>
-                                <?php foreach ($ekspedisiOptions as $ex): ?>
-                                    <option value="<?= h($ex['nama_ekspedisi']) ?>"><?= h($ex['nama_ekspedisi']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
                         </div>
                     </div>
-                    <div class="mt-4 text-end">
-                        <button type="button" id="btnGeneratePdf" class="btn btn-primary"><i class="bi bi-file-earmark-pdf-fill me-1"></i> Download PDF & Lanjutkan</button>
+
+                    <div class="text-end">
+                        <button type="button" id="btnGeneratePdf" class="btn btn-danger btn-lg fw-black px-5 py-3 rounded-pill shadow-sm border-2 border-dark">
+                            <i class="bi bi-printer-fill me-2"></i> CETAK TANDA TERIMA & LABEL PACKING
+                        </button>
                     </div>
                 </div>
 
+                <!-- STEP 2 -->
                 <div id="logistikStep2" style="display:none;">
                     <input type="hidden" name="form_type" value="logistik">
                     <input type="hidden" name="pdf_generated" id="pdf_generated" value="0">
@@ -497,68 +486,96 @@ ORDER BY br.nama_branch ASC
                     <input type="hidden" name="receipt_ekspedisi" id="receipt_ekspedisi_hidden">
                     <input type="hidden" name="receipt_pengirim" id="receipt_pengirim_hidden">
                     <input type="hidden" name="receipt_penerima_branch" id="receipt_penerima_branch">
-                    <div class="alert alert-secondary">Form pengiriman cabang hanya muncul setelah surat pengiriman berhasil dibuat / ditampilkan.</div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Tanggal Keluar<span class="text-danger">*</span></label>
-                            <input type="date" name="tanggal_keluar" class="form-control" required min="<?= date('Y-m-d') ?>">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Tujuan Pengiriman<span class="text-danger">*</span></label>
-                            <select name="tujuan" class="form-control select2" required>
-                                <option value="">-- Pilih Tujuan --</option>
-                                <?php foreach ($tujuanOptions as $bt): ?>
-                                    <option value="<?= (int) $bt['id_branch'] ?>"><?= h($bt['nama_branch']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Jasa Pengiriman<span class="text-danger">*</span></label>
-                            <select name="jasa_pengiriman" class="form-control select2" required>
-                                <option value="">Pilih...</option>
-                                <option value="SAP Express">SAP Express</option>
-                                <option value="PCP Express">PCP Express</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Nomor Resi Keluar<span class="text-danger">*</span></label>
-                            <input type="text" name="nomor_resi" class="form-control" placeholder="Masukkan nomor resi keluar" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Foto Resi Keluar / Bukti Kirim<span class="text-danger">*</span></label>
-                            <input type="file" name="foto_resi" class="form-control" required>
+                    
+                    <div class="alert alert-warning fw-black border-warning border-2" style="background-color: #fff3cd;">
+                        <i class="bi bi-check-circle-fill me-2 text-success"></i> Dokumen berhasil dicetak. Silakan isi form di bawah ini untuk validasi sistem.
+                    </div>
+                    
+                    <div class="card border-dark border-2">
+                        <div class="card-body bg-white">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="label-bold">Tanggal Keluar<span class="text-danger">*</span></label>
+                                    <input type="date" name="tanggal_keluar" class="form-control input-bold" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label class="label-bold">Tujuan Pengiriman (Cabang)<span class="text-danger">*</span></label>
+                                    <select name="tujuan" class="form-control select2 input-bold" required>
+                                        <option value="">-- PILIH TUJUAN --</option>
+                                        <?php foreach ($tujuanOptions as $bt): ?>
+                                            <option value="<?= (int) $bt['id_branch'] ?>"><?= strtoupper(h($bt['nama_branch'])) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label class="label-bold">Jasa Pengiriman<span class="text-danger">*</span></label>
+                                    <select name="jasa_pengiriman" class="form-control select2 input-bold" required>
+                                        <option value="">-- PILIH JASA PENGIRIMAN --</option>
+                                        <option value="SAP Express">SAP EXPRESS</option>
+                                        <option value="PCP Express">PCP EXPRESS</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <label class="label-bold">Nomor Resi Keluar<span class="text-danger">*</span></label>
+                                    <input type="text" name="nomor_resi" class="form-control input-bold text-uppercase" placeholder="INPUT NOMOR RESI..." required>
+                                </div>
+                                
+                                <div class="col-md-12">
+                                    <label class="label-bold">Foto Resi Keluar / Bukti Kirim<span class="text-danger">*</span></label>
+                                    <input type="file" name="foto_resi" class="form-control input-bold" accept=".jpg,.jpeg,.png,.gif,.webp" required>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                     <div class="mt-4 text-end">
-                        <button type="button" id="btnBackToStep1" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-left me-1"></i> Kembali</button>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i> Kirim Logistik</button>
+                        <button type="button" id="btnBackToStep1" class="btn btn-secondary btn-lg me-2 fw-black border-dark border-2"><i class="bi bi-arrow-left me-1"></i> KEMBALI</button>
+                        <button type="submit" class="btn btn-success btn-lg fw-black px-5 rounded-pill shadow-sm border-2 border-dark" id="btnSimpanPengirimanUser">
+                            <span class="btn-text"><i class="bi bi-send-fill me-2"></i> KIRIM BARANG SEKARANG</span>
+                            <span class="btn-loading d-none">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> LOADING...
+                            </span>
+                        </button>
                     </div>
                 </div>
 
             <?php elseif ($sedangDikirim): ?>
                 <input type="hidden" name="form_type" value="penerimaan">
-                <div class="alert alert-warning mb-3">Barang sedang dikirim. Isi form di bawah untuk konfirmasi penerimaan.</div>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Tanggal Diterima<span class="text-danger">*</span></label>
-                        <input type="date" name="tanggal_diterima" class="form-control" required min="<?= date('Y-m-d') ?>">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Nama Penerima<span class="text-danger">*</span></label>
-                        <input type="text" name="nama_penerima" class="form-control" placeholder="Nama penerima barang" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Upload Foto Barang Diterima<span class="text-danger">*</span></label>
-                        <input type="file" name="foto_barang_diterima" class="form-control" required>
+                <div class="alert alert-warning fw-black border-warning border-2" style="background-color: #fff3cd;">
+                    <i class="bi bi-box-seam text-primary me-2"></i> Barang sedang dikirim. Isi form di bawah untuk konfirmasi penerimaan.
+                </div>
+                <div class="card border-dark border-2">
+                    <div class="card-body bg-light">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="label-bold">Tanggal Diterima<span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal_diterima" class="form-control input-bold" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="label-bold">Nama Penerima<span class="text-danger">*</span></label>
+                                <input type="text" name="nama_penerima" class="form-control input-bold text-uppercase" placeholder="NAMA PENERIMA BARANG..." required>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="label-bold">Upload Foto Barang Diterima<span class="text-danger">*</span></label>
+                                <input type="file" name="foto_barang_diterima" class="form-control input-bold" accept=".jpg,.jpeg,.png,.gif,.webp" required>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="mt-4 text-end">
-                    <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i> Konfirmasi Terima</button>
+                    <button type="submit" class="btn btn-success btn-lg fw-black px-5 rounded-pill shadow-sm border-2 border-dark">
+                        <i class="bi bi-check-circle-fill me-2"></i> KONFIRMASI TERIMA BARANG
+                    </button>
                 </div>
 
             <?php else: ?>
-                <div class="alert alert-success">Status pengiriman saat ini: <?= h($pengirimanTerakhir['status_pengiriman']) ?>. Proses logistik selesai.</div>
+                <div class="alert alert-success fw-black border-success border-2">
+                    <i class="bi bi-check-all me-2"></i> Status pengiriman saat ini: <?= strtoupper(h($pengirimanTerakhir['status_pengiriman'])) ?>. Proses logistik selesai.
+                </div>
             <?php endif; ?>
         <?php endif; ?>
     </form>
@@ -573,7 +590,7 @@ ORDER BY br.nama_branch ASC
             return false;
         }
         if (!ekspedisi) {
-            Swal.fire('Validasi', 'Ekspedisi harus diisi.', 'warning');
+            Swal.fire('Validasi', 'Ekspedisi harus dipilih.', 'warning');
             return false;
         }
         return true;
@@ -583,19 +600,17 @@ ORDER BY br.nama_branch ASC
 
         const userCabangData = <?= json_encode($daftarUserCabang) ?>;
 
-        // ✅ Auto-fill deskripsi barang otomatis
-        const deskripsiAuto = <?= json_encode($deskripsiAuto) ?>;
-        if (deskripsiAuto) {
-            $('#receipt_table tbody tr:first').find('.row-desc').val(deskripsiAuto);
-        }
-
-        // ✅ Fungsi auto-fill penerima berdasarkan id branch
+        // Auto-fill penerima DAN USER berdasarkan id branch (Charge)
         function autoFillPenerima(idBranch) {
             const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
             if (found) {
-                $('#receipt_penerima').val(found.username);
-                $('#receipt_penerima_branch').val(found.nama_branch);
-                $('#receipt_penerima_hidden').val(found.username);
+                // Set Penerima
+                $('#receipt_penerima').val(found.username.toUpperCase());
+                $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
+                $('#receipt_penerima_hidden').val(found.username.toUpperCase());
+                
+                // Set User juga agar otomatis sinkron!
+                $('#receipt_user').val(found.username.toUpperCase());
             } else {
                 $('#receipt_penerima').val('');
                 $('#receipt_penerima_branch').val('');
@@ -603,11 +618,10 @@ ORDER BY br.nama_branch ASC
             }
         }
 
-        // ✅ Event Charge — pakai select2:select karena menggunakan Select2
+        // Event Charge -> Sync ke Penerima & Tujuan & USER
         $('#receipt_charge').on('select2:select', function(e) {
             const idBranch = e.params.data.id;
             autoFillPenerima(idBranch);
-            // Sync ke dropdown tujuan di Step 2
             $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
         });
 
@@ -617,36 +631,40 @@ ORDER BY br.nama_branch ASC
             $('#receipt_penerima_hidden').val('');
         });
 
-        // ✅ Event tujuan di Step 2 (jika diubah manual)
+        // Event Tujuan (Step 2) -> Sync ke Penerima jika diubah manual
         $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
             autoFillPenerima(e.params.data.id);
         });
 
+        // Tombol Cetak PDF
         $('#btnGeneratePdf').on('click', function() {
             if (!validateReceiptStep()) return;
 
             const descs = [];
             const hosts = [];
             $('#receipt_table tbody tr').each(function() {
-                descs.push($(this).find('.row-desc').val().trim());
-                hosts.push($(this).find('.row-host').val().trim());
+                descs.push($(this).find('.row-desc').val().trim().toUpperCase());
+                hosts.push($(this).find('.row-host').val().trim().toUpperCase());
             });
 
+            // PARAMETER UNTUK ADMIN (HO -> CABANG)
             const paramsObj = {
                 'description[]': descs,
                 'hostname[]': hosts,
                 'qty': $('#receipt_qty').val().trim(),
-                'catatan': $('#receipt_catatan').val().trim(),
-                'user': $('#receipt_user').val().trim(),
-                'asuransi': $('#receipt_asuransi').val().trim(),
-                'charge': $('#receipt_charge option:selected').text().trim(),
-                'penerima': $('#receipt_penerima').val().trim(),
-                'penerima_branch': $('#receipt_penerima_branch').val().trim(),
-                'ekspedisi': $('#receipt_ekspedisi').val().trim(),
-                'pengirim': 'Pak Deni',
-                'pengirim_branch': 'Head Office',
-                'nama_barang_auto': '<?= h($deskripsiAuto) ?>',
-                'is_admin': '1'
+                'catatan': $('#receipt_catatan').val().trim().toUpperCase(),
+                'user': $('#receipt_user').val().trim().toUpperCase(),
+                'asuransi': $('#receipt_asuransi').val().trim().toUpperCase(),
+                'charge': $('#receipt_charge option:selected').text().trim().toUpperCase(),
+                'ekspedisi': $('#receipt_ekspedisi').val().trim().toUpperCase(),
+                
+                'penerima': $('#receipt_penerima').val().trim().toUpperCase(),
+                'penerima_branch': $('#receipt_penerima_branch').val().trim().toUpperCase(),
+                
+                'pengirim': 'DENI PRATAMA',
+                'pengirim_branch': 'IT HEAD OFFICE',
+                
+                'is_admin': '1' // KODE INI YANG BIKIN HALAMAN 2 BERUBAH JADI HO KE CABANG
             };
 
             window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
@@ -655,21 +673,21 @@ ORDER BY br.nama_branch ASC
             $('#receipt_description_hidden').val(descs.join('\n'));
             $('#receipt_hostname_hidden').val(hosts.join('||'));
             $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
-            $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim());
-            $('#receipt_user_hidden').val($('#receipt_user').val().trim());
+            $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim().toUpperCase());
+            $('#receipt_user_hidden').val($('#receipt_user').val().trim().toUpperCase());
             $('#receipt_attn_hidden').val('');
-            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim());
-            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim());
-            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim());
-            $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim());
-            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim());
-            $('#receipt_pengirim_hidden').val('Pak Deni');
+            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim().toUpperCase());
+            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim().toUpperCase());
+            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim().toUpperCase());
+            $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim().toUpperCase());
+            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
+            $('#receipt_pengirim_hidden').val('DENI PRATAMA');
             $('#pdf_generated').val('1');
 
             $('#logistikStep1').hide();
             $('#logistikStep2').show();
             $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
-            $('#stepLabel2').removeClass('bg-secondary').addClass('bg-primary');
+            $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
         });
 
         $('#btnBackToStep1').on('click', function() {
@@ -687,10 +705,12 @@ ORDER BY br.nama_branch ASC
 
         function addRow(desc = '', host = '') {
             const $tr = $('<tr>');
-            $tr.append('<td class="row-no"></td>');
-            $tr.append('<td><input type="text" class="form-control row-desc" placeholder="Deskripsi item" value="' + $('<div/>').text(desc).html() + '"></td>');
-            $tr.append('<td><input type="text" class="form-control row-host" placeholder="Hostname (boleh kosong)" value="' + $('<div/>').text(host).html() + '"></td>');
-            $tr.append('<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">×</button></td>');
+            $tr.append('<td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;"></td>');
+            $tr.append('<td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="' + $('<div/>').text(desc).html() + '"></td>');
+            $tr.append('<td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..." value="' + $('<div/>').text(host).html() + '"></td>');
+            $tr.append('<td><input type="number" class="form-control input-bold text-center fw-black" value="1" min="1"></td>');
+            $tr.append('<td><input type="text" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>');
+            $tr.append('<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>');
             $('#receipt_table tbody').append($tr);
             renumberRows();
             $tr.find('.row-desc').focus();
@@ -751,7 +771,7 @@ ORDER BY br.nama_branch ASC
             }
         });
     });
-</script>
+    </script>
 <?php
     exit;
 }
@@ -762,10 +782,6 @@ ORDER BY br.nama_branch ASC
 $formType = $_POST['form_type'] ?? '';
 
 if ($formType === 'penerimaan') {
-    // ----------------------------------------------------------------
-    // PENERIMAAN: Barang dikonfirmasi diterima oleh cabang tujuan.
-    // Di sinilah nama pemilik (user) baru diupdate ke nama penerima.
-    // ----------------------------------------------------------------
     $tanggalDiterima = normalizeNullableString($_POST['tanggal_diterima'] ?? '');
     if ($tanggalDiterima < date('Y-m-d')) jsonError("Tanggal diterima tidak boleh tanggal yang lampau.");
 
@@ -777,25 +793,14 @@ if ($formType === 'penerimaan') {
 
     mysqli_begin_transaction($koneksi);
     try {
-        // Update status pengiriman dan simpan nama penerima
         $stmt = mysqli_prepare($koneksi, "UPDATE barang_pengiriman SET status_pengiriman = ?, tanggal_diterima = ?, nama_penerima = ?, foto_barang_diterima = ? WHERE id_pengiriman = ?");
         $idPeng = (int) $pengirimanTerakhir['id_pengiriman'];
         $st = STATUS_SUDAH_DITERIMA;
         mysqli_stmt_bind_param($stmt, 'ssssi', $st, $tanggalDiterima, $namaPenerima, $upload['filename'], $idPeng);
         mysqli_stmt_execute($stmt);
 
-        // ✅ FIX: user diupdate ke nama_penerima HANYA saat barang sudah benar-benar diterima
-        $branchTujuan       = (int) $pengirimanTerakhir['branch_tujuan'];
-        $namaPenerimaBersih = mysqli_real_escape_string($koneksi, $namaPenerima);
         $branchTujuan = (int) $pengirimanTerakhir['branch_tujuan'];
-
-        // ✅ JANGAN update kolom user — nama_penerima hanya untuk tanda terima kiriman
-        // user tetap seperti semula (pemilik asli barang)
-        mysqli_query($koneksi, "UPDATE barang SET 
-    id_status = 4, 
-    id_branch = $branchTujuan, 
-    status = 'Tersedia'
-    WHERE id = $id");
+        mysqli_query($koneksi, "UPDATE barang SET id_status = 4, id_branch = $branchTujuan, status = 'Tersedia' WHERE id = $id");
         mysqli_commit($koneksi);
         jsonSuccess("Penerimaan barang berhasil dikonfirmasi.");
     } catch (Exception $e) {
@@ -819,22 +824,8 @@ if ($formType === 'penerimaan') {
     try {
         $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
         mysqli_stmt_bind_param(
-            $stmt,
-            'ssiiiiiisssssi',
-            $noAsset,
-            $serialNumber,
-            $_POST['id_barang'],
-            $_POST['id_merk'],
-            $_POST['id_tipe'],
-            $_POST['id_jenis'],
-            $_POST['id_branch'],
-            $_POST['user'],
-            $user_id_sistem,
-            $_POST['bermasalah'],
-            $keteranganMasalah,
-            $tanggalTerima,
-            $fotoBaru,
-            $id
+            $stmt, 'ssiiiiiisssssi',
+            $noAsset, $serialNumber, $_POST['id_barang'], $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem, $_POST['bermasalah'], $keteranganMasalah, $tanggalTerima, $fotoBaru, $id
         );
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
@@ -844,24 +835,16 @@ if ($formType === 'penerimaan') {
         jsonError($e->getMessage());
     }
 } elseif ($formType === 'logistik') {
-    // ----------------------------------------------------------------
-    // LOGISTIK: Barang baru dikirim, status jadi "Sedang perjalanan".
-    // ❌ Nama user/pemilik TIDAK diubah di sini — tetap seperti semula.
-    // ✅ Nama penerima tujuan disimpan ke kolom nama_penerima di barang_pengiriman
-    //    dan baru akan dipindahkan ke tabel barang saat konfirmasi penerimaan.
-    // ----------------------------------------------------------------
     $tanggalKeluar = $_POST['tanggal_keluar'] ?? '';
     if ($tanggalKeluar < date('Y-m-d')) jsonError("Tanggal keluar logistik tidak boleh tanggal lampau.");
 
     $upload = uploadImage('foto_resi');
     if ($upload['status'] === 'error') jsonError($upload['message']);
 
-    // Nama penerima tujuan (untuk disimpan di record pengiriman, bukan di barang)
     $namaPenerimaKirim = trim($_POST['receipt_penerima'] ?? $_POST['receipt_user'] ?? '');
 
     mysqli_begin_transaction($koneksi);
     try {
-        // ✅ Tambahkan kolom nama_penerima ke INSERT agar tersimpan di record pengiriman
         $stmt = mysqli_prepare(
             $koneksi,
             "INSERT INTO barang_pengiriman
@@ -871,22 +854,11 @@ if ($formType === 'penerimaan') {
         $asal = (int) $barang['id_branch'];
         $st   = STATUS_SEDANG_PERJALANAN;
         mysqli_stmt_bind_param(
-            $stmt,
-            'iiissssss',
-            $id,
-            $asal,
-            $_POST['tujuan'],
-            $_POST['tanggal_keluar'],
-            $_POST['jasa_pengiriman'],
-            $_POST['nomor_resi'],
-            $upload['filename'],
-            $st,
-            $namaPenerimaKirim
+            $stmt, 'iiissssss',
+            $id, $asal, $_POST['tujuan'], $_POST['tanggal_keluar'], $_POST['jasa_pengiriman'], $_POST['nomor_resi'], $upload['filename'], $st, $namaPenerimaKirim
         );
         mysqli_stmt_execute($stmt);
 
-        // ✅ FIX: Hanya update status barang ke "transit" (id_status=3).
-        //    Kolom user TIDAK disentuh — nama pemilik tetap seperti sebelum dikirim.
         mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE id = $id");
 
         $newPengirimanId = (int) mysqli_insert_id($koneksi);
@@ -895,10 +867,7 @@ if ($formType === 'penerimaan') {
             $title   = 'Pengiriman dalam perjalanan';
             $message = 'Barang dengan resi ' . mysqli_real_escape_string($koneksi, $_POST['nomor_resi']) . ' sedang dalam perjalanan ke cabang Anda.';
             $link    = '../Barang/index.php?filter=masuk';
-            $stmtNotif = mysqli_prepare(
-                $koneksi,
-                "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)"
-            );
+            $stmtNotif = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)");
             if ($stmtNotif) {
                 mysqli_stmt_bind_param($stmtNotif, 'isss', $targetBranch, $title, $message, $link);
                 mysqli_stmt_execute($stmtNotif);

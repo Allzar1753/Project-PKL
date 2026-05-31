@@ -88,8 +88,8 @@ $searchSql_barang_pengiriman = "";
 if ($searchInput !== '') {
     $s = mysqli_real_escape_string($koneksi, $searchInput);
     $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%') ";
-    $searchSql_pengiriman_ho = " AND (tb_barang.nama_barang LIKE '%$s%' OR p.serial_number LIKE '%$s%') ";
-    $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%') ";
+    $searchSql_pengiriman_ho = " AND (tb_barang.nama_barang LIKE '%$s%' OR p.serial_number LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR p.pemilik_barang LIKE '%$s%') ";
+    $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%' OR p.nama_penerima LIKE '%$s%' OR b.user LIKE '%$s%') ";
 }
 
 
@@ -203,6 +203,11 @@ if ($filter === 'keluar') {
     } else {
         // User Cabang: Disamakan dengan logic Logistik Masuk (Ambil dari histori HO)
         $subqueryLastUser = "(SELECT pch.pemilik_barang FROM pengiriman_cabang_ho pch WHERE pch.serial_number = barang.serial_number AND pch.pemilik_barang IS NOT NULL AND pch.pemilik_barang != '' AND pch.pemilik_barang != '0' ORDER BY pch.id_pengiriman_ho DESC LIMIT 1)";
+    }
+
+    if($searchInput !== '') {
+        $s = mysqli_real_escape_string($koneksi, $searchInput);
+        $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%' OR barang.user LIKE '%$s%' OR $subqueryLastUser LIKE '%$s%') ";
     }
 
     $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, 
@@ -686,7 +691,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     <div class="input-group">
                                         <input type="text" name="cari" class="form-control" placeholder="Nama, No Asset, atau Serial Number..." value="<?= $searchValue ?>">
                                         <button class="btn search-btn" type="submit"><i class="bi bi-search me-2"></i>Cari</button>
-                                        <a href="index.php" class="btn reset-btn">Reset</a>
+                                        <a href="index.php?filter=<?= $filterValue  ?>&limit=<?= $limit ?>" class="btn reset-btn">Reset</a>
                                     </div>
                                 </form>
                             </div>

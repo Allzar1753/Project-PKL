@@ -13,7 +13,6 @@ if (!$isAdmin && $myBranchId <= 0) { exit('Akses Ditolak.'); }
 function h($value): string { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 
 function resolve_period_range($periode, $tahun, $bulan, $minggu, $customAwal, $customAkhir) {
-    // (Logika tanggal persis seperti sebelumnya - dipersingkat demi kerapian)
     $now = new DateTime();
     if (!preg_match('/^\d{4}$/', $tahun)) $tahun = $now->format('Y');
     if (!preg_match('/^(0[1-9]|1[0-2])$/', $bulan)) $bulan = $now->format('m');
@@ -37,40 +36,105 @@ $singleId    = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $range = resolve_period_range($periode, $tahun, $bulan, '', $_GET['custom_awal']??'', $_GET['custom_akhir']??'');
 
-$sql = "
+// ==============================================================================
+// KONDISI WHERE PER ROLE (ISOLASI DATA PDF)
+// ==============================================================================
+$idBranchHO = 40;
+$activeBranchId = $isAdmin ? $idBranchHO : $myBranchId;
+
+if ($isAdmin) {
+    // Admin HO cetak semua data
+    $condA = "1=1";
+    $condB = "1=1";
+} else {
+    // User Cabang HANYA cetak data yang melibatkan cabangnya
+    $condA = "(b.id_branch = $activeBranchId OR bp.branch_tujuan = $activeBranchId OR bp.branch_asal = $activeBranchId)";
+    $condB = "pch.branch_asal = $activeBranchId";
+}
+
+$singleIdCondA = $singleId > 0 ? "AND b.id = $singleId" : "";
+$singleIdCondB = $singleId > 0 ? "AND b.id = $singleId" : "";
+
+$penerimaHO = 'Pak Deni'; // Penerima mutlak untuk retur ke HO
+
+// ==============================================================================
+// QUERY A: Logistik HO → Cabang
+// ==============================================================================
+$sqlA = "
     SELECT b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.user, b.bermasalah, b.keterangan_masalah,
            tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
-           bp.id_pengiriman, bp.tanggal_keluar, bp.tanggal_diterima, bp.status_pengiriman, bp.nomor_resi_keluar, bp.nama_penerima, bp.jasa_pengiriman,
-           bpasal.nama_branch AS branch_asal_pengiriman, bptujuan.nama_branch AS branch_tujuan
-    FROM barang b
+           bp.id_pengiriman, bp.tanggal_keluar, bp.tanggal_diterima, bp.status_pengiriman, 
+           bp.nomor_resi_keluar, bp.nama_penerima, bp.jasa_pengiriman,
+           bpasal.nama_branch AS branch_asal_pengiriman, bptujuan.nama_branch AS branch_tujuan,
+           DATE(bp.tanggal_keluar) AS tgl_aktivitas
+    FROM barang_pengiriman bp
+    JOIN barang b ON bp.id_barang = b.id
     LEFT JOIN tb_barang tb ON tb.id_barang = b.id_barang
     LEFT JOIN tb_merk bm ON bm.id_merk = b.id_merk
     LEFT JOIN tb_status st ON st.id_status = b.id_status
     LEFT JOIN tb_branch ba ON ba.id_branch = b.id_branch
-    LEFT JOIN barang_pengiriman bp ON bp.id_barang = b.id
     LEFT JOIN tb_branch bpasal ON bpasal.id_branch = bp.branch_asal
     LEFT JOIN tb_branch bptujuan ON bptujuan.id_branch = bp.branch_tujuan
-    WHERE DATE(COALESCE(bp.tanggal_keluar, b.tanggal_terima)) BETWEEN ? AND ?
+    WHERE DATE(bp.tanggal_keluar) BETWEEN ? AND ? 
+      AND ($condA) $singleIdCondA
 ";
-if ($isAdmin) {
-    $sql .= " AND (b.id_branch = $myBranchId OR bp.branch_tujuan = $myBranchId) ";
-} else {
-    $sql .= " AND b.id_branch = $myBranchId AND b.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
-}
-if ($singleId > 0) { $sql .= " AND b.id = $singleId "; }
-$sql .= " ORDER BY b.id DESC, bp.id_pengiriman ASC ";
 
-$stmt = mysqli_prepare($koneksi, $sql);
-mysqli_stmt_bind_param($stmt, 'ss', $range['start'], $range['end']);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
+// ==============================================================================
+// QUERY B: Logistik Cabang → HO (Retur)
+// ==============================================================================
+$sqlB = "
+    SELECT b.id, b.no_asset, pch.serial_number, b.tanggal_terima, b.user, b.bermasalah, b.keterangan_masalah,
+           tb.nama_barang, bm.nama_merk, st.nama_status, ba.nama_branch AS branch_aktif,
+           pch.id_pengiriman_ho AS id_pengiriman, pch.tanggal_pengajuan AS tanggal_keluar, 
+           DATE(pch.disetujui_pada) AS tanggal_diterima,
+           pch.status_pengiriman, pch.nomor_resi_keluar, '$penerimaHO' AS nama_penerima, 
+           pch.jasa_pengiriman AS jasa_pengiriman,
+           bpasal.nama_branch AS branch_asal_pengiriman, 'Kantor Pusat HO' AS branch_tujuan,
+           DATE(pch.tanggal_pengajuan) AS tgl_aktivitas
+    FROM pengiriman_cabang_ho pch
+    LEFT JOIN barang b ON b.serial_number = pch.serial_number
+    LEFT JOIN tb_barang tb ON tb.id_barang = pch.id_barang
+    LEFT JOIN tb_merk bm ON bm.id_merk = b.id_merk
+    LEFT JOIN tb_status st ON st.id_status = b.id_status
+    LEFT JOIN tb_branch ba ON ba.id_branch = b.id_branch
+    LEFT JOIN tb_branch bpasal ON bpasal.id_branch = pch.branch_asal
+    WHERE DATE(pch.tanggal_pengajuan) BETWEEN ? AND ? 
+      AND ($condB) $singleIdCondB AND b.id IS NOT NULL
+";
 
+// Eksekusi Query A
+$stmtA = mysqli_prepare($koneksi, $sqlA);
+mysqli_stmt_bind_param($stmtA, 'ss', $range['start'], $range['end']);
+mysqli_stmt_execute($stmtA);
+$resA = mysqli_stmt_get_result($stmtA);
+
+// Eksekusi Query B
+$stmtB = mysqli_prepare($koneksi, $sqlB);
+mysqli_stmt_bind_param($stmtB, 'ss', $range['start'], $range['end']);
+mysqli_stmt_execute($stmtB);
+$resB = mysqli_stmt_get_result($stmtB);
+
+// Menggabungkan Data
 $groupedAssets = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $id = (int)$row['id'];
+while ($row = mysqli_fetch_assoc($resA)) {
+    $id = (string)$row['id'];
     if (!isset($groupedAssets[$id])) { $groupedAssets[$id] = ['asset' => $row, 'timeline' => []]; }
     if (!empty($row['id_pengiriman'])) { $groupedAssets[$id]['timeline'][] = $row; }
 }
+while ($row = mysqli_fetch_assoc($resB)) {
+    $id = (string)$row['id'];
+    if (!isset($groupedAssets[$id])) { $groupedAssets[$id] = ['asset' => $row, 'timeline' => []]; }
+    if (!empty($row['id_pengiriman'])) { $groupedAssets[$id]['timeline'][] = $row; }
+}
+
+// Sorting Timeline Berdasarkan Tanggal Secara Otomatis
+foreach ($groupedAssets as &$entry) {
+    usort($entry['timeline'], function($a, $b) {
+        return strcmp($a['tgl_aktivitas'], $b['tgl_aktivitas']);
+    });
+}
+unset($entry);
+
 $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$range['end']), 0, 4));
 ?>
 <!DOCTYPE html>
@@ -78,20 +142,40 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
 <head>
     <meta charset="UTF-8">
     <title>Print Document</title>
-    <!-- CSS Bootstrap Core -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- CSS Khusus Desain PDF -->
     <style>
         /* Memaksa browser mencetak warna background dan gradien */
         @media print {
             body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            @page { size: A4 portrait; margin: 12mm; }
+            @page { size: A4 portrait; margin: 10mm 15mm; } /* Margin disesuaikan agar lebih proporsional */
+            
+            /* MENCEGAH KOP DOKUMEN PISAH HALAMAN DENGAN KONTEN */
+            .print-intro { 
+                page-break-after: avoid !important; 
+                break-after: avoid !important; 
+                margin-bottom: 20px !important;
+            }
+            
+            /* MEMASTIKAN KARTU ASET BISA NAIK KE HALAMAN 1 JIKA MUAT */
+            .asset-card {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-before: auto !important;
+                break-before: auto !important;
+                display: block;
+            }
+
+            .force-new-page {
+                page-break-before: always !important;
+                break-before: page !important;
+                margin-top: 10px !important;
+            }
         }
         
         body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-size: 11px; background: #fff; color: #171717; line-height: 1.45; }
         
         /* Header & Intro */
-        .print-intro { margin-bottom: 20px; border: 1px solid #eadfce; page-break-inside: avoid; }
+        .print-intro { margin-bottom: 20px; border: 1px solid #eadfce; }
         .print-intro-top { display: flex; width: 100%; background: #fff; }
         .print-intro-left { flex: 1; padding: 20px; }
         .print-intro-right { width: 220px; text-align: center; border-left: 1px solid #eadfce; background: #fff7ef; padding: 20px; }
@@ -109,7 +193,7 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
         .print-meta-value { font-size: 11px; font-weight: 700; }
 
         /* Asset Card Premium */
-        .asset-card { border: 1px solid #eadfce; background: #fff; margin-bottom: 20px; page-break-inside: avoid; }
+        .asset-card { border: 1px solid #eadfce; background: #fff; margin-bottom: 20px; }
         .asset-top { position: relative; padding: 15px; border-bottom: 1px solid #eadfce; background: linear-gradient(180deg, #fff9f2, #fff); }
         .asset-top::before { content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 8px; background: linear-gradient(180deg, #1f1f1f, #f08a14); }
         
@@ -143,7 +227,6 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
 </head>
 <body>
 
-    <!-- KOP DOKUMEN -->
     <div class="print-intro">
         <div class="print-intro-top">
             <div class="print-intro-left">
@@ -178,7 +261,6 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
         </div>
     </div>
 
-    <!-- LIST ASSET -->
     <?php if (empty($groupedAssets)): ?>
         <div style="text-align: center; padding: 40px; border: 1px solid #eadfce; color: #666;">
             Tidak ada data laporan pada periode ini.
@@ -209,9 +291,9 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
                         Asset masih berada di cabang aktif. Belum ada aktivitas pengiriman tercatat.
                     </div>
                 <?php else: foreach ($entry['timeline'] as $idx => $step): 
-                    $isDone = ($step['status_pengiriman'] === 'Sudah diterima');
-                ?>
-                    <div class="timeline-card">
+                    $isDone = in_array(strtolower(trim($step['status_pengiriman'])), ['sudah diterima', 'sudah diterima ho', 'selesai']);
+$breakClass = ($idx === 2) ? 'force-new-page' : '';                ?>
+                    <div class="timeline-card <?= $breakClass ?>">
                         <div class="timeline-head">
                             <div class="timeline-title">Aktivitas Transaksi Mutasi Ke-<?= $idx + 1 ?></div>
                             <div class="status-badge <?= $isDone ? 'selesai' : 'proses' ?>">
@@ -266,7 +348,6 @@ $docNum = 'ITS/' . date('Ymd') . '/' . strtoupper(substr(md5($range['start'].$ra
         PT HEXINDO ADIPEKARSA TBK · IT System Asset Reporting Automation · Dokumen Valid Tanpa Tanda Tangan Fisik.
     </div>
 
-    <!-- SCRIPT OTOMATIS PRINT -->
     <script>
         window.onload = function() {
             // Ketika file ini selesai diload oleh Iframe gaib, ia langsung memanggil perintah Print

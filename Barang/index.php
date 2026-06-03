@@ -205,7 +205,7 @@ if ($filter === 'keluar') {
         $subqueryLastUser = "(SELECT pch.pemilik_barang FROM pengiriman_cabang_ho pch WHERE pch.serial_number = barang.serial_number AND pch.pemilik_barang IS NOT NULL AND pch.pemilik_barang != '' AND pch.pemilik_barang != '0' ORDER BY pch.id_pengiriman_ho DESC LIMIT 1)";
     }
 
-    if($searchInput !== '') {
+    if ($searchInput !== '') {
         $s = mysqli_real_escape_string($koneksi, $searchInput);
         $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%' OR barang.user LIKE '%$s%' OR $subqueryLastUser LIKE '%$s%') ";
     }
@@ -1147,7 +1147,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         });
 
         /**
-         * AJAX SUBMIT FORMS
+         * AJAX SUBMIT FORMS (DENGAN ANIMASI DELAY 2 DETIK)
          */
         $(document).on('submit', '#formCreate, #formUpdate, #formUpdateCabang, #formPengirimanUser, #formTerimaCabang, #formCreateCabang', function(e) {
             e.preventDefault();
@@ -1168,7 +1168,8 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 
             const targetUrl = $form.attr('action') || urlMap[formId];
 
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Proses...');
+            // Tampilkan animasi Loading di tombol
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...');
 
             $.ajax({
                 url: targetUrl,
@@ -1178,16 +1179,28 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                 processData: false,
                 dataType: 'json',
                 success: function(res) {
-                    if (res.status === 'success' || res.success) {
-                        Swal.fire('Berhasil', res.message, 'success').then(() => location.reload());
-                    } else {
-                        Swal.fire('Gagal', res.message || 'Terjadi kesalahan sistem', 'error');
-                        $btn.prop('disabled', false).html(originalBtnHtml);
-                    }
+                    // Jeda animasi 2 detik (2000 ms) sebelum menampilkan hasil
+                    setTimeout(function() {
+                        if (res.status === 'success' || res.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Berhasil!',
+                                text: res.message,
+                                showConfirmButton: false,
+                                timer: 1500
+                            }).then(() => location.reload());
+                        } else {
+                            Swal.fire('Gagal', res.message || 'Terjadi kesalahan sistem', 'error');
+                            $btn.prop('disabled', false).html(originalBtnHtml);
+                        }
+                    }, 2000); // <-- Delay 2 detik
                 },
                 error: function() {
-                    Swal.fire('Error', 'Gagal menghubungi server', 'error');
-                    $btn.prop('disabled', false).html(originalBtnHtml);
+                    // Jeda animasi 2 detik jika terjadi error jaringan
+                    setTimeout(function() {
+                        Swal.fire('Error', 'Gagal menghubungi server', 'error');
+                        $btn.prop('disabled', false).html(originalBtnHtml);
+                    }, 2000); // <-- Delay 2 detik
                 }
             });
         });

@@ -234,14 +234,17 @@ $branchName = getBranchName($koneksi, $myBranchId);
 $currentUserName = (string) ((current_user()['username'] ?? current_user()['name']) ?? '');
 $barangList = getBarangBranchOptions($koneksi, $myBranchId);
 
-// Ambil user cabang
-$qUserCabang = mysqli_query($koneksi, "
-    SELECT DISTINCT b.`user` AS nama_user, br.nama_branch
-    FROM barang b
-    JOIN tb_branch br ON b.id_branch = br.id_branch
-    WHERE b.id_branch = $myBranchId AND b.`user` IS NOT NULL AND b.`user` != '' AND b.`user` != '0'
-    ORDER BY nama_user ASC
-");
+// Ambil daftar Pemilik Barang murni yang saat ini asetnya ada di cabang
+    $qUserCabang = mysqli_query($koneksi, "
+        SELECT DISTINCT b.`user` AS nama_user, br.nama_branch
+        FROM barang b
+        JOIN tb_branch br ON b.id_branch = br.id_branch
+        WHERE b.id_branch = $myBranchId 
+          AND b.`user` IS NOT NULL 
+          AND b.`user` != '' 
+          AND b.`user` != '0'
+        ORDER BY nama_user ASC
+    ");
 $daftarUserCabang = [];
 while ($row = mysqli_fetch_assoc($qUserCabang)) {
     $daftarUserCabang[] = ['username' => $row['nama_user'], 'nama_branch' => $row['nama_branch']];
@@ -407,13 +410,9 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
                     </div>
 
                     <div class="col-md-4">
-                        <label class="label-bold">Jasa Pengiriman</label>
-                        <select name="jasa_pengiriman" class="form-control select2 input-bold" required>
-                            <option value="">-- PILIH JASA PENGIRIMAN --</option>
-                            <option value="SAP Express">SAP EXPRESS</option>
-                            <option value="PCP Express">PCP EXPRESS</option>
-                        </select>
-                    </div>
+    <label class="label-bold">Jasa Pengiriman</label>
+    <input type="text" name="jasa_pengiriman" class="form-control input-bold fw-black text-primary" readonly style="background-color: #e9ecef;" required>
+</div>
 
                     <div class="col-md-4">
                         <label class="label-bold">Nomor Resi Keluar</label>
@@ -471,27 +470,51 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
             });
         });
 
-        // Klik tombol Cetak PDF
+        // Tombol Cetak PDF
         $('#btnGeneratePdf').on('click', function() {
-            if (!$('#receipt_user_select').val()) { Swal.fire('Error', 'Pilih User terlebih dahulu!', 'warning'); return; }
-            if (!$('#receipt_ekspedisi').val()) { Swal.fire('Error', 'Pilih Ekspedisi terlebih dahulu!', 'warning'); return; }
+            var userVal = $('#receipt_user_select').val();
+            var eksVal = $('#receipt_ekspedisi').val();
+
+            // Validasi menggunakan SweetAlert sesuai desain awal
+            if (!userVal) { 
+                Swal.fire('Peringatan', 'Pilih User terlebih dahulu!', 'warning'); 
+                return; 
+            }
+            if (!eksVal) { 
+                Swal.fire('Peringatan', 'Pilih Ekspedisi terlebih dahulu!', 'warning'); 
+                return; 
+            }
+
+            // Mencegah error jika data kosong
+            var desc = $('#receipt_table .row-desc').val() || '';
+            var host = $('#receipt_table .row-host').val() || '';
+            var qty = $('#receipt_qty').val() || '1';
+            var catatan = $('#receipt_catatan').val() || '';
+            var asuransi = $('#receipt_asuransi').val() || '';
+            var charge = $('#receipt_charge').val() || '';
+            var userHidden = $('#receipt_user').val() || userVal;
 
             // Kumpulkan Data untuk dilempar ke print_pengiriman.php
             const params = {
-                'description[]': [$('#receipt_table .row-desc').val().toUpperCase()],
-                'hostname[]': [$('#receipt_table .row-host').val().toUpperCase()],
-                qty: $('#receipt_qty').val(),
-                catatan: $('#receipt_catatan').val().toUpperCase(),
-                asuransi: $('#receipt_asuransi').val().toUpperCase(),
-                charge: $('#receipt_charge').val().toUpperCase(),
-                user: $('#receipt_user').val().toUpperCase(),
-                ekspedisi: $('#receipt_ekspedisi').val().toUpperCase(),
-                pengirim: currentUserName.toUpperCase(),
-                pengirim_branch: branchName.toUpperCase()
+                'description[]': [desc.toUpperCase()],
+                'hostname[]': [host.toUpperCase()],
+                qty: qty,
+                catatan: catatan.toUpperCase(),
+                asuransi: asuransi.toUpperCase(),
+                charge: charge.toUpperCase(),
+                user: userHidden.toUpperCase(),
+                ekspedisi: eksVal.toUpperCase(),
+                pengirim: (typeof currentUserName !== 'undefined' ? currentUserName : '').toUpperCase(),
+                pengirim_branch: (typeof branchName !== 'undefined' ? branchName : '').toUpperCase()
             };
 
-            // Buka halaman Print (Otomatis menampilkan 2 Halaman PDF)
+            // Buka halaman Print PDF
             window.open('print_pengiriman.php?' + $.param(params), '_blank');
+
+            // --- KODE AUTO-FILL EKSPEDISI (PERMANEN) ---
+            // Di sini kita HANYA mengisi valuenya saja tanpa memanggil fungsi select2 agar tidak error
+            $('input[name="jasa_pengiriman"]').val(eksVal.toUpperCase());
+            // -------------------------------------------
 
             // Tandai sudah diprint dan pindah ke Step 2
             $('#pdf_generated').val('1');
@@ -499,13 +522,6 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
             $('#pengirimanStep2').show();
             $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
             $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
-        });
-
-        $('#btnBackToStep1').on('click', function() {
-            $('#pengirimanStep2').hide();
-            $('#pengirimanStep1').show();
-            $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
-            $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
         });
 
         // Auto-fill form Step 2

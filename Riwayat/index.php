@@ -107,10 +107,10 @@ if (!$isAdmin) {
     $partA_where[] = "bp.branch_tujuan = $myBranchId";
 }
 // filter masuk/keluar
-if ($filter === 'masuk'  && !$isAdmin) $partA_where[] = "1=1"; // user: A = masuk, tampilkan
-if ($filter === 'masuk'  &&  $isAdmin) $partA_where[] = "1=0"; // admin: A = keluar, sembunyikan
-if ($filter === 'keluar' && !$isAdmin) $partA_where[] = "1=0"; // user: A = masuk, sembunyikan
-if ($filter === 'keluar' &&  $isAdmin) $partA_where[] = "1=1"; // admin: A = keluar, tampilkan
+if ($filter === 'masuk'  && !$isAdmin) $partA_where[] = "1=1"; 
+if ($filter === 'masuk'  &&  $isAdmin) $partA_where[] = "1=0"; 
+if ($filter === 'keluar' && !$isAdmin) $partA_where[] = "1=0"; 
+if ($filter === 'keluar' &&  $isAdmin) $partA_where[] = "1=1"; 
 
 // pencarian teks
 if ($search_input !== '') {
@@ -139,7 +139,10 @@ $partA = "
         b.serial_number,
         tb.nama_barang,
         bm.nama_merk,
-        b.user                       AS nama_pemilik,
+        CASE 
+            WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user
+            ELSE (SELECT pch2.pemilik_barang FROM pengiriman_cabang_ho pch2 WHERE pch2.serial_number = b.serial_number AND pch2.pemilik_barang IS NOT NULL AND pch2.pemilik_barang != '' AND pch2.pemilik_barang != '0' ORDER BY pch2.id_pengiriman_ho DESC LIMIT 1)
+        END                          AS nama_pemilik,
         CASE
             WHEN bp.nama_penerima IS NOT NULL AND bp.nama_penerima != '' THEN bp.nama_penerima
             ELSE b.user

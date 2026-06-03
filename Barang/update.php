@@ -231,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         LIMIT 1
     ");
     $detailBarang = mysqli_fetch_assoc($qDetailBarang) ?: [];
-    
+
     // LOGIKA FILTER NAMA BARANG (Mencegah nama merek terulang: DELL DELL PRO -> DELL PRO)
     $merk = trim(strtoupper($detailBarang['nama_merk'] ?? ''));
     $tipe = trim(strtoupper($detailBarang['nama_tipe'] ?? ''));
@@ -240,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     } else {
         $namaBarangAuto = $merk . ' ' . $tipe;
     }
-    
+
     $deskripsiAuto = $namaBarangAuto;
     $serialBarang  = $barang['serial_number'] ?? '';
 
@@ -261,14 +261,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 ?>
 
     <style>
-        .fw-black { font-weight: 900 !important; color: #000 !important; }
-        .label-bold { font-weight: 900 !important; color: #1a1a1a !important; text-transform: uppercase; font-size: 0.95rem; margin-bottom: 5px; }
-        .input-bold { font-weight: bold !important; color: #000 !important; border: 2px solid #ccc !important; }
-        .input-bold:focus { border-color: #000 !important; box-shadow: none !important; }
-        .card-header-bold { background-color: #212529 !important; color: #fff !important; font-weight: 900 !important; font-size: 1.1rem !important; letter-spacing: 1px; }
-        .table-dark-bold th { background-color: #212529 !important; color: #fff !important; font-weight: 900 !important; border: 2px solid #000 !important; }
-        .table-bordered-dark { border: 2px solid #000 !important; }
-        .table-bordered-dark td { border: 2px solid #000 !important; }
+        .fw-black {
+            font-weight: 900 !important;
+            color: #000 !important;
+        }
+
+        .label-bold {
+            font-weight: 900 !important;
+            color: #1a1a1a !important;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+            margin-bottom: 5px;
+        }
+
+        .input-bold {
+            font-weight: bold !important;
+            color: #000 !important;
+            border: 2px solid #ccc !important;
+        }
+
+        .input-bold:focus {
+            border-color: #000 !important;
+            box-shadow: none !important;
+        }
+
+        .card-header-bold {
+            background-color: #212529 !important;
+            color: #fff !important;
+            font-weight: 900 !important;
+            font-size: 1.1rem !important;
+            letter-spacing: 1px;
+        }
+
+        .table-dark-bold th {
+            background-color: #212529 !important;
+            color: #fff !important;
+            font-weight: 900 !important;
+            border: 2px solid #000 !important;
+        }
+
+        .table-bordered-dark {
+            border: 2px solid #000 !important;
+        }
+
+        .table-bordered-dark td {
+            border: 2px solid #000 !important;
+        }
     </style>
 
     <form id="formUpdate" enctype="multipart/form-data">
@@ -332,7 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 </div>
                 <div class="col-md-6">
                     <label class="label-bold">User Pengguna<span class="text-danger">*</span></label>
-                    <input type="text" name="user" class="form-control input-bold text-uppercase" value="<?= h($barang['user'] ?? '') ?>" required>
+                    <input type="text" name="user" class="form-control input-bold text-uppercase" value="<?= strtoupper(h($pemilikBarang)) ?>" required>
                 </div>
                 <div class="col-md-6">
                     <label class="label-bold">Status Bermasalah<span class="text-danger">*</span></label>
@@ -361,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         <?php elseif ($type === 'logistik'): ?>
             <?php if (!$pernahDikirim || $sudahDiterima): ?>
-                
+
                 <!-- TAMPILAN PENGIRIMAN LOGISTIK (HO KE CABANG) -->
                 <div class="mb-4">
                     <div class="d-flex gap-2 flex-wrap">
@@ -391,7 +429,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                
+
                                 <!-- Charge / Branch Penanggung -->
                                 <div class="col-md-6">
                                     <label class="label-bold">Charge (Branch Penanggung)</label>
@@ -444,7 +482,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                                 <div class="col-md-6">
                                     <label class="label-bold">User (Pemilik Barang)</label>
-                                    <input type="text" id="receipt_user" class="form-control input-bold text-uppercase text-primary" placeholder="OTOMATIS SAAT CHARGE DIPILIH..." value="<?= strtoupper(h($pemilikBarang)) ?>">
+                                    <input type="text" id="receipt_user" class="form-control input-bold text-uppercase fw-black text-primary" value="<?= strtoupper(h($pemilikBarang)) ?>" readonly style="background-color: #e9ecef;">
                                 </div>
 
                                 <!-- Pengirim (Dikunci ke Deni Pratama / HO) -->
@@ -486,11 +524,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <input type="hidden" name="receipt_ekspedisi" id="receipt_ekspedisi_hidden">
                     <input type="hidden" name="receipt_pengirim" id="receipt_pengirim_hidden">
                     <input type="hidden" name="receipt_penerima_branch" id="receipt_penerima_branch">
-                    
+
                     <div class="alert alert-warning fw-black border-warning border-2" style="background-color: #fff3cd;">
                         <i class="bi bi-check-circle-fill me-2 text-success"></i> Dokumen berhasil dicetak. Silakan isi form di bawah ini untuk validasi sistem.
                     </div>
-                    
+
                     <div class="card border-dark border-2">
                         <div class="card-body bg-white">
                             <div class="row g-4">
@@ -498,7 +536,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                     <label class="label-bold">Tanggal Keluar<span class="text-danger">*</span></label>
                                     <input type="date" name="tanggal_keluar" class="form-control input-bold" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <label class="label-bold">Tujuan Pengiriman (Cabang)<span class="text-danger">*</span></label>
                                     <select name="tujuan" class="form-control select2 input-bold" required>
@@ -508,21 +546,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <label class="label-bold">Jasa Pengiriman<span class="text-danger">*</span></label>
-                                    <select name="jasa_pengiriman" class="form-control select2 input-bold" required>
-                                        <option value="">-- PILIH JASA PENGIRIMAN --</option>
-                                        <option value="SAP Express">SAP EXPRESS</option>
-                                        <option value="PCP Express">PCP EXPRESS</option>
-                                    </select>
+                                    <input type="text" name="jasa_pengiriman" class="form-control input-bold fw-black text-primary" readonly style="background-color: #e9ecef;" required>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <label class="label-bold">Nomor Resi Keluar<span class="text-danger">*</span></label>
                                     <input type="text" name="nomor_resi" class="form-control input-bold text-uppercase" placeholder="INPUT NOMOR RESI..." required>
                                 </div>
-                                
+
                                 <div class="col-md-12">
                                     <label class="label-bold">Foto Resi Keluar / Bukti Kirim<span class="text-danger">*</span></label>
                                     <input type="file" name="foto_resi" class="form-control input-bold" accept=".jpg,.jpeg,.png,.gif,.webp" required>
@@ -581,196 +615,219 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     </form>
 
     <script>
-    function validateReceiptStep() {
-        const qty = parseInt($('#receipt_qty').val(), 10);
-        const ekspedisi = $('#receipt_ekspedisi').val().trim();
+        function validateReceiptStep() {
+            const qty = parseInt($('#receipt_qty').val(), 10);
+            const ekspedisi = $('#receipt_ekspedisi').val().trim();
 
-        if (!qty || qty < 1) {
-            Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
-            return false;
+            if (!qty || qty < 1) {
+                Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
+                return false;
+            }
+            if (!ekspedisi) {
+                Swal.fire('Validasi', 'Ekspedisi harus dipilih.', 'warning');
+                return false;
+            }
+            return true;
         }
-        if (!ekspedisi) {
-            Swal.fire('Validasi', 'Ekspedisi harus dipilih.', 'warning');
-            return false;
-        }
-        return true;
-    }
 
-    $(document).ready(function() {
+        $(document).ready(function() {
 
-        const userCabangData = <?= json_encode($daftarUserCabang) ?>;
+            const userCabangData = <?= json_encode($daftarUserCabang) ?>;
 
-        // Auto-fill penerima DAN USER berdasarkan id branch (Charge)
-        function autoFillPenerima(idBranch) {
-            const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
-            if (found) {
-                // Set Penerima
-                $('#receipt_penerima').val(found.username.toUpperCase());
-                $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
-                $('#receipt_penerima_hidden').val(found.username.toUpperCase());
-                
-                // Set User juga agar otomatis sinkron!
-                $('#receipt_user').val(found.username.toUpperCase());
-            } else {
+            // Auto-fill penerima DAN USER berdasarkan id branch (Charge)
+            function autoFillPenerima(idBranch) {
+                const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
+                if (found) {
+                    // Set Penerima
+                    $('#receipt_penerima').val(found.username.toUpperCase());
+                    $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
+                    $('#receipt_penerima_hidden').val(found.username.toUpperCase());
+
+                    // Set User juga agar otomatis sinkron!
+                } else {
+                    $('#receipt_penerima').val('');
+                    $('#receipt_penerima_branch').val('');
+                    $('#receipt_penerima_hidden').val('');
+                }
+            }
+
+            // Event Charge -> Sync ke Penerima & Tujuan & USER
+            $('#receipt_charge').on('select2:select', function(e) {
+                const idBranch = e.params.data.id;
+                autoFillPenerima(idBranch);
+                $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
+            });
+
+            $('#receipt_charge').on('select2:unselect', function() {
                 $('#receipt_penerima').val('');
                 $('#receipt_penerima_branch').val('');
                 $('#receipt_penerima_hidden').val('');
+            });
+
+            // Event Tujuan (Step 2) -> Sync ke Penerima jika diubah manual
+            $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
+                autoFillPenerima(e.params.data.id);
+            });
+
+            // Tombol Cetak PDF
+            $('#btnGeneratePdf').on('click', function() {
+                if (!validateReceiptStep()) return;
+
+                const descs = [];
+                const hosts = [];
+                $('#receipt_table tbody tr').each(function() {
+                    descs.push($(this).find('.row-desc').val().trim().toUpperCase());
+                    hosts.push($(this).find('.row-host').val().trim().toUpperCase());
+                });
+
+                // PARAMETER UNTUK ADMIN (HO -> CABANG)
+                const paramsObj = {
+                    'description[]': descs,
+                    'hostname[]': hosts,
+                    'qty': $('#receipt_qty').val().trim(),
+                    'catatan': $('#receipt_catatan').val().trim().toUpperCase(),
+                    'user': $('#receipt_user').val().trim().toUpperCase(),
+                    'asuransi': $('#receipt_asuransi').val().trim().toUpperCase(),
+                    'charge': $('#receipt_charge option:selected').text().trim().toUpperCase(),
+                    'ekspedisi': $('#receipt_ekspedisi').val().trim().toUpperCase(),
+
+                    'penerima': $('#receipt_penerima').val().trim().toUpperCase(),
+                    'penerima_branch': $('#receipt_penerima_branch').val().trim().toUpperCase(),
+
+                    'pengirim': 'DENI PRATAMA',
+                    'pengirim_branch': 'IT HEAD OFFICE',
+
+                    'is_admin': '1' // KODE INI YANG BIKIN HALAMAN 2 BERUBAH JADI HO KE CABANG
+                };
+
+                window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
+
+                // Simpan ke hidden fields
+                $('#receipt_description_hidden').val(descs.join('\n'));
+                $('#receipt_hostname_hidden').val(hosts.join('||'));
+                $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
+                $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim().toUpperCase());
+                $('#receipt_user_hidden').val($('#receipt_user').val().trim().toUpperCase());
+                $('#receipt_attn_hidden').val('');
+                $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim().toUpperCase());
+                $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim().toUpperCase());
+                $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim().toUpperCase());
+                $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim().toUpperCase());
+                $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
+                $('#receipt_pengirim_hidden').val('DENI PRATAMA');
+                $('#pdf_generated').val('1');
+                // --- TAMBAHAN KODE: Auto-fill Jasa Pengiriman ke Step 2 ---
+                const ekspedisiTerpilih = $('#receipt_ekspedisi').val();
+                $('input[name="jasa_pengiriman"]').val(ekspedisiTerpilih);
+                // ----------------------------------------------------------
+
+                $('#logistikStep1').hide();
+                $('#logistikStep2').show();
+                $('#logistikStep1').hide();
+                $('#logistikStep2').show();
+                $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
+                $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
+            });
+
+            $('#btnBackToStep1').on('click', function() {
+                $('#logistikStep2').hide();
+                $('#logistikStep1').show();
+                $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
+                $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
+            });
+
+            function renumberRows() {
+                $('#receipt_table tbody tr').each(function(i) {
+                    $(this).find('.row-no').text(i + 1);
+                });
             }
-        }
 
-        // Event Charge -> Sync ke Penerima & Tujuan & USER
-        $('#receipt_charge').on('select2:select', function(e) {
-            const idBranch = e.params.data.id;
-            autoFillPenerima(idBranch);
-            $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
-        });
-
-        $('#receipt_charge').on('select2:unselect', function() {
-            $('#receipt_penerima').val('');
-            $('#receipt_penerima_branch').val('');
-            $('#receipt_penerima_hidden').val('');
-        });
-
-        // Event Tujuan (Step 2) -> Sync ke Penerima jika diubah manual
-        $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
-            autoFillPenerima(e.params.data.id);
-        });
-
-        // Tombol Cetak PDF
-        $('#btnGeneratePdf').on('click', function() {
-            if (!validateReceiptStep()) return;
-
-            const descs = [];
-            const hosts = [];
-            $('#receipt_table tbody tr').each(function() {
-                descs.push($(this).find('.row-desc').val().trim().toUpperCase());
-                hosts.push($(this).find('.row-host').val().trim().toUpperCase());
-            });
-
-            // PARAMETER UNTUK ADMIN (HO -> CABANG)
-            const paramsObj = {
-                'description[]': descs,
-                'hostname[]': hosts,
-                'qty': $('#receipt_qty').val().trim(),
-                'catatan': $('#receipt_catatan').val().trim().toUpperCase(),
-                'user': $('#receipt_user').val().trim().toUpperCase(),
-                'asuransi': $('#receipt_asuransi').val().trim().toUpperCase(),
-                'charge': $('#receipt_charge option:selected').text().trim().toUpperCase(),
-                'ekspedisi': $('#receipt_ekspedisi').val().trim().toUpperCase(),
-                
-                'penerima': $('#receipt_penerima').val().trim().toUpperCase(),
-                'penerima_branch': $('#receipt_penerima_branch').val().trim().toUpperCase(),
-                
-                'pengirim': 'DENI PRATAMA',
-                'pengirim_branch': 'IT HEAD OFFICE',
-                
-                'is_admin': '1' // KODE INI YANG BIKIN HALAMAN 2 BERUBAH JADI HO KE CABANG
-            };
-
-            window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
-
-            // Simpan ke hidden fields
-            $('#receipt_description_hidden').val(descs.join('\n'));
-            $('#receipt_hostname_hidden').val(hosts.join('||'));
-            $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
-            $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim().toUpperCase());
-            $('#receipt_user_hidden').val($('#receipt_user').val().trim().toUpperCase());
-            $('#receipt_attn_hidden').val('');
-            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim().toUpperCase());
-            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim().toUpperCase());
-            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim().toUpperCase());
-            $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim().toUpperCase());
-            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
-            $('#receipt_pengirim_hidden').val('DENI PRATAMA');
-            $('#pdf_generated').val('1');
-
-            $('#logistikStep1').hide();
-            $('#logistikStep2').show();
-            $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
-            $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
-        });
-
-        $('#btnBackToStep1').on('click', function() {
-            $('#logistikStep2').hide();
-            $('#logistikStep1').show();
-            $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
-            $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
-        });
-
-        function renumberRows() {
-            $('#receipt_table tbody tr').each(function(i) {
-                $(this).find('.row-no').text(i + 1);
-            });
-        }
-
-        function addRow(desc = '', host = '') {
-            const $tr = $('<tr>');
-            $tr.append('<td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;"></td>');
-            $tr.append('<td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="' + $('<div/>').text(desc).html() + '"></td>');
-            $tr.append('<td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..." value="' + $('<div/>').text(host).html() + '"></td>');
-            $tr.append('<td><input type="number" class="form-control input-bold text-center fw-black" value="1" min="1"></td>');
-            $tr.append('<td><input type="text" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>');
-            $tr.append('<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>');
-            $('#receipt_table tbody').append($tr);
-            renumberRows();
-            $tr.find('.row-desc').focus();
-        }
-
-        $('#btnAddRow').on('click', function() { addRow(); });
-
-        $(document).on('click', '.btn-remove-row', function() {
-            if ($('#receipt_table tbody tr').length <= 1) {
-                $(this).closest('tr').find('input').val('');
-            } else {
-                $(this).closest('tr').remove();
+            function addRow(desc = '', host = '') {
+                const $tr = $('<tr>');
+                $tr.append('<td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;"></td>');
+                $tr.append('<td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="' + $('<div/>').text(desc).html() + '"></td>');
+                $tr.append('<td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..." value="' + $('<div/>').text(host).html() + '"></td>');
+                $tr.append('<td><input type="number" class="form-control input-bold text-center fw-black" value="1" min="1"></td>');
+                $tr.append('<td><input type="text" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>');
+                $tr.append('<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>');
+                $('#receipt_table tbody').append($tr);
                 renumberRows();
+                $tr.find('.row-desc').focus();
             }
-        });
 
-        $(document).on('keydown', '.row-desc', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); addRow(); }
-        });
+            $('#btnAddRow').on('click', function() {
+                addRow();
+            });
 
-        $('#updateBermasalahSelect').on('change', function() {
-            if ($(this).val() === 'Iya') {
-                $('#updateKeteranganMasalahDiv').slideDown();
-                $('textarea[name="keterangan_masalah"]').attr('required', true);
-            } else {
-                $('#updateKeteranganMasalahDiv').slideUp();
-                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-            }
-        });
+            $(document).on('click', '.btn-remove-row', function() {
+                if ($('#receipt_table tbody tr').length <= 1) {
+                    $(this).closest('tr').find('input').val('');
+                } else {
+                    $(this).closest('tr').remove();
+                    renumberRows();
+                }
+            });
 
-        $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
-            var id_barang = $(this).val();
-            $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
-            $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-            if (id_barang) {
-                $.ajax({
-                    url: 'ajax_dropdown.php', type: 'POST',
-                    data: { action: 'get_merk', id_barang: id_barang },
-                    success: function(response) { $('#update_id_merk').html(response).trigger('change'); }
-                });
-            } else {
-                $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
-            }
-        });
+            $(document).on('keydown', '.row-desc', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addRow();
+                }
+            });
 
-        $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
-            var id_barang = $('#update_id_barang').val();
-            var id_merk = $(this).val();
-            $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
-            if (id_merk && id_barang) {
-                $.ajax({
-                    url: 'ajax_dropdown.php', type: 'POST',
-                    data: { action: 'get_tipe', id_barang: id_barang, id_merk: id_merk },
-                    success: function(response) { $('#update_id_tipe').html(response).trigger('change'); }
-                });
-            } else {
+            $('#updateBermasalahSelect').on('change', function() {
+                if ($(this).val() === 'Iya') {
+                    $('#updateKeteranganMasalahDiv').slideDown();
+                    $('textarea[name="keterangan_masalah"]').attr('required', true);
+                } else {
+                    $('#updateKeteranganMasalahDiv').slideUp();
+                    $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+                }
+            });
+
+            $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
+                var id_barang = $(this).val();
+                $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
                 $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-            }
+                if (id_barang) {
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_merk',
+                            id_barang: id_barang
+                        },
+                        success: function(response) {
+                            $('#update_id_merk').html(response).trigger('change');
+                        }
+                    });
+                } else {
+                    $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+                }
+            });
+
+            $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
+                var id_barang = $('#update_id_barang').val();
+                var id_merk = $(this).val();
+                $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+                if (id_merk && id_barang) {
+                    $.ajax({
+                        url: 'ajax_dropdown.php',
+                        type: 'POST',
+                        data: {
+                            action: 'get_tipe',
+                            id_barang: id_barang,
+                            id_merk: id_merk
+                        },
+                        success: function(response) {
+                            $('#update_id_tipe').html(response).trigger('change');
+                        }
+                    });
+                } else {
+                    $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+                }
+            });
         });
-    });
     </script>
 <?php
     exit;
@@ -824,8 +881,22 @@ if ($formType === 'penerimaan') {
     try {
         $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
         mysqli_stmt_bind_param(
-            $stmt, 'ssiiiiiisssssi',
-            $noAsset, $serialNumber, $_POST['id_barang'], $_POST['id_merk'], $_POST['id_tipe'], $_POST['id_jenis'], $_POST['id_branch'], $_POST['user'], $user_id_sistem, $_POST['bermasalah'], $keteranganMasalah, $tanggalTerima, $fotoBaru, $id
+            $stmt,
+            'ssiiiiiisssssi',
+            $noAsset,
+            $serialNumber,
+            $_POST['id_barang'],
+            $_POST['id_merk'],
+            $_POST['id_tipe'],
+            $_POST['id_jenis'],
+            $_POST['id_branch'],
+            $_POST['user'],
+            $user_id_sistem,
+            $_POST['bermasalah'],
+            $keteranganMasalah,
+            $tanggalTerima,
+            $fotoBaru,
+            $id
         );
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
@@ -854,8 +925,17 @@ if ($formType === 'penerimaan') {
         $asal = (int) $barang['id_branch'];
         $st   = STATUS_SEDANG_PERJALANAN;
         mysqli_stmt_bind_param(
-            $stmt, 'iiissssss',
-            $id, $asal, $_POST['tujuan'], $_POST['tanggal_keluar'], $_POST['jasa_pengiriman'], $_POST['nomor_resi'], $upload['filename'], $st, $namaPenerimaKirim
+            $stmt,
+            'iiissssss',
+            $id,
+            $asal,
+            $_POST['tujuan'],
+            $_POST['tanggal_keluar'],
+            $_POST['jasa_pengiriman'],
+            $_POST['nomor_resi'],
+            $upload['filename'],
+            $st,
+            $namaPenerimaKirim
         );
         mysqli_stmt_execute($stmt);
 

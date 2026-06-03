@@ -3,10 +3,11 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
-require_once '../config/mail.php';
+// require_once '../config/mail.php'; <-- SUDAH DIHAPUS/DIMATIKAN
 
 require_admin();
 
+// Mengambil data untuk dropdown form
 $merk   = mysqli_query($koneksi, "SELECT * FROM tb_merk ORDER BY nama_merk ASC");
 $tipe   = mysqli_query($koneksi, "SELECT * FROM tb_tipe ORDER BY nama_tipe ASC");
 $jenis  = mysqli_query($koneksi, "SELECT * FROM tb_jenis ORDER BY nama_jenis ASC");
@@ -48,37 +49,13 @@ function uploadImage(string $fieldName, string $targetDir = "../assets/images/")
     return ['status' => 'success', 'filename' => $filename];
 }
 
-function ambilDetailBarangUntukEmail(mysqli $koneksi, int $idBarangBaru): ?array
-{
-    $query = mysqli_query($koneksi, "
-        SELECT
-            b.id, b.no_asset, b.serial_number, b.tanggal_terima, b.bermasalah, b.keterangan_masalah,
-            b.foto, b.`user`, tb.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch
-        FROM barang b
-        LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-        LEFT JOIN tb_merk m ON b.id_merk = m.id_merk
-        LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe
-        LEFT JOIN tb_jenis j ON b.id_jenis = j.id_jenis
-        LEFT JOIN tb_branch br ON b.id_branch = br.id_branch
-        WHERE b.id = {$idBarangBaru}
-        LIMIT 1
-    ");
-    return ($query && mysqli_num_rows($query) > 0) ? mysqli_fetch_assoc($query) : null;
-}
-
+// PROSES SIMPAN DATA (AJAX REQUEST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json');
 
     $required = [
-        'id_barang',
-        'id_merk',
-        'serial_number',
-        'id_tipe',
-        'id_jenis',
-        'tanggal_terima',
-        'bermasalah',
-        'id_branch',
-        'user' // Dikembalikan ke 'user' (input text manual)
+        'id_barang', 'id_merk', 'serial_number', 'id_tipe', 
+        'id_jenis', 'tanggal_terima', 'bermasalah', 'id_branch', 'user'
     ];
 
     foreach ($required as $field) {
@@ -96,15 +73,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_jenis      = (int) $_POST['id_jenis'];
     $tanggal_terima = esc($koneksi, $_POST['tanggal_terima']);
     $today = date('Y-m-d');
+    
     if ($tanggal_terima < $today) {
         echo json_encode(['status' => 'error', 'message' => 'Tanggal terima tidak boleh tanggal yang lampau']);
         exit;
     }
+    
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
-    $user          = esc($koneksi, $_POST['user']); // Inputan manual nama user
+    $user          = esc($koneksi, $_POST['user']);
 
-    // Mengambil ID sistem admin yang sedang login untuk dicatat ke database
     $user_id_sistem = (int) current_user_id();
 
     $keterangan_masalah = ($bermasalah === 'Iya') ? esc($koneksi, $_POST['keterangan_masalah'] ?? '') : null;
@@ -124,10 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!empty($no_asset)) {
-        $getBarangInput = mysqli_query($koneksi, "SELECT nama_barang FROM tb_barang WHERE id_barang = $id_barang LIMIT 1");
-        $dataBarangInput = mysqli_fetch_assoc($getBarangInput);
-        $namaBarangInput = strtolower(trim($dataBarangInput['nama_barang']));
-
         $pasanganDiizinkan = ['monitor', 'cpu'];
         $inputAdalahPasangan = in_array($namaBarangInput, $pasanganDiizinkan, true);
 
@@ -152,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if (!$inputAdalahPasangan) {
-                echo json_encode(['status' => 'error', 'message' => "$no_asset' khusus digunakan untuk pasangan CPU & Monitor."]);
+                echo json_encode(['status' => 'error', 'message' => "No Asset '$no_asset' khusus digunakan untuk pasangan CPU & Monitor."]);
                 exit;
             }
 
@@ -173,35 +147,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
     $statusField = 'Tersedia';
 
-    // INSERT otomatis memasukkan $user_id_sistem ke database walau tidak ada di form
     $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id, status) 
                     VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem', '$statusField')";
 
     mysqli_begin_transaction($koneksi);
     try {
         if (!mysqli_query($koneksi, $queryBarang)) throw new Exception(mysqli_error($koneksi));
-        $idBarangBaru = (int) mysqli_insert_id($koneksi);
         mysqli_commit($koneksi);
 
-        $detailBarang = ambilDetailBarangUntukEmail($koneksi, $idBarangBaru);
-        if ($detailBarang) {
-            $fotoPath = (!empty($detailBarang['foto']) && is_file(__DIR__ . '/../assets/images/' . $detailBarang['foto'])) ? __DIR__ . '/../assets/images/' . $detailBarang['foto'] : null;
-            kirimEmailKeBranchInti([
-                'branch' => $detailBarang['nama_branch'],
-                'no_asset' => $detailBarang['no_asset'] ?: '-',
-                'serial_number' => $detailBarang['serial_number'],
-                'nama_barang' => $detailBarang['nama_barang'],
-                'merk' => $detailBarang['nama_merk'],
-                'tipe' => $detailBarang['nama_tipe'],
-                'jenis' => $detailBarang['nama_jenis'],
-                'tanggal_terima' => $detailBarang['tanggal_terima'],
-                'user' => $detailBarang['user'],
-                'bermasalah' => $detailBarang['bermasalah'],
-                'foto_path' => $fotoPath
-            ]);
-        }
-
-        echo json_encode(['status' => 'success', 'message' => 'Data barang berhasil ditambahkan dan email terkirim.']);
+        echo json_encode(['status' => 'success', 'message' => 'Data barang berhasil ditambahkan!']);
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
         echo json_encode(['status' => 'error', 'message' => 'Gagal simpan: ' . $e->getMessage()]);
@@ -303,11 +257,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="col-md-6">
             <label>Foto Barang <span class="text-danger">*</span></label>
             <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
-            <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none;">
+            <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none; border-radius: 8px;">
         </div>
 
-        <div class="col-md-12 text-end">
-            <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark" id="btnSimpanBarang">
+        <div class="col-md-12 text-end mt-4">
+            <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark shadow-sm" id="btnSimpanBarang">
                 <span class="btn-text"><i class="bi bi-save me-1"></i> Simpan</span>
                 <span class="btn-loading d-none">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Menyimpan...
@@ -342,12 +296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
 
         // 3. SCRIPT DYNAMIC DROPDOWN (BARANG -> MERK -> TIPE)
-
-        // A. Ketika Barang Dipilih
         $(document).off('change', '#id_barang').on('change', '#id_barang', function() {
             var id_barang = $(this).val();
-
-            // Set loading state dan reset tipe
             $('#id_merk').html('<option value="">Sedang memuat... </option>').trigger('change');
             $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
 
@@ -355,10 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $.ajax({
                     url: 'ajax_dropdown.php',
                     type: 'POST',
-                    data: {
-                        action: 'get_merk',
-                        id_barang: id_barang
-                    },
+                    data: { action: 'get_merk', id_barang: id_barang },
                     success: function(response) {
                         $('#id_merk').html(response).trigger('change');
                     }
@@ -368,23 +315,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
 
-        // B. Ketika Merk Dipilih
         $(document).off('change', '#id_merk').on('change', '#id_merk', function() {
             var id_barang = $('#id_barang').val();
             var id_merk = $(this).val();
-
-            // Set loading state
             $('#id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
 
             if (id_merk && id_barang) {
                 $.ajax({
                     url: 'ajax_dropdown.php',
                     type: 'POST',
-                    data: {
-                        action: 'get_tipe',
-                        id_barang: id_barang,
-                        id_merk: id_merk
-                    },
+                    data: { action: 'get_tipe', id_barang: id_barang, id_merk: id_merk },
                     success: function(response) {
                         $('#id_tipe').html(response).trigger('change');
                     }
@@ -394,5 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
 
-    });
+        // SCRIPT AJAX SUBMIT DIHAPUS DARI SINI KARENA BIKIN DOUBLE SUBMIT
+
+    }); 
 </script>

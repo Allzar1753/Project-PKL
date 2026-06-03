@@ -180,8 +180,12 @@ if ($isAdmin) {
                     p.status_pengiriman,
                     tb.nama_barang,
                     br.nama_branch AS nama_branch_aktif,
-                    p.pemilik_barang AS nama_pemilik
+                    CASE 
+                        WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user 
+                        ELSE p.pemilik_barang
+                    END AS nama_pemilik
                FROM pengiriman_cabang_ho p
+               LEFT JOIN barang b ON p.serial_number = b.serial_number
                LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
                LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
@@ -193,8 +197,7 @@ if ($isAdmin) {
                     tb.nama_barang,
                     'PUSAT HO' AS nama_branch_aktif,
                     CASE
-                        WHEN p.nama_penerima IS NOT NULL AND p.nama_penerima != '' THEN p.nama_penerima
-                        WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0'  THEN b.user
+                        WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user
                         ELSE 'Belum Ada Pemilik'
                     END AS nama_pemilik
                FROM barang_pengiriman p

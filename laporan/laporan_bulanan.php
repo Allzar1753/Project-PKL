@@ -127,21 +127,17 @@ $penerimaHO = 'Pak Deni';
 // ==============================================================================
 // KONDISI WHERE PER ROLE
 // ==============================================================================
-// Untuk barang_pengiriman (HO → Cabang)
 if ($isAdmin) {
-    // Admin HO: barang yang berasal dari HO atau tujuannya ke HO
-    $condA = "b.id_branch = $myBranchId OR bp.branch_tujuan = $myBranchId";
-} else {
-    // User Cabang: hanya pengiriman masuk ke cabangnya
-    $condA = "bp.branch_tujuan = $myBranchId";
-}
-
-// Untuk pengiriman_cabang_ho (Cabang → HO)
-if ($isAdmin) {
-    // Admin HO: semua pengiriman masuk ke HO
+    // ADMIN PUSAT (HO): Tidak ada batasan. 
+    // Bisa melihat semua riwayat pengiriman (HO -> Semua Cabang) & (Semua Cabang -> HO)
+    $condA = "1=1";
     $condB = "1=1";
 } else {
-    // User Cabang: hanya pengiriman keluar dari cabangnya
+    // USER CABANG: Hanya melihat riwayat interaksi yang melibatkan cabangnya saja.
+    // Query A: Barang yang dikirim dari HO ke Cabang ini (Cabang sebagai tujuan)
+    $condA = "bp.branch_tujuan = $myBranchId";
+    
+    // Query B: Barang yang dikirim dari Cabang ini ke HO (Cabang sebagai asal)
     $condB = "pch.branch_asal = $myBranchId";
 }
 
@@ -205,7 +201,7 @@ $sqlB = "
         pch.id_pengiriman_ho AS id_aktivitas,
         'B' AS sumber_tabel,
         pch.tanggal_pengajuan AS tgl_keluar,
-        NULL AS tgl_diterima,
+        DATE(COALESCE(pch.disetujui_pada, pch.updated_at)) AS tgl_diterima,
         pch.status_pengiriman,
         pch.nomor_resi_keluar AS resi,
         NULL AS jasa_pengiriman,
@@ -277,7 +273,7 @@ while ($row = mysqli_fetch_assoc($resultB)) {
             'sumber'        => 'B',
             'id_aktivitas'  => $row['id_aktivitas'],
             'tgl_keluar'    => $row['tgl_keluar'],
-            'tgl_diterima'  => null,
+            'tgl_diterima'  => $row['tgl_diterima'],
             'status'        => $row['status_pengiriman'],
             'resi'          => $row['resi'],
             'jasa'          => null,

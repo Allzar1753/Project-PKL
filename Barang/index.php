@@ -624,6 +624,12 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 
                         <div class="hero-actions d-flex gap-3">
                             <?php if ($isAdmin): ?>
+                                <!-- Tombol Kelola Master Data -->
+                                <a href="master_data.php" class="btn btn-header-dark" title="Kelola Kategori, Merk, dan Tipe">
+                                    <i class="bi bi-database-gear me-2"></i>Kelola Master Data
+                                </a>
+
+
                                 <!-- Tombol Khusus Admin HO -->
                                 <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreate">
                                     <i class="bi bi-plus-circle me-2"></i>Tambah Barang Master

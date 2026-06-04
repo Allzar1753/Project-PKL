@@ -880,23 +880,25 @@ if ($formType === 'penerimaan') {
     mysqli_begin_transaction($koneksi);
     try {
         $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
+        
+        // UBAH STRING PARAMETER DI BAWAH INI:
         mysqli_stmt_bind_param(
             $stmt,
-            'ssiiiiiisssssi',
-            $noAsset,
-            $serialNumber,
-            $_POST['id_barang'],
-            $_POST['id_merk'],
-            $_POST['id_tipe'],
-            $_POST['id_jenis'],
-            $_POST['id_branch'],
-            $_POST['user'],
-            $user_id_sistem,
-            $_POST['bermasalah'],
-            $keteranganMasalah,
-            $tanggalTerima,
-            $fotoBaru,
-            $id
+            'ssiiiiisissssi', // s, s, i, i, i, i, i, s (untuk user), i (untuk user_id), s, s, s, s, i
+            $noAsset,           // s
+            $serialNumber,      // s
+            $_POST['id_barang'],// i
+            $_POST['id_merk'],  // i
+            $_POST['id_tipe'],  // i
+            $_POST['id_jenis'], // i
+            $_POST['id_branch'],// i
+            $_POST['user'],     // s (String - sekarang teks akan masuk dengan benar)
+            $user_id_sistem,    // i (Integer)
+            $_POST['bermasalah'], // s
+            $keteranganMasalah, // s
+            $tanggalTerima,     // s
+            $fotoBaru,          // s
+            $id                 // i
         );
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);

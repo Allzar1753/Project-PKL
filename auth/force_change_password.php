@@ -1,7 +1,7 @@
 <?php
 include '../config/koneksi.php';
 require_once '../config/auth.php';
-
+/** @var mysqli $koneksi */
 if (!is_logged_in()) {
     redirect_to(base_url('auth/login.php'));
 }

@@ -8,7 +8,7 @@ if (!$isAdmin) {
     exit;
 }
 // ==============================================================================
-// 1. BACKEND: PROSES CRUD (AJAX)
+// 1. BACKEND: PROSES CRUD (AJAX) - 100% TIDAK DIUBAH
 // ==============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // ==============================================================================
-// 2. AMBIL DATA UNTUK UI
+// 2. AMBIL DATA UNTUK UI - 100% TIDAK DIUBAH
 // ==============================================================================
 // 1. Kategori dan Merk diurutkan rapi berdasarkan Abjad A-Z
 $dBarang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang ASC");
@@ -121,208 +121,310 @@ $arrMerk   = []; while($m = mysqli_fetch_assoc($dMerk)) $arrMerk[] = $m; mysqli_
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- CSS SINKRONISASI HEXINDO THEME -->
     <style>
-        :root { --hex-orange: #E65100; --hex-dark: #212121; --bg-body: #F4F6F8; }
-        body { background-color: var(--bg-body); font-family: 'Plus Jakarta Sans', sans-serif; }
-        .page-header { background: var(--hex-dark); color: white; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; border-bottom: 4px solid var(--hex-orange); }
-        .nav-tabs .nav-link { color: var(--hex-dark); font-weight: 600; border: none; border-bottom: 3px solid transparent; padding: 1rem 1.5rem; }
-        .nav-tabs .nav-link.active { color: var(--hex-orange); border-bottom: 3px solid var(--hex-orange); background: transparent; font-weight: 800; }
-        .card-custom { border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .card-header-custom { background: white; border-bottom: 2px solid #f0f0f0; padding: 1.2rem; border-radius: 12px 12px 0 0; font-weight: 800; color: var(--hex-dark); }
-        .btn-hexindo { background-color: var(--hex-orange); color: white; font-weight: 700; border: none; }
-        .table th { background-color: #f8f9fa; color: var(--hex-dark); }
-        .table-wrap { max-height: 500px; overflow-y: auto; }
-        .action-btn { cursor: pointer; padding: 5px 8px; border-radius: 6px; }
-        .action-btn:hover { background: #eee; }
+        :root {
+            /* TEMA HEXINDO / HITACHI */
+            --orange-1: #E64312; 
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #333333;
+            --text-soft: #666666;
+            --surface-bg: #F4F6F9;
+            --border-soft: #E0E4E8;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --radius-xl: 8px; /* Lebih kotak / industrial */
+        }
+
+        body { 
+            background-color: var(--surface-bg); 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            color: var(--text-main);
+        }
+        
+        .page-shell { padding: 24px 32px; }
+
+        /* Hero Banner tersinkronisasi */
+        .page-hero {
+            position: relative;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .page-title { color: #fff; font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .page-desc { color: #9ca3af; font-size: 0.95rem; margin-bottom: 0; }
+
+        .btn-header-dark {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff; font-weight: 600;
+            border-radius: var(--radius-xl);
+            padding: 0.6rem 1.2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+        .btn-header-dark:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+        /* TABS MENU STYLING */
+        .nav-tabs { border-bottom: 2px solid var(--border-soft); margin-bottom: 1.5rem; }
+        .nav-tabs .nav-link { 
+            color: var(--text-soft); font-weight: 600; border: none; 
+            border-bottom: 3px solid transparent; padding: 1rem 1.5rem; 
+            transition: all 0.2s ease;
+        }
+        .nav-tabs .nav-link:hover { color: var(--orange-1); }
+        .nav-tabs .nav-link.active { 
+            color: var(--orange-1); 
+            border-bottom: 3px solid var(--orange-1); 
+            background: transparent; font-weight: 700; 
+        }
+
+        /* CARD STYLING */
+        .ui-card { 
+            background: #ffffff; border: 1px solid var(--border-soft); 
+            border-radius: var(--radius-xl); box-shadow: var(--shadow-soft); 
+        }
+        .card-header-custom { 
+            background: #fff; border-bottom: 1px solid var(--border-soft); 
+            padding: 1.2rem 1.5rem; border-radius: var(--radius-xl) var(--radius-xl) 0 0; 
+            font-weight: 700; color: var(--dark-1); 
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* FORM & BUTTON STYLING */
+        .form-control, .select2-container .select2-selection--single {
+            border: 1px solid var(--border-soft);
+            border-radius: 6px;
+        }
+        .form-control:focus { border-color: var(--orange-1); box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.1); }
+        
+        .btn-hexindo { background-color: var(--orange-1); color: white; font-weight: 600; border: none; border-radius: 6px; }
+        .btn-hexindo:hover { background-color: var(--orange-2); color: white;}
+        
+        /* State tombol Update */
+        .btn-success { background-color: #059669; border-color: #059669; font-weight: 600; border-radius: 6px;}
+
+        /* TABLE STYLING */
+        .table > :not(caption) > * > * { padding: 1rem 1.5rem; border-bottom-color: var(--border-soft); }
+        .table-light { background-color: #f9fafb !important; color: var(--text-soft); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .table-wrap { max-height: 550px; overflow-y: auto; }
+
+        /* ACTION BUTTONS (Disamakan dengan index.php) */
+        .action-btn { 
+            width: 32px; height: 32px; display: inline-flex; align-items: center; 
+            justify-content: center; border-radius: var(--radius-xl); margin: 2px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .action-btn:hover { background: var(--surface-bg); }
+
+        /* SOFT BADGE UNTUK TABEL TIPE */
+        .badge.rounded-pill { padding: 0.4em 0.8em; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.3px; }
+        .badge-soft-secondary { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; }
     </style>
 </head>
 <body>
 
-<div class="container-fluid p-4">
+<div class="container-fluid p-0">
     <div class="d-flex flex-nowrap w-100 overflow-hidden">
+        
         <?php include '../layout/sidebar.php'; ?>
 
-        <div class="flex-grow-1" style="padding-left: 20px;">
-            <div class="page-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="fw-bold mb-1"><i class="bi bi-database-gear me-2 text-warning"></i>Kelola Master Data</h2>
-                    <p class="mb-0 text-secondary" style="color: #bbb !important;">Pusat pengelolaan Kategori, Merk, dan Tipe untuk inventaris.</p>
-                </div>
-                <a href="index.php" class="btn btn-outline-light rounded-pill px-4"><i class="bi bi-arrow-left me-2"></i>Kembali ke Data Aset</a>
-            </div>
-
-            <!-- TABS MENU -->
-            <ul class="nav nav-tabs mb-4" id="masterTabs" role="tablist">
-                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabBarang" type="button"><i class="bi bi-box me-2"></i>Kategori Barang</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMerk" type="button"><i class="bi bi-tags me-2"></i>Merk Barang</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabTipe" type="button"><i class="bi bi-cpu me-2"></i>Tipe & Spesifikasi</button></li>
-            </ul>
-
-            <div class="tab-content" id="masterTabsContent">
+        <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+            <div class="page-shell">
                 
-                <!-- ================= TAB 1: BARANG ================= -->
-                <div class="tab-pane fade show active" id="tabBarang">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="card card-custom h-100">
-                                <div class="card-header-custom"><i class="bi bi-pencil-square me-2 text-warning"></i>Form Kategori Barang</div>
-                                <div class="card-body p-4">
-                                    <form class="crud-form" data-action="save_barang">
-                                        <input type="hidden" name="id_barang_edit" id="id_barang_edit" value="0">
-                                        <div class="mb-4">
-                                            <label class="form-label fw-bold">Nama Kategori <span class="text-danger">*</span></label>
-                                            <input type="text" name="nama_barang" id="input_nama_barang" class="form-control" required placeholder="Cth: Monitor">
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
-                                            <button type="button" class="btn btn-light btn-cancel d-none" onclick="resetForm(this)">Batal</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-8">
-                            <div class="card card-custom h-100">
-                                <div class="card-header-custom">Daftar Kategori Barang</div>
-                                <div class="card-body p-0 table-wrap">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="sticky-top"><tr><th class="ps-4">No</th><th>Nama Kategori</th><th class="text-center">Aksi</th></tr></thead>
-                                        <tbody>
-                                            <?php $no=1; while($row = mysqli_fetch_assoc($dBarang)): ?>
-                                            <tr>
-                                                <td class="ps-4 text-muted"><?= $no++ ?></td>
-                                                <td class="fw-bold"><?= htmlspecialchars($row['nama_barang']) ?></td>
-                                                <td class="text-center">
-                                                    <a class="action-btn text-primary" onclick="editData('barang', <?= $row['id_barang'] ?>, '<?= htmlspecialchars($row['nama_barang']) ?>')"><i class="bi bi-pencil-fill"></i></a>
-                                                    <a class="action-btn text-danger" onclick="deleteData('delete_barang', <?= $row['id_barang'] ?>)"><i class="bi bi-trash-fill"></i></a>
-                                                </td>
-                                            </tr>
-                                            <?php endwhile; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
+                <!-- HEADER HERO SINKRON DENGAN TEMA HEXINDO -->
+                <div class="page-hero">
+                    <div class="hero-text">
+                        <h1 class="page-title">Kelola Master Data</h1>
+                        <p class="page-desc">Pusat pengaturan data dasar Kategori, Merk, dan Tipe Spesifikasi.</p>
+                    </div>
+                    <div class="hero-actions">
+                        <a href="index.php" class="btn btn-header-dark"><i class="bi bi-arrow-left me-2"></i>Kembali ke Asset</a>
                     </div>
                 </div>
 
-                <!-- ================= TAB 2: MERK ================= -->
-                <div class="tab-pane fade" id="tabMerk">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="card card-custom h-100">
-                                <div class="card-header-custom"><i class="bi bi-pencil-square me-2 text-warning"></i>Form Merk Barang</div>
-                                <div class="card-body p-4">
-                                    <form class="crud-form" data-action="save_merk">
-                                        <input type="hidden" name="id_merk_edit" id="id_merk_edit" value="0">
-                                        <div class="mb-4">
-                                            <label class="form-label fw-bold">Nama Merk <span class="text-danger">*</span></label>
-                                            <input type="text" name="nama_merk" id="input_nama_merk" class="form-control" required placeholder="Cth: Dell">
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
-                                            <button type="button" class="btn btn-light btn-cancel d-none" onclick="resetForm(this)">Batal</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-8">
-                            <div class="card card-custom h-100">
-                                <div class="card-header-custom">Daftar Merk Terdaftar</div>
-                                <div class="card-body p-0 table-wrap">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="sticky-top"><tr><th class="ps-4">No</th><th>Nama Merk</th><th class="text-center">Aksi</th></tr></thead>
-                                        <tbody>
-                                            <?php $no=1; while($row = mysqli_fetch_assoc($dMerk)): ?>
-                                            <tr>
-                                                <td class="ps-4 text-muted"><?= $no++ ?></td>
-                                                <td class="fw-bold text-primary"><?= htmlspecialchars($row['nama_merk']) ?></td>
-                                                <td class="text-center">
-                                                    <a class="action-btn text-primary" onclick="editData('merk', <?= $row['id_merk'] ?>, '<?= htmlspecialchars($row['nama_merk']) ?>')"><i class="bi bi-pencil-fill"></i></a>
-                                                    <a class="action-btn text-danger" onclick="deleteData('delete_merk', <?= $row['id_merk'] ?>)"><i class="bi bi-trash-fill"></i></a>
-                                                </td>
-                                            </tr>
-                                            <?php endwhile; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- TABS MENU -->
+                <ul class="nav nav-tabs" id="masterTabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabBarang" type="button"><i class="bi bi-box me-2"></i>Kategori Barang</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMerk" type="button"><i class="bi bi-tags me-2"></i>Merk Barang</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabTipe" type="button"><i class="bi bi-cpu me-2"></i>Tipe & Spesifikasi</button></li>
+                </ul>
 
-                <!-- ================= TAB 3: TIPE ================= -->
-                <div class="tab-pane fade" id="tabTipe">
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="card card-custom h-100">
-                                <div class="card-header-custom"><i class="bi bi-pencil-square me-2 text-warning"></i>Form Tipe Barang</div>
-                                <div class="card-body p-4">
-                                    <form class="crud-form" data-action="save_tipe">
-                                        <input type="hidden" name="id_tipe_edit" id="id_tipe_edit" value="0">
-                                        <div class="mb-3">
-                                            <label class="form-label fw-bold">Barang <span class="text-danger">*</span></label>
-                                            <select name="id_barang" id="input_id_barang" class="form-control select2" required>
-                                                <option value="">Pilih...</option>
-                                                <?php foreach($arrBarang as $b): ?><option value="<?= $b['id_barang'] ?>"><?= htmlspecialchars($b['nama_barang']) ?></option><?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label fw-bold">Merk <span class="text-danger">*</span></label>
-                                            <select name="id_merk" id="input_id_merk" class="form-control select2" required>
-                                                <option value="">Pilih...</option>
-                                                <?php foreach($arrMerk as $m): ?><option value="<?= $m['id_merk'] ?>"><?= htmlspecialchars($m['nama_merk']) ?></option><?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="mb-4">
-                                            <label class="form-label fw-bold">Nama Tipe <span class="text-danger">*</span></label>
-                                            <input type="text" name="nama_tipe" id="input_nama_tipe" class="form-control" required placeholder="Cth: Latitude 3440">
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
-                                            <button type="button" class="btn btn-light btn-cancel d-none" onclick="resetForm(this)">Batal</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-8">
-                            <div class="card card-custom h-100">
-                                <!-- Bagian Header Diubah agar ada Kotak Pencarian -->
-                                <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                    <span>Daftar Spesifikasi Tipe</span>
-                                    <div class="input-group input-group-sm" style="width: 250px;">
-                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                                        <input type="text" id="searchTipe" class="form-control border-start-0 ps-0" placeholder="Cari nama tipe / merk...">
+                <div class="tab-content" id="masterTabsContent">
+                    
+                    <!-- ================= TAB 1: BARANG ================= -->
+                    <div class="tab-pane fade show active" id="tabBarang">
+                        <div class="row g-4">
+                            <div class="col-lg-4">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom"><i class="bi bi-pencil-square" style="color: var(--orange-1);"></i> Form Kategori Barang</div>
+                                    <div class="card-body p-4">
+                                        <form class="crud-form" data-action="save_barang">
+                                            <input type="hidden" name="id_barang_edit" id="id_barang_edit" value="0">
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold small text-muted">Nama Kategori <span class="text-danger">*</span></label>
+                                                <input type="text" name="nama_barang" id="input_nama_barang" class="form-control" required placeholder="Cth: Monitor">
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
+                                                <button type="button" class="btn btn-light border btn-cancel d-none" onclick="resetForm(this)">Batal</button>
+                                            </div>
+                                        </form>
                                     </div>
                                 </div>
-                                <div class="card-body p-0 table-wrap">
-                                    <table class="table table-hover align-middle mb-0">
-                                        <thead class="sticky-top"><tr><th class="ps-4">No</th><th>Kategori & Merk</th><th>Tipe Spesifikasi</th><th class="text-center">Aksi</th></tr></thead>
-                                        <tbody>
-                                            <?php $no=1; while($row = mysqli_fetch_assoc($dTipe)): ?>
-                                            <tr>
-                                                <td class="ps-4 text-muted"><?= $no++ ?></td>
-                                                <td>
-                                                    <span class="badge bg-light text-dark border"><?= htmlspecialchars($row['nama_barang']) ?></span><br>
-                                                    <span class="small text-primary fw-semibold"><?= htmlspecialchars($row['nama_merk']) ?></span>
-                                                </td>
-                                                <td class="fw-bold"><?= htmlspecialchars($row['nama_tipe']) ?></td>
-                                                <td class="text-center">
-                                                    <a class="action-btn text-primary" onclick="editTipe(<?= $row['id_tipe'] ?>, <?= $row['id_barang'] ?>, <?= $row['id_merk'] ?>, '<?= htmlspecialchars($row['nama_tipe']) ?>')"><i class="bi bi-pencil-fill"></i></a>
-                                                    <a class="action-btn text-danger" onclick="deleteData('delete_tipe', <?= $row['id_tipe'] ?>)"><i class="bi bi-trash-fill"></i></a>
-                                                </td>
-                                            </tr>
-                                            <?php endwhile; ?>
-                                        </tbody>
-                                    </table>
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom"><i class="bi bi-list-ul text-muted"></i> Daftar Kategori Barang</div>
+                                    <div class="card-body p-0 table-wrap">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="sticky-top table-light"><tr><th class="ps-4" width="60">No</th><th>Nama Kategori</th><th class="text-center" width="120">Aksi</th></tr></thead>
+                                            <tbody>
+                                                <?php $no=1; while($row = mysqli_fetch_assoc($dBarang)): ?>
+                                                <tr>
+                                                    <td class="ps-4 text-muted"><?= $no++ ?></td>
+                                                    <td class="fw-bold text-dark"><?= htmlspecialchars($row['nama_barang']) ?></td>
+                                                    <td class="text-center">
+                                                        <a class="action-btn btn btn-light border btn-sm text-primary" onclick="editData('barang', <?= $row['id_barang'] ?>, '<?= htmlspecialchars($row['nama_barang']) ?>')" title="Edit"><i class="bi bi-pencil-fill"></i></a>
+                                                        <a class="action-btn btn btn-light border btn-sm text-danger" onclick="deleteData('delete_barang', <?= $row['id_barang'] ?>)" title="Hapus"><i class="bi bi-trash-fill"></i></a>
+                                                    </td>
+                                                </tr>
+                                                <?php endwhile; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
+                    <!-- ================= TAB 2: MERK ================= -->
+                    <div class="tab-pane fade" id="tabMerk">
+                        <div class="row g-4">
+                            <div class="col-lg-4">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom"><i class="bi bi-pencil-square" style="color: var(--orange-1);"></i> Form Merk Barang</div>
+                                    <div class="card-body p-4">
+                                        <form class="crud-form" data-action="save_merk">
+                                            <input type="hidden" name="id_merk_edit" id="id_merk_edit" value="0">
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold small text-muted">Nama Merk <span class="text-danger">*</span></label>
+                                                <input type="text" name="nama_merk" id="input_nama_merk" class="form-control" required placeholder="Cth: Dell">
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
+                                                <button type="button" class="btn btn-light border btn-cancel d-none" onclick="resetForm(this)">Batal</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom"><i class="bi bi-list-ul text-muted"></i> Daftar Merk Terdaftar</div>
+                                    <div class="card-body p-0 table-wrap">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="sticky-top table-light"><tr><th class="ps-4" width="60">No</th><th>Nama Merk</th><th class="text-center" width="120">Aksi</th></tr></thead>
+                                            <tbody>
+                                                <?php $no=1; while($row = mysqli_fetch_assoc($dMerk)): ?>
+                                                <tr>
+                                                    <td class="ps-4 text-muted"><?= $no++ ?></td>
+                                                    <td class="fw-bold text-primary"><?= htmlspecialchars($row['nama_merk']) ?></td>
+                                                    <td class="text-center">
+                                                        <a class="action-btn btn btn-light border btn-sm text-primary" onclick="editData('merk', <?= $row['id_merk'] ?>, '<?= htmlspecialchars($row['nama_merk']) ?>')" title="Edit"><i class="bi bi-pencil-fill"></i></a>
+                                                        <a class="action-btn btn btn-light border btn-sm text-danger" onclick="deleteData('delete_merk', <?= $row['id_merk'] ?>)" title="Hapus"><i class="bi bi-trash-fill"></i></a>
+                                                    </td>
+                                                </tr>
+                                                <?php endwhile; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ================= TAB 3: TIPE ================= -->
+                    <div class="tab-pane fade" id="tabTipe">
+                        <div class="row g-4">
+                            <div class="col-lg-4">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom"><i class="bi bi-pencil-square" style="color: var(--orange-1);"></i> Form Tipe Barang</div>
+                                    <div class="card-body p-4">
+                                        <form class="crud-form" data-action="save_tipe">
+                                            <input type="hidden" name="id_tipe_edit" id="id_tipe_edit" value="0">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small text-muted">Barang <span class="text-danger">*</span></label>
+                                                <select name="id_barang" id="input_id_barang" class="form-control select2" required>
+                                                    <option value="">Pilih...</option>
+                                                    <?php foreach($arrBarang as $b): ?><option value="<?= $b['id_barang'] ?>"><?= htmlspecialchars($b['nama_barang']) ?></option><?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold small text-muted">Merk <span class="text-danger">*</span></label>
+                                                <select name="id_merk" id="input_id_merk" class="form-control select2" required>
+                                                    <option value="">Pilih...</option>
+                                                    <?php foreach($arrMerk as $m): ?><option value="<?= $m['id_merk'] ?>"><?= htmlspecialchars($m['nama_merk']) ?></option><?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="mb-4">
+                                                <label class="form-label fw-bold small text-muted">Nama Tipe <span class="text-danger">*</span></label>
+                                                <input type="text" name="nama_tipe" id="input_nama_tipe" class="form-control" required placeholder="Cth: Latitude 3440">
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button type="submit" class="btn btn-hexindo flex-grow-1 btn-submit"><span class="t-btn">Simpan</span></button>
+                                                <button type="button" class="btn btn-light border btn-cancel d-none" onclick="resetForm(this)">Batal</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="ui-card h-100">
+                                    <div class="card-header-custom justify-content-between">
+                                        <div class="d-flex align-items-center gap-2"><i class="bi bi-list-ul text-muted"></i> Daftar Spesifikasi Tipe</div>
+                                        <div class="input-group input-group-sm" style="width: 250px;">
+                                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" id="searchTipe" class="form-control border-start-0 ps-0 shadow-none" placeholder="Cari nama tipe / merk...">
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-0 table-wrap">
+                                        <table class="table table-hover align-middle mb-0">
+                                            <thead class="sticky-top table-light"><tr><th class="ps-4" width="60">No</th><th>Kategori & Merk</th><th>Tipe Spesifikasi</th><th class="text-center" width="120">Aksi</th></tr></thead>
+                                            <tbody>
+                                                <?php $no=1; while($row = mysqli_fetch_assoc($dTipe)): ?>
+                                                <tr>
+                                                    <td class="ps-4 text-muted"><?= $no++ ?></td>
+                                                    <td>
+                                                        <span class="badge rounded-pill badge-soft-secondary mb-1"><?= htmlspecialchars($row['nama_barang']) ?></span><br>
+                                                        <span class="small text-muted fw-semibold">Merk: <?= htmlspecialchars($row['nama_merk']) ?></span>
+                                                    </td>
+                                                    <td class="fw-bold text-dark"><?= htmlspecialchars($row['nama_tipe']) ?></td>
+                                                    <td class="text-center">
+                                                        <a class="action-btn btn btn-light border btn-sm text-primary" onclick="editTipe(<?= $row['id_tipe'] ?>, <?= $row['id_barang'] ?>, <?= $row['id_merk'] ?>, '<?= htmlspecialchars($row['nama_tipe']) ?>')" title="Edit"><i class="bi bi-pencil-fill"></i></a>
+                                                        <a class="action-btn btn btn-light border btn-sm text-danger" onclick="deleteData('delete_tipe', <?= $row['id_tipe'] ?>)" title="Hapus"><i class="bi bi-trash-fill"></i></a>
+                                                    </td>
+                                                </tr>
+                                                <?php endwhile; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>

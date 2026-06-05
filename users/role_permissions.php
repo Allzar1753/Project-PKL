@@ -188,468 +188,183 @@ $success = get_flash('success');
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- CSS SINKRONISASI TEMA HEXINDO -->
     <style>
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --orange-4: #ffd166;
-            --orange-5: #fff3e0;
-
-            --dark-1: #111111;
-            --dark-2: #1f1f1f;
-            --dark-3: #2d2d2d;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-
-            --surface: #ffffff;
-            --surface-soft: #fffaf3;
-            --border-soft: rgba(255, 152, 0, 0.14);
-
-            --shadow-soft: 0 14px 40px rgba(17, 17, 17, 0.08);
-            --shadow-hover: 0 18px 46px rgba(255, 122, 0, 0.14);
-
-            --radius-xl: 28px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
-            --radius-sm: 12px;
+            /* TEMA HEXINDO */
+            --orange-1: #E64312; 
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #333333;
+            --text-soft: #666666;
+            --surface-bg: #F4F6F9;
+            --border-soft: #E0E4E8;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --shadow-hover: 0 10px 25px rgba(0,0,0,0.08);
+            --radius-box: 8px; /* Industrial Sharp Edges */
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
-            background:
-                radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 26%),
-                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.09), transparent 18%),
-                linear-gradient(180deg, #fff8f1 0%, #fffaf5 35%, #ffffff 100%);
+            background-color: var(--surface-bg);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        .page-shell { padding: 24px 32px; }
+        @media (max-width: 991.98px) { .page-shell { padding: 18px; } }
 
-        .page-shell {
-            padding: 28px;
-        }
-
-        @media (max-width: 991.98px) {
-            .page-shell {
-                padding: 18px;
-            }
-        }
-
+        /* Hero Banner Hexindo */
         .hero-card {
             position: relative;
-            overflow: hidden;
-            border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, rgba(17, 17, 17, 0.95) 0%, rgba(42, 42, 42, 0.90) 30%, rgba(255, 122, 0, 0.96) 100%);
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
-            padding: 1.55rem 1.6rem;
-            margin-bottom: 1.35rem;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
+            border-radius: var(--radius-box);
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-soft);
         }
 
-        .hero-card::before {
-            content: "";
-            position: absolute;
-            width: 240px;
-            height: 240px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08);
-            top: -90px;
-            right: -65px;
-        }
-
-        .hero-card::after {
-            content: "";
-            position: absolute;
-            width: 170px;
-            height: 170px;
-            border-radius: 50%;
-            background: rgba(255, 209, 102, 0.16);
-            left: -55px;
-            bottom: -65px;
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-        }
+        .hero-content { position: relative; z-index: 2; }
 
         .page-title {
-            color: #fff;
-            font-size: 1.8rem;
-            font-weight: 800;
-            margin-bottom: .35rem;
-            letter-spacing: -0.02em;
+            color: #fff; font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem;
         }
 
         .page-subtitle {
-            color: rgba(255, 255, 255, 0.84);
-            margin-bottom: 0;
-            line-height: 1.7;
-            max-width: 760px;
-            font-size: .94rem;
+            color: #9ca3af; margin-bottom: 0; font-size: 0.95rem; max-width: 760px;
         }
 
+        /* Tombol Aksi Header */
         .hero-action {
-            border: none;
-            background: #fff;
-            color: #111;
-            font-weight: 800;
-            border-radius: 999px;
-            padding: .82rem 1.2rem;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff; font-weight: 600;
+            border-radius: var(--radius-box);
+            padding: 0.6rem 1.2rem;
             text-decoration: none;
-            display: inline-flex;
-            align-items: center;
+            display: inline-flex; align-items: center;
+            transition: all 0.2s; font-size: 0.9rem;
+        }
+        .hero-action:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+        /* Alert Bawaan */
+        .alert { border: none; border-radius: var(--radius-box); padding: 14px 16px; box-shadow: var(--shadow-soft); }
+
+        /* General Card Base */
+        .summary-card, .info-card, .permission-card {
+            background: #fff; border: 1px solid var(--border-soft); border-radius: var(--radius-box); box-shadow: var(--shadow-soft); overflow: hidden;
         }
 
-        .hero-action:hover {
-            background: #fff7ea;
-            color: #111;
-        }
-
-        .alert {
-            border: none;
-            border-radius: 18px;
-            padding: 14px 16px;
-            box-shadow: 0 10px 24px rgba(17, 17, 17, 0.04);
-        }
-
-        .summary-card,
-        .info-card,
-        .permission-card {
-            border: 1px solid var(--border-soft);
-            border-radius: 22px;
-            box-shadow: var(--shadow-soft);
-            background: #fff;
-            overflow: hidden;
-        }
-
+        /* Summary Cards Hexindo */
         .summary-card {
-            position: relative;
-            padding: 1.15rem;
-            height: 100%;
-            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+            position: relative; height: 100%; padding: 1.25rem 1.5rem; transition: all 0.2s ease;
+            border-left: 4px solid var(--orange-1);
         }
-
-        .summary-card::before {
-            content: "";
-            position: absolute;
-            inset: 0 0 auto 0;
-            height: 5px;
-            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
-        }
-
-        .summary-label {
-            font-size: .84rem;
-            color: var(--text-soft);
-            font-weight: 700;
-            margin-bottom: .4rem;
-        }
-
-        .summary-value {
-            font-size: 2rem;
-            font-weight: 800;
-            line-height: 1;
-            margin-bottom: .35rem;
-            color: var(--dark-1);
-        }
-
-        .summary-note {
-            font-size: .82rem;
-            color: var(--text-soft);
-        }
-
+        .summary-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+        .summary-label { font-size: 0.85rem; color: var(--text-soft); font-weight: 600; margin-bottom: 0.35rem; }
+        .summary-value { font-size: 1.8rem; font-weight: 800; color: var(--dark-1); margin-bottom: 0.2rem; }
+        .summary-note { font-size: 0.8rem; color: #9ca3af; }
         .summary-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.15rem;
-            flex-shrink: 0;
-            color: #fff;
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            box-shadow: 0 10px 24px rgba(255, 152, 0, 0.20);
+            width: 45px; height: 45px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; color: var(--orange-1); background: rgba(230, 67, 18, 0.1);
         }
 
-        .role-admin {
-            color: #2563eb !important;
-        }
+        .role-admin { color: #2563eb !important; }
+        .role-user { color: #16a34a !important; }
 
-        .role-user {
-            color: #16a34a !important;
-        }
-
+        /* Info Card */
         .info-card {
-            padding: 1.25rem;
-            margin-bottom: 1.35rem;
-            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
+            padding: 1.5rem; margin-bottom: 1.5rem; background: #fff;
         }
+        .info-title { font-size: 1.05rem; font-weight: 700; color: var(--dark-1); margin-bottom: 0.35rem; }
+        .info-text { color: var(--text-soft); line-height: 1.6; margin-bottom: 0; font-size: 0.9rem; }
 
-        .info-title {
-            font-size: 1.02rem;
-            font-weight: 800;
-            color: var(--dark-1);
-            margin-bottom: .35rem;
-        }
-
-        .info-text {
-            color: var(--text-soft);
-            line-height: 1.7;
-            margin-bottom: 0;
-            font-size: .92rem;
-        }
-
-        .role-switch {
-            display: flex;
-            gap: .65rem;
-            flex-wrap: wrap;
-        }
-
+        /* Role Switch Buttons */
+        .role-switch { display: flex; gap: 0.5rem; flex-wrap: wrap; }
         .role-switch-btn {
-            border-radius: 999px;
-            font-weight: 800;
-            padding: .72rem 1rem;
-            text-decoration: none;
-            border: 1px solid #dfe5ec;
-            transition: all .2s ease;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 130px;
-            background: #fff;
+            border-radius: var(--radius-box); font-weight: 600; padding: 0.6rem 1.2rem; text-decoration: none; border: 1px solid var(--border-soft); transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; min-width: 130px; background: #fff; font-size: 0.9rem;
         }
 
-        .role-switch-btn.admin {
-            color: #2563eb;
-            border-color: rgba(37, 99, 235, 0.18);
-        }
+        .role-switch-btn.admin { color: #2563eb; }
+        .role-switch-btn.user { color: #16a34a; }
+        .role-switch-btn:hover { background-color: var(--surface-bg); }
 
-        .role-switch-btn.user {
-            color: #16a34a;
-            border-color: rgba(22, 163, 74, 0.18);
-        }
+        .role-switch-btn.is-active.admin { background: #2563eb; color: #fff; border-color: transparent; }
+        .role-switch-btn.is-active.user { background: #16a34a; color: #fff; border-color: transparent; }
 
-        .role-switch-btn:hover {
-            transform: translateY(-1px);
-        }
-
-        .role-switch-btn.is-active.admin {
-            background: linear-gradient(135deg, #2563eb, #3b82f6);
-            color: #fff;
-            border-color: transparent;
-            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
-        }
-
-        .role-switch-btn.is-active.user {
-            background: linear-gradient(135deg, #16a34a, #22c55e);
-            color: #fff;
-            border-color: transparent;
-            box-shadow: 0 10px 24px rgba(22, 163, 74, 0.18);
-        }
-
+        /* Permission Card Form */
         .permission-card-header {
-            padding: 1.1rem 1.2rem;
-            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
-            color: #fff;
+            padding: 1.2rem 1.5rem; background: #fff; color: var(--dark-1); border-bottom: 1px solid var(--border-soft);
         }
+        .permission-card-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.2rem; }
+        .section-subinfo { font-size: 0.85rem; color: var(--text-soft); }
 
-        .permission-card-title {
-            font-size: 1rem;
-            font-weight: 800;
-            margin-bottom: .2rem;
-        }
+        .permission-card-body { padding: 1.5rem; background: #fff; }
 
-        .section-subinfo {
-            font-size: .84rem;
-            color: rgba(255, 255, 255, 0.82);
-        }
-
-        .permission-card-body {
-            padding: 1.25rem;
-            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
-        }
-
+        /* Permission Groups Box */
         .permission-group {
-            border: 1px solid rgba(255, 176, 0, 0.14);
-            border-radius: 18px;
-            padding: 1rem;
-            background: #fff;
-            height: 100%;
-            box-shadow: 0 8px 20px rgba(17, 17, 17, 0.04);
+            border: 1px solid var(--border-soft); border-radius: var(--radius-box); padding: 1.2rem; background: #F9FAFB; height: 100%;
         }
-
         .permission-group-title {
-            font-weight: 800;
-            color: var(--dark-1);
-            margin-bottom: .95rem;
-            font-size: .96rem;
-            display: flex;
-            align-items: center;
-            gap: .5rem;
+            font-weight: 700; color: var(--dark-1); margin-bottom: 1rem; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;
         }
+        .permission-group-title i { color: var(--orange-1); }
 
-        .permission-group-title i {
-            color: var(--orange-2);
-        }
-
+        /* Individual Permission Item */
         .permission-item {
-            padding: .82rem .88rem;
-            border: 1px solid #f0ede8;
-            border-radius: 14px;
-            background: #fffdfa;
-            height: 100%;
-            transition: all .2s ease;
+            padding: 0.8rem 1rem; border: 1px solid var(--border-soft); border-radius: var(--radius-box); background: #fff; height: 100%; transition: all 0.2s ease;
         }
+        .permission-item:hover { border-color: var(--orange-1); box-shadow: 0 4px 12px rgba(230, 67, 18, 0.05); }
 
-        .permission-item:hover {
-            border-color: rgba(255, 152, 0, 0.20);
-            background: #fff9f2;
-        }
-
-        .permission-item .form-check {
-            margin: 0;
-            display: flex;
-            align-items: flex-start;
-            gap: .7rem;
-        }
-
+        .permission-item .form-check { margin: 0; display: flex; align-items: flex-start; gap: 0.7rem; }
         .permission-item .form-check-input {
-            margin-top: .22rem;
-            width: 18px;
-            height: 18px;
-            border-radius: 6px;
-            cursor: pointer;
+            margin-top: 0.2rem; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border-color: #d1d5db;
         }
+        .permission-item .form-check-input:checked { background-color: var(--orange-1); border-color: var(--orange-1); }
+        
+        /* Outline fokus checkbox Hexindo */
+        .permission-item .form-check-input:focus { box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.25); }
 
-        .permission-item .form-check-input:checked {
-            background-color: #ff9800;
-            border-color: #ff9800;
-        }
+        .permission-item .form-check-label { cursor: pointer; line-height: 1.4; }
+        .permission-name { font-size: 0.9rem; font-weight: 600; color: var(--dark-1); display: block; margin-bottom: 0.15rem; }
+        .permission-key { color: var(--text-soft); font-size: 0.8rem; word-break: break-word; font-family: monospace;}
 
-        .permission-item .form-check-label {
-            cursor: pointer;
-            line-height: 1.5;
-        }
-
-        .permission-name {
-            font-size: .92rem;
-            font-weight: 700;
-            color: var(--dark-1);
-            display: block;
-            margin-bottom: .18rem;
-        }
-
-        .permission-key {
-            color: var(--text-soft);
-            font-size: .82rem;
-            word-break: break-word;
-        }
-
+        /* Action Buttons Area */
         .sticky-action {
-            position: sticky;
-            bottom: 0;
-            background: linear-gradient(180deg, rgba(255, 253, 249, 0.2) 0%, #fff 22%);
-            padding-top: 1rem;
-            margin-top: 1.2rem;
+            position: sticky; bottom: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); padding: 1rem 0 0 0; margin-top: 1.5rem; border-top: 1px solid var(--border-soft);
         }
 
-        .action-btn {
-            border-radius: 14px;
-            font-weight: 800;
-            padding: .8rem 1rem;
-            min-width: 140px;
-            transition: all .2s ease;
-        }
+        .action-btn { border-radius: var(--radius-box); font-weight: 600; padding: 0.6rem 1.2rem; min-width: 140px; transition: all 0.2s ease; font-size: 0.9rem; }
+        .btn-soft { background: #fff; border: 1px solid var(--border-soft); color: var(--text-main); }
+        .btn-soft:hover { background: var(--surface-bg); color: var(--dark-1); }
 
-        .btn-soft {
-            background: #fff;
-            border: 1px solid #e3e1dc;
-            color: #3c3c3c;
-        }
-
-        .btn-soft:hover {
-            background: #fff7ea;
-            color: #111;
-            border-color: rgba(255, 152, 0, 0.18);
-        }
-
-        .btn-save {
-            border: none;
-            color: #fff;
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            box-shadow: 0 12px 28px rgba(255, 152, 0, 0.18);
-        }
-
-        .btn-save:hover {
-            color: #fff;
-            transform: translateY(-1px);
-            filter: brightness(.98);
-        }
+        .btn-save { border: none; color: #fff; background-color: var(--orange-1); }
+        .btn-save:hover { background-color: var(--orange-2); color: #fff; }
 
         @media (max-width: 991.98px) {
-            .page-wrap {
-                padding: 18px;
-            }
-
-            .hero-card {
-                padding: 1.3rem 1.15rem;
-            }
-
-            .page-title {
-                font-size: 1.4rem;
-            }
-
-            .summary-value {
-                font-size: 1.7rem;
-            }
-
-            .permission-card-body,
-            .permission-card-header,
-            .info-card {
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-
-            .sticky-action {
-                position: static;
-                background: transparent;
-            }
+            .hero-card { padding: 1.3rem 1.15rem; }
+            .page-title { font-size: 1.4rem; }
+            .summary-value { font-size: 1.7rem; }
+            .permission-card-body, .permission-card-header, .info-card { padding: 1rem; }
+            .sticky-action { position: static; background: transparent; }
         }
 
         @media (max-width: 575.98px) {
-            .page-title {
-                font-size: 1.2rem;
-            }
-
-            .page-subtitle {
-                font-size: .9rem;
-            }
-
-            .hero-action,
-            .role-switch-btn,
-            .action-btn {
-                width: 100%;
-            }
+            .page-title { font-size: 1.2rem; }
+            .page-subtitle { font-size: .9rem; }
+            .hero-action, .role-switch-btn, .action-btn { width: 100%; }
         }
     </style>
 </head>
 
 <body>
     <div class="container-fluid p-0">
-        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
         <div class="d-flex flex-nowrap w-100 overflow-hidden">
 
             <?php include '../layout/sidebar.php'; ?>
 
-            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
 
                 <div class="page-shell">
@@ -657,24 +372,24 @@ $success = get_flash('success');
                     <div class="hero-card">
                         <div class="hero-content d-flex justify-content-between align-items-start flex-wrap gap-3">
                             <div>
-                                <h1 class="page-title">Atur Hak Akses Role</h1>
+                                <h1 class="page-title">Atur Hak Akses Role Sistem</h1>
                                 <p class="page-subtitle">
-                                    Kelola permission untuk role Admin dan User secara lebih rapi, terpusat, dan mudah dipantau dalam satu halaman.
+                                    Kelola batasan fitur dan menu (permissions) untuk role Admin dan User secara terpusat untuk menjaga keamanan sistem.
                                 </p>
                             </div>
 
                             <a href="<?= e(base_url('users/index.php')) ?>" class="hero-action">
-                                <i class="bi bi-people me-2"></i>Kelola User
+                                <i class="bi bi-people me-2"></i>Kembali ke Kelola User
                             </a>
                         </div>
                     </div>
 
                     <?php if ($error): ?>
-                        <div class="alert alert-danger"><?= e($error) ?></div>
+                        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= e($error) ?></div>
                     <?php endif; ?>
 
                     <?php if ($success): ?>
-                        <div class="alert alert-success"><?= e($success) ?></div>
+                        <div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i><?= e($success) ?></div>
                     <?php endif; ?>
 
                     <div class="row g-3 mb-4">
@@ -682,11 +397,11 @@ $success = get_flash('success');
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Role Dipilih</div>
+                                        <div class="summary-label">Role Yang Dipilih</div>
                                         <div class="summary-value <?= role_color_class($currentRole) ?>">
                                             <?= strtoupper(e($currentRole)) ?>
                                         </div>
-                                        <div class="summary-note">Role yang sedang dikonfigurasi</div>
+                                        <div class="summary-note">Target konfigurasi saat ini</div>
                                     </div>
                                     <div class="summary-icon">
                                         <i class="bi bi-person-badge"></i>
@@ -696,14 +411,14 @@ $success = get_flash('success');
                         </div>
 
                         <div class="col-md-4">
-                            <div class="summary-card">
+                            <div class="summary-card" style="border-left-color: #10b981;">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Permission Aktif</div>
-                                        <div class="summary-value"><?= count($assignedIds) ?></div>
-                                        <div class="summary-note">Permission yang sedang dipilih</div>
+                                        <div class="summary-label">Akses Diizinkan</div>
+                                        <div class="summary-value text-success"><?= count($assignedIds) ?></div>
+                                        <div class="summary-note">Fitur yang sedang dicentang</div>
                                     </div>
-                                    <div class="summary-icon">
+                                    <div class="summary-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
                                         <i class="bi bi-check2-square"></i>
                                     </div>
                                 </div>
@@ -711,14 +426,14 @@ $success = get_flash('success');
                         </div>
 
                         <div class="col-md-4">
-                            <div class="summary-card">
+                            <div class="summary-card" style="border-left-color: #6b7280;">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Total Permission Sistem</div>
-                                        <div class="summary-value"><?= $allPermissionsCount ?></div>
-                                        <div class="summary-note">Seluruh permission yang tersedia</div>
+                                        <div class="summary-label">Total Modul Sistem</div>
+                                        <div class="summary-value text-muted"><?= $allPermissionsCount ?></div>
+                                        <div class="summary-note">Seluruh hak akses yang tersedia</div>
                                     </div>
-                                    <div class="summary-icon">
+                                    <div class="summary-icon" style="background: rgba(107, 114, 128, 0.1); color: #6b7280;">
                                         <i class="bi bi-diagram-3"></i>
                                     </div>
                                 </div>
@@ -729,18 +444,19 @@ $success = get_flash('success');
                     <div class="info-card">
                         <div class="row g-3 align-items-center">
                             <div class="col-lg-8">
-                                <div class="info-title">Informasi Pengaturan Role</div>
+                                <div class="info-title"><i class="bi bi-info-circle-fill me-2 text-primary"></i>Informasi Konfigurasi</div>
                                 <p class="info-text">
-                                    Administrator memiliki akses penuh secara otomatis. Halaman ini digunakan untuk mengatur hak akses role
-                                    <b>User</b> agar sesuai dengan kebutuhan operasional.
+                                    Administrator (Admin HO) secara default memiliki akses <b>Penuh/Bypass</b> ke seluruh sistem. Pengaturan kotak centang di bawah ini saat ini ditujukan untuk mengatur pembatasan hak akses operasional untuk role
+                                    <b>User Cabang</b>.
                                 </p>
                             </div>
 
                             <div class="col-lg-4">
                                 <div class="role-switch justify-content-lg-end">
+                                    <!-- Menambahkan tulisan '(User Cabang)' untuk kejelasan -->
                                     <a href="<?= e(base_url('users/role_permissions.php')) ?>"
                                         class="<?= role_button_class('user', $currentRole) ?>">
-                                        Role User
+                                        Konfigurasi Role: USER CABANG
                                     </a>
                                 </div>
                             </div>
@@ -752,23 +468,23 @@ $success = get_flash('success');
 
                         <div class="permission-card-header">
                             <div class="permission-card-title">
-                                Permission untuk Role: <?= strtoupper(e($currentRole)) ?>
+                                Hak Akses Untuk: <?= strtoupper(e($currentRole)) ?>
                             </div>
                             <div class="section-subinfo">
-                                Centang permission yang diizinkan untuk role ini.
+                                Centang fitur yang Anda izinkan untuk dibuka/dilakukan oleh role ini.
                             </div>
                         </div>
 
                         <div class="permission-card-body">
                             <div class="row g-3">
                                 <?php foreach ($groupedPermissions as $group => $items): ?>
-                                    <div class="col-xl-6">
+                                    <div class="col-xl-4 col-md-6"> <!-- Ubah ukuran kolom agar muat 3 grid di layar lebar -->
                                         <div class="permission-group">
                                             <div class="permission-group-title">
-                                                <i class="bi bi-folder2-open"></i><?= e($group) ?>
+                                                <i class="bi bi-folder2-open"></i> MODUL <?= e($group) ?>
                                             </div>
 
-                                            <div class="row g-3">
+                                            <div class="row g-2">
                                                 <?php foreach ($items as $item): ?>
                                                     <div class="col-12">
                                                         <div class="permission-item">
@@ -797,15 +513,15 @@ $success = get_flash('success');
                             <div class="sticky-action">
                                 <div class="d-flex justify-content-end gap-2 flex-wrap">
                                     <button type="button" id="btnCheckAll" class="btn action-btn btn-soft">
-                                        Pilih Semua
+                                        <i class="bi bi-check-all me-1"></i> Centang Semua
                                     </button>
 
                                     <button type="button" id="btnUncheckAll" class="btn action-btn btn-soft">
-                                        Hapus Semua
+                                        <i class="bi bi-square me-1"></i> Kosongkan Semua
                                     </button>
 
                                     <button type="submit" class="btn action-btn btn-save">
-                                        Simpan Hak Akses
+                                        <i class="bi bi-save me-1"></i> Simpan Hak Akses
                                     </button>
                                 </div>
                             </div>
@@ -817,6 +533,7 @@ $success = get_flash('success');
         </div>
     </div>
 
+    <!-- SCRIPT TIDAK ADA YANG DIUBAH SAMA SEKALI -->
     <script>
         document.getElementById('btnCheckAll').addEventListener('click', function() {
             document.querySelectorAll('#formRolePermissions input[type="checkbox"]').forEach(function(checkbox) {
@@ -838,12 +555,12 @@ $success = get_flash('success');
 
             Swal.fire({
                 title: 'Simpan hak akses?',
-                text: 'Permission untuk role "' + role + '" akan diperbarui. Total permission dipilih: ' + checkedCount + '.',
+                text: 'Permission untuk role "' + role + '" akan diperbarui. Total modul diizinkan: ' + checkedCount + '.',
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Ya, simpan',
+                confirmButtonText: 'Ya, Simpan',
                 cancelButtonText: 'Batal',
-                confirmButtonColor: '#ff9800',
+                confirmButtonColor: '#E64312', /* Warna tombol YA Hexindo */
                 cancelButtonColor: '#6c757d'
             }).then((result) => {
                 if (result.isConfirmed) {

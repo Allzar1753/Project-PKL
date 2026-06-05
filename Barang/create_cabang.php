@@ -23,7 +23,7 @@ function jsonResponse(string $status, string $message): void {
 }
 
 // ==========================================
-// HANDLE PROSES DATA (METODE POST)
+// HANDLE PROSES DATA (METODE POST) - TIDAK DIUBAH
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
@@ -86,30 +86,112 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang ASC");
 ?>
 
+<!-- STYLE KHUSUS UNTUK FORM SINKRON TEMA HEXINDO & LEBIH RAPIH -->
+<style>
+    /* Jarak vertikal antar input form yang lega */
+    #formCreateCabang .col-md-6, 
+    #formCreateCabang .col-md-12 {
+        margin-bottom: 1.2rem;
+    }
+
+    /* Penyesuaian tinggi dan padding Input Teks biasa */
+    .form-control {
+        border: 1px solid #E0E4E8;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.95rem;
+        min-height: 42px; /* Standar tinggi */
+        box-shadow: none !important;
+    }
+    .form-control:focus {
+        border-color: #E64312;
+        box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.1) !important;
+    }
+
+    /* Sinkronisasi tinggi dropdown Select2 dengan Input Teks */
+    .select2-container .select2-selection--single {
+        border: 1px solid #E0E4E8 !important;
+        border-radius: 6px !important;
+        height: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 0.2rem 0.5rem;
+    }
+    
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 40px !important;
+        right: 8px !important;
+    }
+    
+    .select2-selection__clear {
+        margin-right: 15px;
+        font-size: 1.2rem;
+    }
+
+    /* Merapikan posisi dan warna Label Form */
+    .form-label {
+        font-weight: 600;
+        color: #333333;
+        font-size: 0.88rem;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .text-danger {
+        font-weight: bold;
+    }
+
+    /* Kotak Informasi User Cabang */
+    .alert-success-custom {
+        background-color: #F0FDF4;
+        border-left: 4px solid #16A34A;
+        color: #166534;
+        border-radius: 6px;
+        padding: 1rem;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Tombol Utama Hexindo */
+    .btn-hexindo {
+        background-color: #E64312;
+        color: white;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        padding: 0.6rem 1.5rem;
+        transition: all 0.2s;
+    }
+    .btn-hexindo:hover {
+        background-color: #F25C05;
+        color: white;
+    }
+</style>
+
 <form id="formCreateCabang" action="create_cabang.php" method="POST" enctype="multipart/form-data">
     <div class="row g-3">
+        
         <div class="col-12">
-            <div class="alert alert-success bg-success-subtle border-success mb-0">
-                <i class="bi bi-info-circle-fill me-2 text-success"></i>
-                <b>Info:</b> Aset yang Anda input akan otomatis terdaftar sebagai stok di cabang Anda pada hari ini dengan status <b>Normal & Tersedia</b>.
+            <div class="alert alert-success-custom mb-2">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                <b>Informasi:</b> Aset yang Anda input akan otomatis terdaftar sebagai stok di cabang Anda pada hari ini dengan status <b>Normal & Tersedia</b>.
             </div>
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">No Asset</label>
+            <label class="form-label">No Asset</label>
             <input type="text" name="no_asset" class="form-control" placeholder="Opsional (Boleh dikosongkan)">
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">Serial Number / Service tag <span class="text-danger">*</span></label>
-            <input type="text" name="serial_number" class="form-control" required placeholder="Wajib diisi!">
+            <label class="form-label">Serial Number / Service Tag <span class="text-danger">*</span></label>
+            <input type="text" name="serial_number" class="form-control" required placeholder="Masukkan SN / Service Tag">
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">Nama Barang <span class="text-danger">*</span></label>
-            <!-- DITAMBAHKAN ID id_barang -->
+            <label class="form-label">Kategori Barang <span class="text-danger">*</span></label>
             <select name="id_barang" id="id_barang" class="form-control select2" required>
-                <option value="">Pilih Barang...</option>
+                <option value="">Pilih Kategori...</option>
                 <?php while ($row = mysqli_fetch_assoc($barang)): ?>
                     <option value="<?= (int) $row['id_barang'] ?>"><?= h($row['nama_barang']) ?></option>
                 <?php endwhile; ?>
@@ -117,40 +199,41 @@ $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang A
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">Merk <span class="text-danger">*</span></label>
-            <!-- DITAMBAHKAN ID id_merk DAN DIKOSONGKAN -->
+            <label class="form-label">Merk Barang <span class="text-danger">*</span></label>
             <select name="id_merk" id="id_merk" class="form-control select2" required>
-                <option value="">Pilih Barang Dulu...</option>
+                <option value="">Pilih Kategori Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">Tipe <span class="text-danger">*</span></label>
-            <!-- DITAMBAHKAN ID id_tipe DAN DIKOSONGKAN -->
+            <label class="form-label">Tipe / Spesifikasi <span class="text-danger">*</span></label>
             <select name="id_tipe" id="id_tipe" class="form-control select2" required>
                 <option value="">Pilih Merk Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-bold">User Pengguna Aset <span class="text-danger">*</span></label>
+            <label class="form-label">Nama User Pengguna Aset <span class="text-danger">*</span></label>
             <input type="text" name="user" class="form-control" required placeholder="Contoh: Nabila">
         </div>
 
-        <div class="col-md-12">
-            <label class="form-label fw-bold">Foto Barang</label>
+        <div class="col-md-12 border-top pt-3 mt-3">
+            <label class="form-label">Upload Foto Fisik Barang</label>
             <input type="file" name="foto" class="form-control" id="fotoInputCabang" accept=".jpg,.jpeg,.png,.gif,.webp">
-            <img id="previewFotoCabang" class="rounded mt-2 shadow-sm border" style="max-width:120px; display:none;">
+            <div class="mt-2 text-muted small">Format: JPG, PNG, WEBP. Maksimal 2MB.</div>
+            <img id="previewFotoCabang" class="shadow-sm border mt-3" style="max-height: 150px; display: none; border-radius: 8px; object-fit: cover;">
         </div>
 
-        <div class="col-12 mt-4 text-end">
-            <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark shadow-sm">
-                <span class="btn-text"><i class="bi bi-save me-1"></i> Simpan Aset</span>
+        <div class="col-12 mt-4 pt-3 border-top text-end">
+            <button type="button" class="btn btn-light border px-4 me-2 rounded-2" data-bs-dismiss="modal">Batal</button>
+            <button type="submit" class="btn btn-hexindo">
+                <span class="btn-text"><i class="bi bi-save me-1"></i> Simpan Aset Cabang</span>
                 <span class="btn-loading d-none">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Menyimpan...
                 </span>
             </button>
         </div>
+        
     </div>
 </form>
 
@@ -167,7 +250,7 @@ $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang A
         });
 
         // ==========================================
-        // DYNAMIC DROPDOWN AJAX
+        // DYNAMIC DROPDOWN AJAX - TIDAK DIUBAH
         // ==========================================
         
         // 1. Kategori Barang Diubah
@@ -190,7 +273,7 @@ $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang A
                     }
                 });
             } else {
-                $('#id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+                $('#id_merk').html('<option value="">Pilih Kategori Dulu...</option>').trigger('change');
             }
         });
 

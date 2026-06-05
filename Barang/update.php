@@ -261,180 +261,342 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 ?>
 
     <style>
-        .fw-black {
-            font-weight: 900 !important;
-            color: #000 !important;
+        /* ==========================================
+           TEMA BARU MODERN CLEAN (Dashboard Match)
+           ========================================== */
+        :root {
+            --orange-primary: #E64312;
+            --orange-hover: #F25C05;
+            --dark-main: #231F20;
+            --text-dark: #374151;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-light: #f9fafb;
         }
 
-        .label-bold {
-            font-weight: 900 !important;
-            color: #1a1a1a !important;
+        /* Styling Typography & Label */
+        .modern-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-muted);
             text-transform: uppercase;
-            font-size: 0.95rem;
-            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: block;
         }
 
-        .input-bold {
-            font-weight: bold !important;
-            color: #000 !important;
-            border: 2px solid #ccc !important;
+        /* Styling Input */
+        .modern-input {
+            border: 1px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            padding: 0.6rem 1rem !important;
+            font-size: 0.95rem !important;
+            color: var(--text-dark) !important;
+            background-color: #ffffff !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02) !important;
+            transition: all 0.2s ease-in-out !important;
+            font-weight: 500 !important;
+        }
+        .modern-input:focus {
+            border-color: var(--orange-primary) !important;
+            box-shadow: 0 0 0 4px rgba(230, 67, 18, 0.1) !important;
+            outline: none !important;
+        }
+        .modern-input:read-only {
+            background-color: var(--bg-light) !important;
+            color: var(--text-muted) !important;
         }
 
-        .input-bold:focus {
-            border-color: #000 !important;
-            box-shadow: none !important;
+        /* Styling Card Wrapper */
+        .modern-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .modern-card-header {
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            font-weight: 700;
+            color: var(--dark-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modern-card-body {
+            padding: 1.5rem;
         }
 
-        .card-header-bold {
-            background-color: #212529 !important;
-            color: #fff !important;
-            font-weight: 900 !important;
-            font-size: 1.1rem !important;
-            letter-spacing: 1px;
+        /* Divider antar section form */
+        .form-section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--dark-main);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--bg-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .table-dark-bold th {
-            background-color: #212529 !important;
-            color: #fff !important;
-            font-weight: 900 !important;
-            border: 2px solid #000 !important;
+        /* Tombol Modern */
+        .btn-modern-primary {
+            background-color: var(--orange-primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-modern-primary:hover {
+            background-color: var(--orange-hover);
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(230, 67, 18, 0.2);
+        }
+        .btn-modern-outline {
+            background-color: transparent;
+            color: var(--dark-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+            transition: all 0.2s;
+        }
+        .btn-modern-outline:hover {
+            background-color: var(--bg-light);
+            border-color: #d1d5db;
         }
 
-        .table-bordered-dark {
-            border: 2px solid #000 !important;
+        /* ==========================================
+           STYLING TABEL LOGISTIK (Lebih Bersih)
+           ========================================== */
+        .modern-table-wrapper {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
         }
+        .modern-table {
+            margin-bottom: 0;
+            width: 100%;
+        }
+        .modern-table th {
+            background-color: var(--bg-light);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            border-top: none;
+        }
+        .modern-table td {
+            padding: 8px 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--bg-light);
+        }
+        
+        /* Input di dalam tabel dibuat seolah menyatu */
+        .table-input {
+            border: 1px solid transparent;
+            background-color: transparent;
+            width: 100%;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            transition: 0.2s;
+        }
+        .table-input:hover { background-color: var(--bg-light); }
+        .table-input:focus {
+            background-color: #fff;
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 3px rgba(230, 67, 18, 0.1);
+            outline: none;
+        }
+        
+        .btn-remove-row-modern {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            border: none;
+            width: 32px; height: 32px;
+            border-radius: 6px;
+            display: inline-flex; justify-content: center; align-items: center;
+            transition: 0.2s;
+        }
+        .btn-remove-row-modern:hover { background: #ef4444; color: #fff; }
 
-        .table-bordered-dark td {
-            border: 2px solid #000 !important;
+        /* Step Indicators */
+        .step-indicator {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 99px;
+            font-size: 0.85rem; font-weight: 700;
         }
+        .step-active { background-color: rgba(230, 67, 18, 0.1); color: var(--orange-primary); border: 1px solid rgba(230, 67, 18, 0.2); }
+        .step-done { background-color: rgba(16, 185, 129, 0.1); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .step-pending { background-color: var(--bg-light); color: var(--text-muted); border: 1px solid var(--border-color); }
+
+        /* Select2 override untuk form logistik/master agar sesuai tema */
+        .select2-container .select2-selection--single {
+            height: 42px !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow { height: 40px !important; }
     </style>
 
     <form id="formUpdate" enctype="multipart/form-data">
         <input type="hidden" name="id" value="<?= (int) $barang['id'] ?>">
 
         <?php if ($type === 'master'): ?>
-            <!-- FORM MASTER BARANG -->
+            <!-- ==========================================
+                 FORM MASTER BARANG (Redesign)
+                 ========================================== -->
             <input type="hidden" name="form_type" value="master">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="label-bold">No Asset</label>
-                    <input type="text" name="no_asset" class="form-control input-bold" value="<?= h($barang['no_asset'] ?? '') ?>" placeholder="Boleh dikosongkan">
+            
+            <div class="modern-card">
+                <div class="modern-card-header">
+                    <i class="bi bi-box-seam" style="color: var(--orange-primary);"></i> Update Data Master Barang
                 </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Serial Number<span class="text-danger">*</span></label>
-                    <input type="text" name="serial_number" class="form-control input-bold text-uppercase" value="<?= h($barang['serial_number'] ?? '') ?>" placeholder="Wajib diisi!" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Barang<span class="text-danger">*</span></label>
-                    <select name="id_barang" id="update_id_barang" class="form-control select2 input-bold" required>
-                        <option value="">Pilih Barang...</option>
-                        <?php foreach ($barangOptions as $b): ?>
-                            <option value="<?= (int) $b['id_barang'] ?>" <?= (int) $b['id_barang'] === (int) $barang['id_barang'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_barang'])) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Merk<span class="text-danger">*</span></label>
-                    <select name="id_merk" id="update_id_merk" class="form-control select2 input-bold" required>
-                        <option value="">Pilih Merk...</option>
-                        <?php foreach ($merkOptions as $m): ?>
-                            <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= strtoupper(h($m['nama_merk'])) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Tipe<span class="text-danger">*</span></label>
-                    <select name="id_tipe" id="update_id_tipe" class="form-control select2 input-bold" required>
-                        <option value="">Pilih Tipe...</option>
-                        <?php foreach ($tipeOptions as $t): ?>
-                            <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= strtoupper(h($t['nama_tipe'])) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Jenis<span class="text-danger">*</span></label>
-                    <select name="id_jenis" class="form-control select2 input-bold" required>
-                        <option value="">Pilih Jenis...</option>
-                        <?php foreach ($jenisOptions as $j): ?>
-                            <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= strtoupper(h($j['nama_jenis'])) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Branch Lokasi Saat Ini</label>
-                    <select name="id_branch" class="form-control select2 input-bold">
-                        <?php foreach ($branchOptions as $b): ?>
-                            <option value="<?= (int) $b['id_branch'] ?>" <?= (int) $b['id_branch'] === (int) $barang['id_branch'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_branch'])) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">User Pengguna<span class="text-danger">*</span></label>
-                    <input type="text" name="user" class="form-control input-bold text-uppercase" value="<?= strtoupper(h($pemilikBarang)) ?>" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Status Bermasalah<span class="text-danger">*</span></label>
-                    <select name="bermasalah" id="updateBermasalahSelect" class="form-control input-bold" required>
-                        <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>TIDAK</option>
-                        <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>IYA</option>
-                    </select>
-                </div>
-                <div class="col-md-6" id="updateKeteranganMasalahDiv" style="<?= ($barang['bermasalah'] === 'Iya') ? '' : 'display:none;' ?>">
-                    <label class="label-bold">Keterangan Masalah</label>
-                    <textarea name="keterangan_masalah" class="form-control input-bold text-uppercase" placeholder="Jelaskan masalah barang"><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Tanggal Terima</label>
-                    <input type="date" name="tanggal_terima" class="form-control input-bold" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="label-bold">Update Foto Barang</label>
-                    <input type="file" name="foto" class="form-control input-bold">
+                <div class="modern-card-body">
+                    
+                    <div class="form-section-title"><i class="bi bi-tag text-muted"></i> Identitas & Spesifikasi</div>
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="modern-label">No Asset</label>
+                            <input type="text" name="no_asset" class="form-control modern-input text-uppercase" value="<?= h($barang['no_asset'] ?? '') ?>" placeholder="Opsional / Boleh dikosongkan">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Serial Number <span class="text-danger">*</span></label>
+                            <input type="text" name="serial_number" class="form-control modern-input text-uppercase" value="<?= h($barang['serial_number'] ?? '') ?>" placeholder="Wajib diisi" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Kategori Barang <span class="text-danger">*</span></label>
+                            <select name="id_barang" id="update_id_barang" class="form-control select2 modern-input" required>
+                                <option value="">Pilih Barang...</option>
+                                <?php foreach ($barangOptions as $b): ?>
+                                    <option value="<?= (int) $b['id_barang'] ?>" <?= (int) $b['id_barang'] === (int) $barang['id_barang'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_barang'])) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Jenis <span class="text-danger">*</span></label>
+                            <select name="id_jenis" class="form-control select2 modern-input" required>
+                                <option value="">Pilih Jenis...</option>
+                                <?php foreach ($jenisOptions as $j): ?>
+                                    <option value="<?= (int) $j['id_jenis'] ?>" <?= (int) $j['id_jenis'] === (int) $barang['id_jenis'] ? 'selected' : '' ?>><?= strtoupper(h($j['nama_jenis'])) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Merk <span class="text-danger">*</span></label>
+                            <select name="id_merk" id="update_id_merk" class="form-control select2 modern-input" required>
+                                <option value="">Pilih Merk...</option>
+                                <?php foreach ($merkOptions as $m): ?>
+                                    <option value="<?= (int) $m['id_merk'] ?>" <?= (int) $m['id_merk'] === (int) $barang['id_merk'] ? 'selected' : '' ?>><?= strtoupper(h($m['nama_merk'])) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Tipe <span class="text-danger">*</span></label>
+                            <select name="id_tipe" id="update_id_tipe" class="form-control select2 modern-input" required>
+                                <option value="">Pilih Tipe...</option>
+                                <?php foreach ($tipeOptions as $t): ?>
+                                    <option value="<?= (int) $t['id_tipe'] ?>" <?= (int) $t['id_tipe'] === (int) $barang['id_tipe'] ? 'selected' : '' ?>><?= strtoupper(h($t['nama_tipe'])) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-section-title"><i class="bi bi-geo-alt text-muted"></i> Lokasi & Pengguna</div>
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <label class="modern-label">Branch Lokasi Saat Ini</label>
+                            <select name="id_branch" class="form-control select2 modern-input">
+                                <?php foreach ($branchOptions as $b): ?>
+                                    <option value="<?= (int) $b['id_branch'] ?>" <?= (int) $b['id_branch'] === (int) $barang['id_branch'] ? 'selected' : '' ?>><?= strtoupper(h($b['nama_branch'])) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Nama User Pengguna <span class="text-danger">*</span></label>
+                            <input type="text" name="user" class="form-control modern-input text-uppercase" value="<?= strtoupper(h($pemilikBarang)) ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="form-section-title"><i class="bi bi-clipboard-check text-muted"></i> Kondisi & Status</div>
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="modern-label">Status Bermasalah <span class="text-danger">*</span></label>
+                            <select name="bermasalah" id="updateBermasalahSelect" class="form-control modern-input" required>
+                                <option value="Tidak" <?= ($barang['bermasalah'] ?? '') === 'Tidak' ? 'selected' : '' ?>>Kondisi Normal (TIDAK)</option>
+                                <option value="Iya" <?= ($barang['bermasalah'] ?? '') === 'Iya' ? 'selected' : '' ?>>Ada Kendala (IYA)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="modern-label">Tanggal Terima / Pembelian</label>
+                            <input type="date" name="tanggal_terima" class="form-control modern-input" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-12" id="updateKeteranganMasalahDiv" style="<?= ($barang['bermasalah'] === 'Iya') ? '' : 'display:none;' ?>">
+                            <label class="modern-label">Keterangan Masalah / Kendala</label>
+                            <textarea name="keterangan_masalah" class="form-control modern-input" rows="3" placeholder="Jelaskan detail masalah pada perangkat ini..."><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="modern-label">Update Foto Barang</label>
+                            <input type="file" name="foto" class="form-control modern-input" accept=".jpg,.jpeg,.png,.webp">
+                            <small class="text-muted d-block mt-1">Kosongkan jika tidak ingin mengubah foto. Maksimal 2MB.</small>
+                        </div>
+                    </div>
+
                 </div>
             </div>
-            <div class="mt-4 text-end">
-                <button type="submit" class="btn btn-warning btn-lg fw-black border-dark border-2 px-5"><i class="bi bi-save me-1"></i> SIMPAN PERUBAHAN</button>
+
+            <div class="text-end mb-4">
+                <button type="submit" class="btn btn-modern-primary btn-lg"><i class="bi bi-save me-2"></i> Simpan Perubahan</button>
             </div>
 
 
         <?php elseif ($type === 'logistik'): ?>
             <?php if (!$pernahDikirim || $sudahDiterima): ?>
 
-                <!-- TAMPILAN PENGIRIMAN LOGISTIK (HO KE CABANG) -->
-                <div class="mb-4">
-                    <div class="d-flex gap-2 flex-wrap">
-                        <span id="stepLabel1" class="badge rounded-pill bg-primary fs-6 fw-bold px-3 py-2">1. Konsep Surat Tanda Terima</span>
-                        <span id="stepLabel2" class="badge rounded-pill bg-secondary text-white fs-6 fw-bold px-3 py-2">2. Form Upload Resi</span>
-                    </div>
+                <!-- ==========================================
+                     FORM LOGISTIK (HO KE CABANG) - Redesign
+                     ========================================== -->
+                <div class="mb-4 d-flex gap-2">
+                    <span id="stepLabel1" class="step-indicator step-active"><i class="bi bi-1-circle"></i> Konsep Surat & Label</span>
+                    <span id="stepLabel2" class="step-indicator step-pending"><i class="bi bi-2-circle"></i> Upload Resi Ekspedisi</span>
                 </div>
 
+                <!-- STEP 1: Surat Jalan -->
                 <div id="logistikStep1">
-                    <div class="alert alert-info fw-black border-info border-2" style="background-color: #cff4fc;">
-                        <i class="bi bi-info-circle-fill me-2 text-primary"></i> Isi data Tanda Terima Pengiriman Barang terlebih dahulu, lalu CETAK TANDA TERIMA. Nanti otomatis diarahkan ke Form Pengiriman.
-                    </div>
-
-                    <div class="card border-dark mb-4 border-2">
-                        <div class="card-header card-header-bold text-center">
-                            TANDA TERIMA PENGIRIMAN BARANG - HO KE CABANG
+                    <div class="modern-card">
+                        <div class="modern-card-header justify-content-between">
+                            <span><i class="bi bi-envelope-paper"></i> Tanda Terima Pengiriman Barang</span>
                         </div>
-                        <div class="card-body" style="background-color: #f8f9fa;">
-                            <div class="row g-4">
-                                <!-- Ekspedisi -->
+                        <div class="modern-card-body">
+                            
+                            <!-- Bagian Pengirim & Ekspedisi -->
+                            <div class="row g-4 mb-4 pb-4" style="border-bottom: 1px dashed var(--border-color);">
                                 <div class="col-md-6">
-                                    <label class="label-bold">Ekspedisi<span class="text-danger">*</span></label>
-                                    <select id="receipt_ekspedisi" class="form-control select2 input-bold" required>
-                                        <option value="">-- PILIH EKSPEDISI --</option>
+                                    <label class="modern-label">Ekspedisi <span class="text-danger">*</span></label>
+                                    <select id="receipt_ekspedisi" class="form-control select2 modern-input" required>
+                                        <option value="">-- Pilih Ekspedisi --</option>
                                         <?php foreach ($ekspedisiOptions as $ex): ?>
                                             <option value="<?= strtoupper(h($ex['nama_ekspedisi'])) ?>"><?= strtoupper(h($ex['nama_ekspedisi'])) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-
-                                <!-- Charge / Branch Penanggung -->
                                 <div class="col-md-6">
-                                    <label class="label-bold">Charge (Branch Penanggung)</label>
-                                    <select id="receipt_charge" class="form-control select2 input-bold">
-                                        <option value="">-- PILIH BRANCH --</option>
+                                    <label class="modern-label">Charge (Tujuan Branch Utama)</label>
+                                    <select id="receipt_charge" class="form-control select2 modern-input">
+                                        <option value="">-- Pilih Cabang --</option>
                                         <?php foreach ($branchOptions as $br): ?>
                                             <option value="<?= (int)$br['id_branch'] ?>" data-label="<?= strtoupper(h($br['nama_branch'])) ?>">
                                                 TO HAP <?= strtoupper(h($br['nama_branch'])) ?>
@@ -442,74 +604,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-
-                                <!-- Tabel Barang -->
-                                <div class="col-12 mt-4">
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-bordered-dark" id="receipt_table">
-                                            <thead class="table-dark-bold text-center">
-                                                <tr>
-                                                    <th style="width:5%;">NO</th>
-                                                    <th>DESKRIPSI BARANG</th>
-                                                    <th>HOSTNAME</th>
-                                                    <th style="width:10%;">QTY</th>
-                                                    <th>CATATAN</th>
-                                                    <th style="width:5%;"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;">1</td>
-                                                    <td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="<?= h($deskripsiAuto) ?>"></td>
-                                                    <td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..."></td>
-                                                    <td><input type="number" id="receipt_qty" class="form-control input-bold text-center fw-black" value="1" min="1" required></td>
-                                                    <td><input type="text" id="receipt_catatan" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>
-                                                    <td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div class="mt-2 text-start">
-                                        <button type="button" id="btnAddRow" class="btn btn-dark fw-bold border-2"><i class="bi bi-plus-lg me-1"></i> TAMBAH BARIS</button>
-                                    </div>
-                                </div>
-
-                                <!-- Detail Tambahan -->
                                 <div class="col-md-6">
-                                    <label class="label-bold">Asuransi</label>
-                                    <input type="text" id="receipt_asuransi" class="form-control input-bold text-uppercase">
+                                    <label class="modern-label">Pengirim (HO)</label>
+                                    <input type="text" id="receipt_pengirim" class="form-control modern-input fw-bold" value="DENI PRATAMA (IT HEAD OFFICE)" readonly>
                                 </div>
-
                                 <div class="col-md-6">
-                                    <label class="label-bold">User (Pemilik Barang)</label>
-                                    <input type="text" id="receipt_user" class="form-control input-bold text-uppercase fw-black text-primary" value="<?= strtoupper(h($pemilikBarang)) ?>" readonly style="background-color: #e9ecef;">
+                                    <label class="modern-label">Penerima (User Cabang)</label>
+                                    <input type="text" id="receipt_penerima" class="form-control modern-input" placeholder="Otomatis terisi..." readonly>
                                 </div>
-
-                                <!-- Pengirim (Dikunci ke Deni Pratama / HO) -->
                                 <div class="col-md-6">
-                                    <label class="label-bold">Pengirim (HO)</label>
-                                    <input type="text" id="receipt_pengirim" class="form-control input-bold fw-black text-uppercase text-danger" value="DENI PRATAMA (IT HEAD OFFICE)" readonly style="background:#e9ecef;">
+                                    <label class="modern-label">Pemilik Asset / User</label>
+                                    <input type="text" id="receipt_user" class="form-control modern-input" value="<?= strtoupper(h($pemilikBarang)) ?>" readonly>
                                 </div>
-
-                                <!-- Penerima (Otomatis berdasarkan Charge/Tujuan) -->
                                 <div class="col-md-6">
-                                    <label class="label-bold">Penerima (Cabang Tujuan)</label>
-                                    <input type="text" id="receipt_penerima" class="form-control input-bold fw-black text-uppercase text-primary" placeholder="OTOMATIS SAAT CHARGE DIPILIH..." readonly style="background:#e9ecef;">
-                                    <small class="text-muted fw-bold">Otomatis dari user cabang tujuan</small>
+                                    <label class="modern-label">Asuransi (Opsional)</label>
+                                    <input type="text" id="receipt_asuransi" class="form-control modern-input text-uppercase" placeholder="Isi jika menggunakan asuransi">
                                 </div>
+                            </div>
+
+                            <!-- Tabel Daftar Barang (Desain Bersih) -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="modern-label mb-0"><i class="bi bi-box"></i> Detail Barang yang Dikirim</label>
+                                <button type="button" id="btnAddRow" class="btn btn-sm btn-modern-outline"><i class="bi bi-plus"></i> Tambah Baris</button>
+                            </div>
+                            
+                            <div class="modern-table-wrapper mb-4">
+                                <table class="table modern-table" id="receipt_table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:5%; text-align:center;">No</th>
+                                            <th style="width:35%;">Deskripsi Item</th>
+                                            <th style="width:25%;">Hostname (SN)</th>
+                                            <th style="width:10%; text-align:center;">Qty</th>
+                                            <th style="width:20%;">Catatan</th>
+                                            <th style="width:5%; text-align:center;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-center align-middle row-no fw-bold text-muted">1</td>
+                                            <td><input type="text" class="table-input row-desc text-uppercase" placeholder="Deskripsi barang..." value="<?= h($deskripsiAuto) ?>"></td>
+                                            <td><input type="text" class="table-input row-host text-uppercase" placeholder="Hostname / SN..."></td>
+                                            <td><input type="number" id="receipt_qty" class="table-input text-center fw-bold" value="1" min="1" required></td>
+                                            <td><input type="text" id="receipt_catatan" class="table-input text-uppercase" placeholder="Catatan opsional..."></td>
+                                            <td class="text-center align-middle"><button type="button" class="btn-remove-row-modern btn-remove-row" title="Hapus baris"><i class="bi bi-trash"></i></button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="alert alert-light border text-muted small mb-0 rounded-3">
+                                <i class="bi bi-info-circle me-1"></i> Pastikan detail item sesuai dengan barang fisik yang akan di-packing.
                             </div>
                         </div>
                     </div>
 
-                    <div class="text-end">
-                        <button type="button" id="btnGeneratePdf" class="btn btn-danger btn-lg fw-black px-5 py-3 rounded-pill shadow-sm border-2 border-dark">
-                            <i class="bi bi-printer-fill me-2"></i> CETAK TANDA TERIMA & LABEL PACKING
+                    <div class="text-end mb-5">
+                        <button type="button" id="btnGeneratePdf" class="btn btn-modern-primary btn-lg">
+                            Cetak Tanda Terima & Lanjut <i class="bi bi-arrow-right ms-2"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- STEP 2 -->
+                <!-- STEP 2: Form Upload Resi -->
                 <div id="logistikStep2" style="display:none;">
+                    
                     <input type="hidden" name="form_type" value="logistik">
                     <input type="hidden" name="pdf_generated" id="pdf_generated" value="0">
                     <input type="hidden" name="receipt_hostname" id="receipt_hostname_hidden">
@@ -525,90 +684,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <input type="hidden" name="receipt_pengirim" id="receipt_pengirim_hidden">
                     <input type="hidden" name="receipt_penerima_branch" id="receipt_penerima_branch">
 
-                    <div class="alert alert-warning fw-black border-warning border-2" style="background-color: #fff3cd;">
-                        <i class="bi bi-check-circle-fill me-2 text-success"></i> Dokumen berhasil dicetak. Silakan isi form di bawah ini untuk validasi sistem.
-                    </div>
-
-                    <div class="card border-dark border-2">
-                        <div class="card-body bg-white">
+                    <div class="modern-card">
+                        <div class="modern-card-header">
+                            <i class="bi bi-send text-success"></i> Form Pengiriman Ekspedisi
+                        </div>
+                        <div class="modern-card-body">
                             <div class="row g-4">
                                 <div class="col-md-6">
-                                    <label class="label-bold">Tanggal Keluar<span class="text-danger">*</span></label>
-                                    <input type="date" name="tanggal_keluar" class="form-control input-bold" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                                    <label class="modern-label">Tanggal Keluar Barang <span class="text-danger">*</span></label>
+                                    <input type="date" name="tanggal_keluar" class="form-control modern-input" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
                                 </div>
-
                                 <div class="col-md-6">
-                                    <label class="label-bold">Tujuan Pengiriman (Cabang)<span class="text-danger">*</span></label>
-                                    <select name="tujuan" class="form-control select2 input-bold" required>
-                                        <option value="">-- PILIH TUJUAN --</option>
+                                    <label class="modern-label">Tujuan Pengiriman (Branch) <span class="text-danger">*</span></label>
+                                    <select name="tujuan" class="form-control select2 modern-input" required>
+                                        <option value="">-- Pilih Tujuan --</option>
                                         <?php foreach ($tujuanOptions as $bt): ?>
                                             <option value="<?= (int) $bt['id_branch'] ?>"><?= strtoupper(h($bt['nama_branch'])) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-
                                 <div class="col-md-6">
-                                    <label class="label-bold">Jasa Pengiriman<span class="text-danger">*</span></label>
-                                    <input type="text" name="jasa_pengiriman" class="form-control input-bold fw-black text-primary" readonly style="background-color: #e9ecef;" required>
+                                    <label class="modern-label">Jasa Pengiriman</label>
+                                    <input type="text" name="jasa_pengiriman" class="form-control modern-input text-uppercase fw-bold text-muted" readonly required>
                                 </div>
-
                                 <div class="col-md-6">
-                                    <label class="label-bold">Nomor Resi Keluar<span class="text-danger">*</span></label>
-                                    <input type="text" name="nomor_resi" class="form-control input-bold text-uppercase" placeholder="INPUT NOMOR RESI..." required>
+                                    <label class="modern-label">Nomor Resi Keluar <span class="text-danger">*</span></label>
+                                    <input type="text" name="nomor_resi" class="form-control modern-input text-uppercase" placeholder="Input nomor resi dari kurir..." required>
                                 </div>
-
                                 <div class="col-md-12">
-                                    <label class="label-bold">Foto Resi Keluar / Bukti Kirim<span class="text-danger">*</span></label>
-                                    <input type="file" name="foto_resi" class="form-control input-bold" accept=".jpg,.jpeg,.png,.gif,.webp" required>
+                                    <label class="modern-label">Upload Foto Bukti Resi <span class="text-danger">*</span></label>
+                                    <input type="file" name="foto_resi" class="form-control modern-input" accept=".jpg,.jpeg,.png,.webp" required>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="mt-4 text-end">
-                        <button type="button" id="btnBackToStep1" class="btn btn-secondary btn-lg me-2 fw-black border-dark border-2"><i class="bi bi-arrow-left me-1"></i> KEMBALI</button>
-                        <button type="submit" class="btn btn-success btn-lg fw-black px-5 rounded-pill shadow-sm border-2 border-dark" id="btnSimpanPengirimanUser">
-                            <span class="btn-text"><i class="bi bi-send-fill me-2"></i> KIRIM BARANG SEKARANG</span>
+                    <div class="d-flex justify-content-between mb-5">
+                        <button type="button" id="btnBackToStep1" class="btn btn-modern-outline"><i class="bi bi-arrow-left me-2"></i> Kembali</button>
+                        <button type="submit" class="btn btn-modern-primary btn-lg" id="btnSimpanPengirimanUser">
+                            <span class="btn-text"><i class="bi bi-send-fill me-2"></i> Kirim Barang Sekarang</span>
                             <span class="btn-loading d-none">
-                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> LOADING...
+                                <span class="spinner-border spinner-border-sm me-2"></span> Menyimpan...
                             </span>
                         </button>
                     </div>
                 </div>
 
             <?php elseif ($sedangDikirim): ?>
+                <!-- FORM PENERIMAAN -->
                 <input type="hidden" name="form_type" value="penerimaan">
-                <div class="alert alert-warning fw-black border-warning border-2" style="background-color: #fff3cd;">
-                    <i class="bi bi-box-seam text-primary me-2"></i> Barang sedang dikirim. Isi form di bawah untuk konfirmasi penerimaan.
-                </div>
-                <div class="card border-dark border-2">
-                    <div class="card-body bg-light">
+                <div class="modern-card border-warning">
+                    <div class="modern-card-header bg-warning text-dark bg-opacity-10">
+                        <i class="bi bi-box-seam me-2"></i> Konfirmasi Penerimaan Barang
+                    </div>
+                    <div class="modern-card-body">
                         <div class="row g-4">
                             <div class="col-md-6">
-                                <label class="label-bold">Tanggal Diterima<span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal_diterima" class="form-control input-bold" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                                <label class="modern-label">Tanggal Diterima <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal_diterima" class="form-control modern-input" required min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
                             </div>
                             <div class="col-md-6">
-                                <label class="label-bold">Nama Penerima<span class="text-danger">*</span></label>
-                                <input type="text" name="nama_penerima" class="form-control input-bold text-uppercase" placeholder="NAMA PENERIMA BARANG..." required>
+                                <label class="modern-label">Nama Penerima Paket <span class="text-danger">*</span></label>
+                                <input type="text" name="nama_penerima" class="form-control modern-input text-uppercase" placeholder="Nama yang menerima barang..." required>
                             </div>
                             <div class="col-md-12">
-                                <label class="label-bold">Upload Foto Barang Diterima<span class="text-danger">*</span></label>
-                                <input type="file" name="foto_barang_diterima" class="form-control input-bold" accept=".jpg,.jpeg,.png,.gif,.webp" required>
+                                <label class="modern-label">Upload Foto Barang Diterima <span class="text-danger">*</span></label>
+                                <input type="file" name="foto_barang_diterima" class="form-control modern-input" accept=".jpg,.jpeg,.png,.webp" required>
                             </div>
+                        </div>
+                        <div class="mt-4 text-end">
+                            <button type="submit" class="btn btn-success btn-lg" style="border-radius:8px; font-weight:600;">
+                                <i class="bi bi-check-circle me-2"></i> Konfirmasi Selesai
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-4 text-end">
-                    <button type="submit" class="btn btn-success btn-lg fw-black px-5 rounded-pill shadow-sm border-2 border-dark">
-                        <i class="bi bi-check-circle-fill me-2"></i> KONFIRMASI TERIMA BARANG
-                    </button>
-                </div>
-
             <?php else: ?>
-                <div class="alert alert-success fw-black border-success border-2">
-                    <i class="bi bi-check-all me-2"></i> Status pengiriman saat ini: <?= strtoupper(h($pengirimanTerakhir['status_pengiriman'])) ?>. Proses logistik selesai.
+                <div class="alert alert-success d-flex align-items-center" style="border-radius: 12px; border: 1px solid #a7f3d0; background-color: #ecfdf5; color: #065f46;">
+                    <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                    <div>
+                        <div class="fw-bold">Proses Logistik Selesai</div>
+                        <small>Status pengiriman saat ini: <?= strtoupper(h($pengirimanTerakhir['status_pengiriman'])) ?></small>
+                    </div>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
@@ -620,11 +778,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             const ekspedisi = $('#receipt_ekspedisi').val().trim();
 
             if (!qty || qty < 1) {
-                Swal.fire('Validasi', 'Qty harus minimal 1.', 'warning');
+                Swal.fire('Peringatan', 'Jumlah (Qty) pada baris pertama harus minimal 1.', 'warning');
                 return false;
             }
             if (!ekspedisi) {
-                Swal.fire('Validasi', 'Ekspedisi harus dipilih.', 'warning');
+                Swal.fire('Peringatan', 'Silakan pilih Ekspedisi terlebih dahulu.', 'warning');
                 return false;
             }
             return true;
@@ -638,12 +796,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             function autoFillPenerima(idBranch) {
                 const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
                 if (found) {
-                    // Set Penerima
                     $('#receipt_penerima').val(found.username.toUpperCase());
                     $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
                     $('#receipt_penerima_hidden').val(found.username.toUpperCase());
-
-                    // Set User juga agar otomatis sinkron!
                 } else {
                     $('#receipt_penerima').val('');
                     $('#receipt_penerima_branch').val('');
@@ -716,24 +871,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
                 $('#receipt_pengirim_hidden').val('DENI PRATAMA');
                 $('#pdf_generated').val('1');
-                // --- TAMBAHAN KODE: Auto-fill Jasa Pengiriman ke Step 2 ---
+                
+                // Auto-fill Jasa Pengiriman ke Step 2
                 const ekspedisiTerpilih = $('#receipt_ekspedisi').val();
                 $('input[name="jasa_pengiriman"]').val(ekspedisiTerpilih);
-                // ----------------------------------------------------------
 
+                // UI Changes
                 $('#logistikStep1').hide();
                 $('#logistikStep2').show();
-                $('#logistikStep1').hide();
-                $('#logistikStep2').show();
-                $('#stepLabel1').removeClass('bg-primary').addClass('bg-success');
-                $('#stepLabel2').removeClass('bg-secondary text-white').addClass('bg-primary');
+                
+                $('#stepLabel1').removeClass('step-active').addClass('step-done');
+                $('#stepLabel2').removeClass('step-pending').addClass('step-active');
             });
 
             $('#btnBackToStep1').on('click', function() {
                 $('#logistikStep2').hide();
                 $('#logistikStep1').show();
-                $('#stepLabel1').removeClass('bg-success').addClass('bg-primary');
-                $('#stepLabel2').removeClass('bg-primary').addClass('bg-secondary text-white');
+                
+                $('#stepLabel1').removeClass('step-done').addClass('step-active');
+                $('#stepLabel2').removeClass('step-active').addClass('step-pending');
             });
 
             function renumberRows() {
@@ -744,12 +900,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             function addRow(desc = '', host = '') {
                 const $tr = $('<tr>');
-                $tr.append('<td class="text-center fw-black align-middle row-no" style="font-size: 1.1rem;"></td>');
-                $tr.append('<td><input type="text" class="form-control input-bold row-desc text-uppercase" placeholder="DESKRIPSI ITEM" value="' + $('<div/>').text(desc).html() + '"></td>');
-                $tr.append('<td><input type="text" class="form-control input-bold row-host text-uppercase" placeholder="ISI HOSTNAME JIKA ADA..." value="' + $('<div/>').text(host).html() + '"></td>');
-                $tr.append('<td><input type="number" class="form-control input-bold text-center fw-black" value="1" min="1"></td>');
-                $tr.append('<td><input type="text" class="form-control input-bold text-uppercase" placeholder="ISI CATATAN..."></td>');
-                $tr.append('<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-danger btn-remove-row fw-bold">X</button></td>');
+                $tr.append('<td class="text-center align-middle row-no fw-bold text-muted"></td>');
+                $tr.append('<td><input type="text" class="table-input row-desc text-uppercase" placeholder="Deskripsi barang..." value="' + $('<div/>').text(desc).html() + '"></td>');
+                $tr.append('<td><input type="text" class="table-input row-host text-uppercase" placeholder="Hostname / SN..." value="' + $('<div/>').text(host).html() + '"></td>');
+                $tr.append('<td><input type="number" class="table-input text-center fw-bold" value="1" min="1"></td>');
+                $tr.append('<td><input type="text" class="table-input text-uppercase" placeholder="Catatan opsional..."></td>');
+                $tr.append('<td class="text-center align-middle"><button type="button" class="btn-remove-row-modern btn-remove-row" title="Hapus baris"><i class="bi bi-trash"></i></button></td>');
                 $('#receipt_table tbody').append($tr);
                 renumberRows();
                 $tr.find('.row-desc').focus();

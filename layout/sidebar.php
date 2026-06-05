@@ -69,30 +69,37 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
 
 <style>
     :root {
+        /* Warna yang disamakan dengan tema Dashboard Anda */
+        --orange-1: #E64312;
+        --orange-2: #F25C05;
+        --dark-1: #231F20;
+        --text-main: #2d3136;
+        --text-soft: #6b7280;
+        --surface-bg: #F4F6F9;
+        --border-soft: #e5e7eb;
+        
         --sb-width: 280px;
         --sb-transition: 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
 
-    /* SIDEBAR BASE */
+    /* SIDEBAR BASE - Tema Terang tanpa Scroll */
     .sidebar-shell {
         width: var(--sb-width);
         min-width: var(--sb-width);
         min-height: 100vh;
-        background: radial-gradient(circle at top left, rgba(255, 193, 7, 0.08), transparent 26%),
-                    linear-gradient(180deg, #343940 0%, #3d434b 45%, #464d56 100%);
-        color: #fff;
-        box-shadow: 8px 0 28px rgba(0, 0, 0, 0.08);
+        background: #ffffff; /* Background Putih Bersih */
+        color: var(--text-main);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.03);
         position: sticky;
         top: 0;
         z-index: 1040;
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        border-right: 1px solid var(--border-soft);
         transition: margin-left var(--sb-transition), transform var(--sb-transition);
-        overflow-y: auto;
+        
+        /* SCROLL DIMATIKAN SESUAI PERMINTAAN */
+        overflow-y: hidden;
         overflow-x: hidden;
     }
-
-    .sidebar-shell::-webkit-scrollbar { width: 5px; }
-    .sidebar-shell::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
 
     /* DESKTOP HIDE */
     .sidebar-shell.sidebar-hidden {
@@ -113,36 +120,27 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
             left: 0;
             top: 0;
             margin-left: 0 !important;
-            transform: translateX(-100%); /* Sembunyi ke kiri di HP */
-        }
-        .sidebar-shell.show-mobile {
-            transform: translateX(0); /* Muncul di HP */
-        }
-        .sidebar-shell.sidebar-hidden {
             transform: translateX(-100%);
         }
-        .content-with-sidebar {
-            margin-left: 0 !important;
-        }
+        .sidebar-shell.show-mobile { transform: translateX(0); }
+        .sidebar-shell.sidebar-hidden { transform: translateX(-100%); }
+        .content-with-sidebar { margin-left: 0 !important; }
     }
 
-    /* BACKDROP (Layar gelap saat sidebar buka di HP) */
+    /* BACKDROP */
     .sidebar-backdrop {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.5);
+        background: rgba(35, 31, 32, 0.4);
         backdrop-filter: blur(2px);
         z-index: 1035;
         display: none;
         opacity: 0;
         transition: opacity 0.3s ease;
     }
-    .sidebar-backdrop.active {
-        display: block;
-        opacity: 1;
-    }
+    .sidebar-backdrop.active { display: block; opacity: 1; }
 
-    /* FLOATING EXPAND BUTTON */
+    /* FLOATING EXPAND BUTTON - Tema Dark/Orange */
     .sidebar-expand-btn {
         position: fixed;
         top: 18px;
@@ -152,60 +150,92 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         height: 46px;
         border: none;
         border-radius: 14px;
-        background: linear-gradient(135deg, #111111, #ff8f00);
+        background: var(--dark-1);
         color: #fff;
-        box-shadow: 0 14px 28px rgba(255, 143, 0, 0.18);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        box-shadow: 0 8px 20px rgba(35, 31, 32, 0.2);
+        display: inline-flex; align-items: center; justify-content: center;
         font-size: 1.15rem;
-        opacity: 0;
-        visibility: hidden;
+        opacity: 0; visibility: hidden;
         transform: scale(0.8);
         transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         cursor: pointer;
     }
-    .sidebar-expand-btn.show {
-        opacity: 1;
-        visibility: visible;
-        transform: scale(1);
-    }
+    .sidebar-expand-btn:hover { background: var(--orange-1); }
+    .sidebar-expand-btn.show { opacity: 1; visibility: visible; transform: scale(1); }
 
-    /* BRAND & USER SECTION (Keep your original styles) */
-    .sidebar-brand { padding: 1.15rem 1rem 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(6px); position: sticky; top: 0; z-index: 10; }
+    /* BRAND SECTION */
+    .sidebar-brand { 
+        padding: 1.15rem 1rem 1rem; 
+        border-bottom: 1px solid var(--border-soft); 
+        background: #ffffff; 
+        position: sticky; top: 0; z-index: 10; 
+    }
     .sidebar-brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
-    .sidebar-brand-title { font-weight: 800; font-size: 1.1rem; color: #fff; display: flex; align-items: center; gap: .6rem; }
-    .sidebar-brand-title i { color: #ffc107; font-size: 1.25rem; background: rgba(255, 193, 7, 0.1); padding: 6px; border-radius: 8px; }
-    .sidebar-brand-subtitle { font-size: 0.78rem; color: rgba(255, 255, 255, 0.64); }
-    .sidebar-toggle-btn { width: 38px; height: 38px; border: none; border-radius: 12px; background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.7); cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .sidebar-user { margin: 1rem .85rem 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 1rem; }
-    .sidebar-user-avatar { width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, rgba(255, 193, 7, 0.22), rgba(255, 193, 7, 0.10)); color: #ffd54f; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; border: 1px solid rgba(255, 193, 7, 0.18); }
-    .sidebar-user-name { font-weight: 700; font-size: .95rem; color: #fff; line-height: 1.25; }
-    .sidebar-user-email { color: rgba(255, 255, 255, 0.58); font-size: .78rem; }
-    .sidebar-user-role { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: #ffe082; background: rgba(255, 193, 7, 0.10); border: 1px solid rgba(255, 193, 7, 0.18); border-radius: 999px; padding: .34rem .62rem; margin-top: .55rem; }
-    
-    /* NAV & MENU (Keep your original styles) */
+    .sidebar-brand-title { font-weight: 800; font-size: 1.15rem; color: var(--dark-1); display: flex; align-items: center; gap: .6rem; }
+    .sidebar-brand-title i { color: var(--orange-1); font-size: 1.25rem; background: rgba(230, 67, 18, 0.1); padding: 6px; border-radius: 8px; }
+    .sidebar-brand-subtitle { font-size: 0.78rem; color: var(--text-soft); }
+    .sidebar-toggle-btn { width: 38px; height: 38px; border: none; border-radius: 12px; background: var(--surface-bg); color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;}
+    .sidebar-toggle-btn:hover { background: var(--border-soft); }
+
+    /* USER SECTION */
+    .sidebar-user { 
+        margin: 1rem .85rem 0; 
+        background: #ffffff; 
+        border: 1px solid var(--border-soft); 
+        border-radius: 16px; 
+        padding: 1rem; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+    }
+    .sidebar-user-avatar { width: 46px; height: 46px; border-radius: 14px; background: rgba(230, 67, 18, 0.1); color: var(--orange-1); display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+    .sidebar-user-name { font-weight: 800; font-size: .95rem; color: var(--dark-1); line-height: 1.25; }
+    .sidebar-user-email { color: var(--text-soft); font-size: .78rem; font-weight: 500;}
+    .sidebar-user-role { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; font-weight: 700; color: var(--dark-1); background: var(--surface-bg); border: 1px solid var(--border-soft); border-radius: 999px; padding: .34rem .7rem; margin-top: .6rem; }
+
+    /* NAV & MENU */
     .sidebar-nav-wrap { padding: 1rem .85rem 1rem; }
     .sidebar-group { margin-bottom: .85rem; }
-    .sidebar-group-button { width: 100%; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; background: rgba(255, 255, 255, 0.05); color: #fff; padding: .88rem .95rem; cursor: pointer; }
-    .sidebar-group-button.is-open { background: linear-gradient(135deg, rgba(255, 193, 7, 0.16), rgba(255, 193, 7, 0.08)); color: #fff6d1; }
-    .sidebar-group-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.07); color: #ffc107; }
-    .sidebar-group-arrow { transition: transform .3s ease; }
+    .sidebar-group-button { 
+        width: 100%; display: flex; align-items: center; justify-content: space-between; 
+        border: none; border-radius: 14px; 
+        background: transparent; color: var(--text-main); 
+        padding: .8rem .95rem; cursor: pointer; 
+        font-weight: 600; transition: all 0.2s;
+    }
+    .sidebar-group-button:hover { background: var(--surface-bg); }
+    .sidebar-group-button.is-open { background: var(--surface-bg); color: var(--orange-1); }
+    
+    .sidebar-group-icon { width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-bg); color: var(--text-soft); transition: 0.2s;}
+    .sidebar-group-button:hover .sidebar-group-icon { color: var(--dark-1); }
+    .sidebar-group-button.is-open .sidebar-group-icon { background: #ffffff; color: var(--orange-1); box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+    
+    .sidebar-group-arrow { transition: transform .3s ease; font-size: 0.85rem;}
     .sidebar-group-button.is-open .sidebar-group-arrow { transform: rotate(180deg); }
+    
     .sidebar-submenu { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s ease; }
     .sidebar-submenu.show { grid-template-rows: 1fr; }
     .sidebar-submenu-inner { overflow: hidden; padding-top: 0.5rem; }
     .sidebar-menu { list-style: none; padding: 0; margin: 0; }
-    .sidebar-link { display: flex; align-items: center; gap: .82rem; text-decoration: none; color: rgba(255, 255, 255, 0.86); padding: .82rem .9rem; border-radius: 14px; font-weight: 600; transition: 0.2s; }
-    .sidebar-link:hover { background: rgba(255, 255, 255, 0.07); transform: translateX(4px); color: #fff; }
-    .sidebar-link.active { background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); color: #212529; }
-    .sidebar-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.06); color: #ffc107; }
-    .sidebar-link.active .sidebar-icon { background: rgba(0,0,0,0.1); color: #212529; }
+    
+    .sidebar-link { 
+        display: flex; align-items: center; gap: .82rem; text-decoration: none; 
+        color: var(--text-soft); padding: .75rem .9rem; border-radius: 12px; 
+        font-weight: 600; transition: 0.2s; 
+    }
+    .sidebar-icon { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; color: inherit; font-size: 1.1rem; transition: 0.2s;}
+    
+    .sidebar-link:hover { background: var(--surface-bg); transform: translateX(4px); color: var(--orange-1); }
+    .sidebar-link.active { background: rgba(230, 67, 18, 0.08); color: var(--orange-1); }
+    .sidebar-link.active .sidebar-icon { background: #ffffff; box-shadow: 0 2px 6px rgba(230, 67, 18, 0.15); }
 
     /* FOOTER */
-    .sidebar-footer { margin-top: auto; padding: .9rem .85rem 1rem; border-top: 1px solid rgba(255, 255, 255, 0.06); background: rgba(0, 0, 0, 0.1); position: sticky; bottom: 0; }
-    .sidebar-logout { display: flex; align-items: center; gap: .8rem; text-decoration: none; color: #ffd1d1; padding: .84rem .9rem; border-radius: 16px; font-weight: 700; background: rgba(220, 53, 69, 0.10); border: 1px solid rgba(220, 53, 69, 0.16); transition: 0.2s; }
-    .sidebar-logout:hover { background: rgba(220, 53, 69, 0.18); transform: translateY(-2px); color: #fff; }
+    .sidebar-footer { margin-top: auto; padding: .9rem .85rem 1rem; border-top: 1px solid var(--border-soft); background: #ffffff; position: sticky; bottom: 0; }
+    .sidebar-logout { 
+        display: flex; align-items: center; gap: .8rem; text-decoration: none; 
+        color: #ef4444; padding: .8rem .9rem; border-radius: 14px; 
+        font-weight: 700; background: rgba(239, 68, 68, 0.1); transition: 0.2s; 
+    }
+    .sidebar-logout .sidebar-icon { background: transparent; }
+    .sidebar-logout:hover { background: #ef4444; transform: translateY(-2px); color: #fff; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);}
 </style>
 
 <!-- Tombol Expand (Muncul saat sidebar sembunyi) -->
@@ -241,10 +271,10 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                 <div class="sidebar-user-name"><?= h($user['username'] ?? 'User') ?></div>
                 <div class="sidebar-user-email"><?= h($user['email'] ?? '-') ?></div>
                 <div class="sidebar-user-email mt-1">
-                    <i class="bi bi-geo-alt-fill text-warning me-1"></i><?= h($branchName) ?>
+                    <i class="bi bi-geo-alt-fill text-danger me-1"></i><?= h($branchName) ?>
                 </div>
                 <div class="sidebar-user-role">
-                    <i class="bi bi-shield-lock-fill"></i>
+                    <i class="bi bi-shield-check text-primary"></i>
                     <span><?= h($role ?? '-') ?></span>
                 </div>
             </div>
@@ -377,9 +407,6 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         const content = document.getElementById('mainContent');
 
         const storageSidebar = 'itasset-sidebar-hidden';
-        const storageMain = 'itasset-menu-main';
-        const storageAdmin = 'itasset-menu-admin';
-        const storageMonitoring = 'itasset-menu-monitoring';
 
         if (content) content.classList.add('content-with-sidebar');
 
@@ -418,24 +445,14 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
         expandBtn.addEventListener('click', showSidebar);
         backdrop.addEventListener('click', hideSidebar);
 
-        // Submenu Logic
+        // Submenu Logic (Tidak lagi menyimpan state ke localStorage)
         document.querySelectorAll('.sidebar-group-button').forEach(btn => {
             const targetId = btn.getAttribute('data-menu-target');
             const submenu = document.getElementById(targetId);
-            let storageKey;
-                    if (targetId === 'mainMenu') storageKey = storageMain;
-                    else if (targetId === 'adminMenu') storageKey = storageAdmin;
-                    else if (targetId === 'monitoringMenu') storageKey = storageMonitoring;            
-
-            if (localStorage.getItem(storageKey) === 'open') {
-                submenu.classList.add('show');
-                btn.classList.add('is-open');
-            }
 
             btn.addEventListener('click', () => {
-                const isOpen = submenu.classList.toggle('show');
+                submenu.classList.toggle('show');
                 btn.classList.toggle('is-open');
-                localStorage.setItem(storageKey, isOpen ? 'open' : 'closed');
             });
         });
 

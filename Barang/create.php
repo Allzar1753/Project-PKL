@@ -164,29 +164,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 
+<!-- STYLE KHUSUS UNTUK FORM INI AGAR SINKRON DENGAN TEMA HEXINDO -->
+<style>
+    /* 1. Mengatur jarak vertikal antar form input */
+    #formCreate .col-md-6, 
+    #formCreate .col-md-12 {
+        margin-bottom: 1.2rem;
+    }
+
+    /* 2. Menyamakan tinggi Input Teks biasa */
+    .form-control {
+        border: 1px solid #E0E4E8;
+        border-radius: 6px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.95rem;
+        min-height: 42px; /* Tinggi standar agar sama dengan dropdown */
+        box-shadow: none !important;
+    }
+    .form-control:focus {
+        border-color: #E64312;
+        box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.1) !important;
+    }
+
+    /* 3. Menyamakan tinggi Select2 (Dropdown) agar sejajar dengan Input Teks */
+    .select2-container .select2-selection--single {
+        border: 1px solid #E0E4E8 !important;
+        border-radius: 6px !important;
+        height: 42px !important; /* Samakan tingginya */
+        display: flex !important;
+        align-items: center !important;
+        padding: 0.2rem 0.5rem;
+        box-shadow: none !important;
+    }
+    
+    /* Memperbaiki posisi panah dropdown Select2 */
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 40px !important;
+        right: 8px !important;
+    }
+    
+    /* Memperbaiki posisi tombol "X" (clear) pada Select2 */
+    .select2-selection__clear {
+        margin-right: 15px;
+        font-size: 1.2rem;
+    }
+
+    /* 4. Merapikan Label */
+    .form-label {
+        font-weight: 600;
+        color: #333333;
+        font-size: 0.88rem;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    
+    /* Bintang merah wajib isi */
+    .text-danger {
+        font-weight: bold;
+    }
+
+    /* 5. Catatan Info */
+    .alert-info-custom {
+        background-color: #F0F7FF;
+        border-left: 4px solid #0066CC;
+        color: #004085;
+        border-radius: 6px;
+        padding: 1rem;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* 6. Tombol Hexindo */
+    .btn-hexindo {
+        background-color: #E64312;
+        color: white;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        padding: 0.6rem 1.5rem;
+        transition: all 0.2s;
+    }
+    .btn-hexindo:hover {
+        background-color: #F25C05;
+        color: white;
+    }
+</style>
+
 <form id="formCreate" enctype="multipart/form-data">
     <div class="row g-3">
         <div class="col-12">
-            <div class="alert alert-info mb-0">
+            <div class="alert alert-info-custom mb-2">
+                <i class="bi bi-info-circle-fill me-2"></i> 
                 <b>Catatan:</b> Form create digunakan untuk menyimpan data barang yang akan dikirim ke branch inti.
                 Tanggal yang diinput adalah tanggal kirim.
             </div>
         </div>
 
         <div class="col-md-6">
-            <label>No Asset</label>
-            <input type="text" name="no_asset" class="form-control" placeholder="Boleh dikosongkan">
+            <label class="form-label">No Asset</label>
+            <input type="text" name="no_asset" class="form-control" placeholder="Boleh dikosongkan (Otomatis untuk CPU/Monitor)">
         </div>
 
         <div class="col-md-6">
-            <label>Serial Number / Service tag <span class="text-danger">*</span></label>
-            <input type="text" name="serial_number" class="form-control" required placeholder="Wajib diisi!">
+            <label class="form-label">Serial Number / Service Tag <span class="text-danger">*</span></label>
+            <input type="text" name="serial_number" class="form-control" required placeholder="Masukkan SN/Service Tag">
         </div>
 
         <div class="col-md-6">
-            <label>Barang <span class="text-danger">*</span></label>
+            <label class="form-label">Kategori Barang <span class="text-danger">*</span></label>
             <select name="id_barang" id="id_barang" class="form-control select2" required>
-                <option value="">Pilih Barang...</option>
+                <option value="">Pilih Kategori...</option>
                 <?php mysqli_data_seek($barang, 0);
                 while ($row = mysqli_fetch_assoc($barang)): ?>
                     <option value="<?= (int) $row['id_barang'] ?>"><?= h($row['nama_barang']) ?></option>
@@ -195,21 +282,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Merk <span class="text-danger">*</span></label>
+            <label class="form-label">Merk Barang <span class="text-danger">*</span></label>
             <select name="id_merk" id="id_merk" class="form-control select2" required>
-                <option value="">Pilih Merk...</option>
+                <option value="">Pilih Kategori Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
-            <label>Tipe <span class="text-danger">*</span></label>
+            <label class="form-label">Tipe / Spesifikasi <span class="text-danger">*</span></label>
             <select name="id_tipe" id="id_tipe" class="form-control select2" required>
-                <option value="">Pilih Tipe...</option>
+                <option value="">Pilih Merk Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
-            <label>Jenis <span class="text-danger">*</span></label>
+            <label class="form-label">Jenis Kepemilikan <span class="text-danger">*</span></label>
             <select name="id_jenis" class="form-control select2" required>
                 <option value="">Pilih Jenis...</option>
                 <?php mysqli_data_seek($jenis, 0);
@@ -220,12 +307,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>Tanggal Terima <span class="text-danger">*</span></label>
+            <label class="form-label">Tanggal Terima <span class="text-danger">*</span></label>
             <input type="date" name="tanggal_terima" class="form-control" required min="<?= date('Y-m-d') ?>">
         </div>
 
         <div class="col-md-6">
-            <label>Branch <span class="text-danger">*</span></label>
+            <label class="form-label">Lokasi Branch <span class="text-danger">*</span></label>
             <select name="id_branch" class="form-control select2" required>
                 <option value="">Pilih Branch...</option>
                 <?php mysqli_data_seek($branch, 0);
@@ -236,33 +323,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
-            <label>User Pengguna <span class="text-danger">*</span></label>
-            <input type="text" name="user" class="form-control" required placeholder="User pengguna">
+            <label class="form-label">Nama User Pengguna <span class="text-danger">*</span></label>
+            <input type="text" name="user" class="form-control" required placeholder="Masukkan nama pengguna alat">
         </div>
 
         <div class="col-md-6">
-            <label>Bermasalah <span class="text-danger">*</span></label>
+            <label class="form-label">Apakah Barang Bermasalah? <span class="text-danger">*</span></label>
             <select name="bermasalah" class="form-control select2" id="bermasalahSelect" required>
-                <option value="">Pilih...</option>
-                <option value="Tidak">Tidak</option>
-                <option value="Iya">Iya</option>
+                <option value="">Pilih Kondisi...</option>
+                <option value="Tidak">Tidak (Kondisi Normal)</option>
+                <option value="Iya">Iya (Rusak/Kendala)</option>
             </select>
         </div>
 
         <div class="col-md-12" id="keteranganMasalahDiv" style="display:none;">
-            <label>Keterangan Masalah</label>
-            <textarea name="keterangan_masalah" class="form-control" placeholder="Jelaskan masalah barang"></textarea>
+            <label class="form-label text-danger">Detail Keterangan Masalah <span class="text-danger">*</span></label>
+            <textarea name="keterangan_masalah" class="form-control" rows="3" placeholder="Jelaskan secara detail masalah atau kerusakan pada barang ini..."></textarea>
         </div>
 
-        <div class="col-md-6">
-            <label>Foto Barang <span class="text-danger">*</span></label>
+        <div class="col-md-12 border-top pt-3 mt-3">
+            <label class="form-label">Upload Foto Fisik Barang <span class="text-danger">*</span></label>
             <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
-            <img id="previewFoto" style="max-width:120px;margin-top:10px;display:none; border-radius: 8px;">
+            <div class="mt-2 text-muted small">Format: JPG, PNG, WEBP. Maksimal 2MB.</div>
+            <img id="previewFoto" class="shadow-sm border mt-3" style="max-height: 150px; display: none; border-radius: 8px; object-fit: cover;">
         </div>
 
-        <div class="col-md-12 text-end mt-4">
-            <button type="submit" class="btn btn-warning fw-bold rounded-pill px-4 text-dark shadow-sm" id="btnSimpanBarang">
-                <span class="btn-text"><i class="bi bi-save me-1"></i> Simpan</span>
+        <!-- Bagian Tombol Simpan -->
+        <div class="col-md-12 text-end mt-4 pt-3 border-top">
+            <!-- Tombol Batal untuk menutup modal -->
+            <button type="button" class="btn btn-light border px-4 me-2 rounded-2" data-bs-dismiss="modal">Batal</button>
+            <!-- Tombol Simpan (Tema Hexindo) -->
+            <button type="submit" class="btn btn-hexindo" id="btnSimpanBarang">
+                <span class="btn-text"><i class="bi bi-floppy me-1"></i> Simpan Data Aset</span>
                 <span class="btn-loading d-none">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Menyimpan...
                 </span>
@@ -271,6 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </form>
 
+<!-- INI ADALAH SCRIPT JAVASCRIPT YANG MEMBUAT FUNGSINYA BERJALAN -->
 <script>
     $(document).ready(function() {
 
@@ -311,7 +404,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 });
             } else {
-                $('#id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+                $('#id_merk').html('<option value="">Pilih Kategori Dulu...</option>').trigger('change');
             }
         });
 
@@ -333,8 +426,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
             }
         });
-
-        // SCRIPT AJAX SUBMIT DIHAPUS DARI SINI KARENA BIKIN DOUBLE SUBMIT
 
     }); 
 </script>

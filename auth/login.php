@@ -19,50 +19,32 @@ $success = get_flash('success');
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
+        /* ==========================================
+           TEMA BARU MODERN CLEAN (Dashboard Match)
+           ========================================== */
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --orange-4: #ffd166;
-            --orange-5: #fff3e0;
-
-            --dark-1: #111111;
-            --dark-2: #1f1f1f;
-            --dark-3: #2f2f2f;
-
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --border-soft: rgba(255, 152, 0, 0.14);
-
-            --surface: #ffffff;
-            --surface-soft: #fffaf3;
-            --shadow-soft: 0 16px 40px rgba(17, 17, 17, 0.08);
-            --shadow-strong: 0 22px 54px rgba(255, 122, 0, 0.16);
-
-            --radius-xl: 28px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
+            --orange-primary: #E64312;
+            --orange-hover: #F25C05;
+            --dark-main: #231F20;
+            --text-dark: #374151;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-body: #F4F6F9;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             min-height: 100vh;
             margin: 0;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            color: var(--text-main);
-            background:
-                radial-gradient(circle at top left, rgba(255, 176, 0, 0.18), transparent 24%),
-                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 20%),
-                linear-gradient(180deg, #fff8f1 0%, #fffaf5 34%, #ffffff 100%);
+            color: var(--text-dark);
+            background-color: var(--bg-body);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -71,49 +53,52 @@ $success = get_flash('success');
 
         .login-wrap {
             width: 100%;
-            max-width: 1120px;
+            max-width: 1000px;
         }
 
         .login-card {
-            background: var(--surface);
-            border: 1px solid rgba(255, 176, 0, 0.14);
-            border-radius: var(--radius-xl);
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: var(--shadow-soft);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
         }
 
+        /* --- Sisi Kiri (Informasi) --- */
         .login-left {
             position: relative;
-            overflow: hidden;
-            background: linear-gradient(135deg, rgba(17, 17, 17, 0.96) 0%, rgba(42, 42, 42, 0.92) 34%, rgba(255, 122, 0, 0.96) 100%);
-            color: #fff;
-            padding: 52px 42px;
+            background-color: var(--dark-main);
+            color: #ffffff;
+            padding: 48px 40px;
             height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            overflow: hidden;
         }
 
+        /* Ornamen Background Kiri */
         .login-left::before {
             content: "";
             position: absolute;
-            top: -80px;
-            right: -70px;
-            width: 220px;
-            height: 220px;
+            top: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(230, 67, 18, 0.1);
+            z-index: 1;
         }
-
         .login-left::after {
             content: "";
             position: absolute;
-            bottom: -70px;
-            left: -60px;
-            width: 180px;
-            height: 180px;
+            bottom: -80px;
+            left: -40px;
+            width: 150px;
+            height: 150px;
             border-radius: 50%;
-            background: rgba(255, 209, 102, 0.18);
+            background: rgba(255, 255, 255, 0.03);
+            z-index: 1;
         }
 
         .login-left-content,
@@ -126,286 +111,139 @@ $success = get_flash('success');
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 9px 15px;
-            border-radius: 999px;
-            background: rgba(255, 193, 7, 0.12);
-            color: #ffe082;
-            font-size: .84rem;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            font-size: .85rem;
             font-weight: 700;
-            margin-bottom: 22px;
-            border: 1px solid rgba(255, 193, 7, 0.18);
-            backdrop-filter: blur(4px);
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .brand-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            background: #ffc107;
-            box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.14);
-        }
+        .brand-badge i { color: var(--orange-primary); font-size: 1.1rem; }
 
         .login-title {
-            font-size: 2.1rem;
+            font-size: 2rem;
             font-weight: 800;
-            line-height: 1.18;
+            line-height: 1.2;
             margin-bottom: 16px;
-            letter-spacing: -0.03em;
-            max-width: 470px;
+            color: #ffffff;
         }
 
         .login-desc {
-            color: rgba(255, 255, 255, 0.82);
-            line-height: 1.72;
-            max-width: 460px;
-            font-size: .96rem;
-            margin-bottom: 0;
-        }
-
-        .login-feature {
-            margin-top: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
+            color: #9ca3af;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
         }
 
         .feature-item {
             display: flex;
             align-items: flex-start;
-            gap: 13px;
-            padding: 14px 15px;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(8px);
+            gap: 14px;
+            margin-bottom: 20px;
         }
-
         .feature-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 13px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 193, 7, 0.14);
-            color: #ffd166;
+            background: rgba(230, 67, 18, 0.15);
+            color: var(--orange-primary);
             flex-shrink: 0;
-            font-size: 1rem;
-            border: 1px solid rgba(255, 193, 7, 0.16);
+            font-size: 1.1rem;
         }
-
-        .feature-title {
-            font-weight: 700;
-            margin-bottom: 3px;
-            color: #fff;
-        }
-
-        .feature-text {
-            color: rgba(255, 255, 255, 0.70);
-            font-size: .9rem;
-            line-height: 1.5;
-        }
+        .feature-title { font-weight: 700; margin-bottom: 4px; color: #f3f4f6; font-size: 0.95rem; }
+        .feature-text { color: #9ca3af; font-size: 0.85rem; line-height: 1.5; }
 
         .login-left-footer {
-            margin-top: 28px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: rgba(255, 255, 255, 0.74);
-            font-size: .88rem;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 500;
         }
 
-        .footer-mark {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.09);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffd166;
-            font-weight: 800;
-            border: 1px solid rgba(255, 255, 255, 0.10);
-        }
-
+        /* --- Sisi Kanan (Form) --- */
         .login-right {
-            padding: 44px 38px;
-            background:
-                linear-gradient(180deg, #ffffff 0%, #fffdf9 100%);
-        }
-
-        .form-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 8px 14px;
-            background: #fff6e8;
-            color: #9a640b;
-            font-size: .82rem;
-            font-weight: 700;
-            border: 1px solid rgba(255, 152, 0, 0.16);
-            margin-bottom: 16px;
+            padding: 48px 40px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
         }
 
         .form-title {
-            font-size: 1.75rem;
+            font-size: 1.6rem;
             font-weight: 800;
-            color: var(--dark-1);
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
+            color: var(--dark-main);
+            margin-bottom: 6px;
         }
 
         .form-subtitle {
-            color: var(--text-soft);
+            color: var(--text-muted);
             margin-bottom: 28px;
-            line-height: 1.65;
-            font-size: .94rem;
+            line-height: 1.5;
+            font-size: 0.95rem;
         }
 
+        /* Notifikasi Alert */
         .alert {
             border: none;
-            border-radius: 16px;
-            padding: 14px 16px;
-            font-size: .92rem;
-            box-shadow: 0 10px 24px rgba(17, 17, 17, 0.04);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 24px;
         }
+        .alert-danger { background: #fef2f2; color: #b91c1c; border-left: 4px solid #ef4444; }
+        .alert-success { background: #f0fdf4; color: #15803d; border-left: 4px solid #22c55e; }
 
-        .alert-danger {
-            background: #fff1ef;
-            color: #c2412d;
-        }
-
-        .alert-success {
-            background: #eefaf0;
-            color: #2f7d43;
-        }
-
+        /* Form Input Modern */
         .form-label {
             font-weight: 700;
-            color: var(--dark-1);
-            margin-bottom: .55rem;
+            color: var(--dark-main);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
         }
 
-        .input-shell {
-            position: relative;
-        }
-
+        .input-shell { position: relative; }
         .input-icon {
             position: absolute;
             top: 50%;
-            left: 15px;
+            left: 16px;
             transform: translateY(-50%);
-            color: #c27e12;
-            font-size: 1rem;
+            color: #9ca3af;
+            font-size: 1.1rem;
             z-index: 2;
+            transition: color 0.2s;
         }
 
         .form-control {
-            border-radius: 16px;
-            padding: .95rem 1rem .95rem 2.85rem;
-            border: 1px solid #e6dfd2;
-            background: #fff;
-            box-shadow: none;
-            font-size: .95rem;
-            transition: all .2s ease;
+            border-radius: 8px;
+            padding: 0.75rem 1rem 0.75rem 2.8rem;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-dark);
+            transition: all 0.2s ease;
+            box-shadow: none !important;
         }
-
+        
         .form-control:focus {
-            border-color: #f0c63d;
-            box-shadow: 0 0 0 0.22rem rgba(255, 193, 7, 0.14);
-            background: #fffdfa;
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 4px rgba(230, 67, 18, 0.1) !important;
         }
-
-        .btn-login {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            border: none;
-            color: #fff;
-            font-weight: 800;
-            border-radius: 16px;
-            padding: .95rem 1rem;
-            box-shadow: var(--shadow-strong);
-            transition: all .22s ease;
-            letter-spacing: .01em;
-        }
-
-        .btn-login:hover {
-            color: #fff;
-            transform: translateY(-1px);
-            filter: brightness(.98);
-        }
-
-        .system-note {
-            margin-top: 24px;
-            background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%);
-            border: 1px solid rgba(255, 152, 0, 0.12);
-            border-radius: 18px;
-            padding: 15px 16px;
-            color: var(--text-soft);
-            font-size: .91rem;
-            line-height: 1.6;
-        }
-
-        .note-text {
-            color: var(--text-soft);
-            font-size: .88rem;
-            text-align: center;
-            margin-top: 18px;
-            font-weight: 600;
-        }
-
-        .note-text span {
-            color: #9a640b;
-        }
-
-        @media (max-width: 991.98px) {
-            .login-left {
-                padding: 34px 28px;
-            }
-
-            .login-right {
-                padding: 34px 28px;
-            }
-
-            .login-title {
-                font-size: 1.75rem;
-            }
-
-            .form-title {
-                font-size: 1.45rem;
-            }
-        }
-
-        @media (max-width: 767.98px) {
-            body {
-                padding: 16px;
-            }
-
-            .login-card {
-                border-radius: 22px;
-            }
-
-            .login-left,
-            .login-right {
-                padding: 26px 22px;
-            }
-
-            .login-title {
-                font-size: 1.5rem;
-            }
-
-            .brand-badge,
-            .form-badge {
-                font-size: .78rem;
-            }
-        }
-
-        .password-shell {
-            position: relative;
-        }
-
-        .password-shell .form-control {
-            padding-right: 3.2rem;
+        
+        /* Merubah warna icon saat input fokus */
+        .form-control:focus + .input-icon,
+        .input-shell:focus-within .input-icon {
+            color: var(--orange-primary);
         }
 
         .password-toggle {
@@ -413,28 +251,65 @@ $success = get_flash('success');
             top: 50%;
             right: 12px;
             transform: translateY(-50%);
-            width: 38px;
-            height: 38px;
+            width: 32px;
+            height: 32px;
             border: none;
             background: transparent;
-            color: #c27e12;
-            border-radius: 12px;
+            color: #9ca3af;
+            border-radius: 6px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all .2s ease;
+            transition: all 0.2s ease;
             z-index: 3;
         }
+        .password-toggle:hover { background: var(--bg-body); color: var(--dark-main); }
+        .password-toggle:focus { outline: none; box-shadow: 0 0 0 2px rgba(230, 67, 18, 0.1); }
 
-        .password-toggle:hover {
-            background: #fff3e0;
-            color: #111;
+        /* Tombol Modern */
+        .btn-login {
+            background-color: var(--orange-primary);
+            color: #ffffff;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+        .btn-login:hover {
+            background-color: var(--orange-hover);
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(230, 67, 18, 0.2);
         }
 
-        .password-toggle:focus {
-            outline: none;
-            box-shadow: 0 0 0 .2rem rgba(255, 193, 7, 0.14);
+        .forgot-link {
+            color: var(--orange-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: 0.2s;
+        }
+        .forgot-link:hover { color: var(--orange-hover); text-decoration: underline; }
+
+        .system-note {
+            margin-top: 36px;
+            background: var(--bg-body);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            border-left: 4px solid var(--border-color);
+        }
+
+        @media (max-width: 991.98px) {
+            .login-left, .login-right { padding: 32px 24px; }
+            .login-title { font-size: 1.6rem; }
+            .form-title { font-size: 1.4rem; }
         }
     </style>
 </head>
@@ -443,127 +318,106 @@ $success = get_flash('success');
     <div class="login-wrap">
         <div class="row g-0 login-card">
 
-            <div class="col-lg-6">
+            <!-- BAGIAN KIRI (Branding & Info) -->
+            <div class="col-lg-5 d-none d-lg-block">
                 <div class="login-left">
                     <div class="login-left-content">
                         <div class="brand-badge">
-                            <span class="brand-dot"></span>
-                            <span>IT Asset Management System</span>
+                            <i class="bi bi-layers-fill"></i>
+                            <span>IT Asset System</span>
                         </div>
 
                         <div class="login-title">
-                            Selamat Datang di Sistem Inventaris Perusahaan
+                            Kelola Inventaris Dengan Lebih Mudah
                         </div>
 
                         <div class="login-desc">
-                            Kelola data aset, pantau aktivitas inventaris, dan atur kontrol akses pengguna
-                            dalam satu sistem yang lebih terpusat, modern, dan efisien untuk operasional harian.
+                            Platform terpusat untuk memantau data aset, aktivitas inventaris, dan proses logistik operasional perusahaan.
                         </div>
 
-                        <div class="login-feature">
+                        <div>
                             <div class="feature-item">
-                                <div class="feature-icon">✓</div>
+                                <div class="feature-icon"><i class="bi bi-shield-check"></i></div>
                                 <div>
-                                    <div class="feature-title">Kontrol Akses Terpusat</div>
-                                    <div class="feature-text">Hak akses pengguna dikelola berdasarkan role dan permission yang sudah ditentukan.</div>
+                                    <div class="feature-title">Akses Terjamin</div>
+                                    <div class="feature-text">Keamanan data dengan sistem role dan permission terpusat.</div>
                                 </div>
                             </div>
-
                             <div class="feature-item">
-                                <div class="feature-icon">✓</div>
+                                <div class="feature-icon"><i class="bi bi-display"></i></div>
                                 <div>
-                                    <div class="feature-title">Monitoring Inventaris</div>
-                                    <div class="feature-text">Pantau barang masuk, barang keluar, kondisi aset, serta proses pengiriman secara lebih rapi.</div>
-                                </div>
-                            </div>
-
-                            <div class="feature-item">
-                                <div class="feature-icon">✓</div>
-                                <div>
-                                    <div class="feature-title">Siap untuk Operasional</div>
-                                    <div class="feature-text">Dirancang untuk membantu proses inventaris perusahaan agar lebih tertib, cepat, dan terstruktur.</div>
+                                    <div class="feature-title">Monitoring Real-time</div>
+                                    <div class="feature-text">Pantau perpindahan dan kondisi perangkat kapan saja.</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="login-left-footer">
-                        <div class="footer-mark">IT</div>
-                        <div>Sistem inventaris internal untuk pengelolaan aset teknologi perusahaan.</div>
+                        &copy; <?= date('Y') ?> IT Asset Management Internal System.
                     </div>
                 </div>
             </div>
 
-            <div class="col-lg-6">
+            <!-- BAGIAN KANAN (Form Login) -->
+            <div class="col-lg-7">
                 <div class="login-right">
-                    <div class="form-badge">
-                        <span>Secure Access</span>
-                    </div>
-
+                    
                     <div class="form-title">Masuk ke Akun</div>
                     <div class="form-subtitle">
-                        Gunakan username atau email yang telah terdaftar untuk mengakses dashboard dan fitur sistem.
+                        Gunakan username atau email yang telah terdaftar untuk mengakses dashboard.
                     </div>
 
                     <?php if ($error): ?>
-                        <div class="alert alert-danger rounded-4"><?= e($error) ?></div>
+                        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= e($error) ?></div>
                     <?php endif; ?>
 
                     <?php if ($success): ?>
-                        <div class="alert alert-success rounded-4"><?= e($success) ?></div>
+                        <div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i><?= e($success) ?></div>
                     <?php endif; ?>
 
                     <form action="<?= h(base_url('auth/proses_login.php')) ?>" method="POST">
                         <div class="mb-3">
                             <label class="form-label">Username atau Email</label>
                             <div class="input-shell">
-                                <span class="input-icon">@</span>
-                                <input type="text" name="login" class="form-control" required autofocus placeholder="Masukkan username atau email">
+                                <i class="bi bi-person-fill input-icon"></i>
+                                <input type="text" name="login" class="form-control" required autofocus placeholder="Masukkan username / email">
                             </div>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label class="form-label">Password</label>
-                            <div class="input-shell password-shell">
-                                <span class="input-icon">•</span>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    class="form-control"
-                                    id="loginPassword"
-                                    required
-                                    placeholder="Masukkan password">
-                                <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Lihat password">
+                            <div class="input-shell">
+                                <i class="bi bi-lock-fill input-icon"></i>
+                                <input type="password" name="password" class="form-control" id="loginPassword" required placeholder="Masukkan password" style="padding-right: 3rem;">
+                                <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Lihat password" title="Tampilkan Password">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
                         </div>
 
                         <button type="submit" class="btn btn-login w-100">
-                            Masuk ke Dashboard
+                            Masuk ke Dashboard <i class="bi bi-arrow-right ms-1"></i>
                         </button>
                     </form>
 
                     <div class="text-center mt-3">
-                        <a href="<?= h(base_url('auth/forgot_password.php')) ?>" class="text-decoration-none fw-semibold" style="color:#c27e12;">
-                            Lupa password? Buat password baru sendiri
+                        <a href="<?= h(base_url('auth/forgot_password.php')) ?>" class="forgot-link">
+                            Lupa password?
                         </a>
                     </div>
 
                     <div class="system-note">
-                        Akun pengguna dibuat dan hak akses sistem dikelola oleh <b>Super Admin</b>.
-                        Pastikan Anda menggunakan akun yang sudah terdaftar.
+                        <i class="bi bi-info-circle me-1 text-muted"></i> Akses sistem dan pembuatan akun dikelola penuh oleh <b>Super Admin</b>. Pastikan Anda memiliki kredensial yang sah.
                     </div>
 
-                    <div class="note-text">
-                        <span>IT Asset Management</span> — Internal System Access
-                    </div>
                 </div>
             </div>
 
         </div>
     </div>
 
+    <!-- SCRIPT UNTUK FITUR MATA (SHOW/HIDE PASSWORD) -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const toggleButton = document.getElementById('toggleLoginPassword');

@@ -17,7 +17,7 @@ if ($myBranchId <= 0) {
 }
 
 // ==============================================================================
-// FUNGSI HELPER
+// FUNGSI HELPER (DIPERBARUI DENGAN SOFT BADGES MODERN)
 // ==============================================================================
 function h($value): string
 {
@@ -32,29 +32,29 @@ function dv($value, $fallback = '—'): string
 
 function shippingBadge(string $status): string
 {
-    $class      = 'bg-secondary';
+    $class      = 'badge-soft-secondary';
     $icon       = 'bi-clock';
     $statusLower = strtolower(trim($status));
 
     if (in_array($statusLower, ['menunggu persetujuan admin', 'sedang dikemas'])) {
-        $class = 'bg-warning text-dark';
+        $class = 'badge-soft-warning';
         $icon  = 'bi-hourglass-split';
     } elseif ($statusLower === 'sedang perjalanan') {
-        $class = 'bg-primary';
+        $class = 'badge-soft-primary';
         $icon  = 'bi-truck';
     } elseif (in_array($statusLower, ['sudah diterima', 'sudah diterima ho', 'selesai'])) {
-        $class = 'bg-success';
+        $class = 'badge-soft-success';
         $icon  = 'bi-check-circle';
     }
-    return '<span class="badge rounded-pill ' . $class . '" style="line-height:1.4;"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
+    return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
 }
 
 function barangBadge(string $bermasalah): string
 {
     if ($bermasalah === 'Iya') {
-        return '<span class="badge rounded-pill bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
+        return '<span class="badge rounded-pill badge-soft-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
     }
-    return '<span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
+    return '<span class="badge rounded-pill badge-soft-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
 }
 
 function fetchSingleValue(mysqli $koneksi, string $sql): int
@@ -87,27 +87,14 @@ function fetchBranchName(mysqli $koneksi, int $id): string
 }
 
 // ==============================================================================
-// KONSTANTA — ID Branch HO (selaras dengan Barang/index.php)
+// KONSTANTA & LOGIKA (TIDAK DIUBAH)
 // ==============================================================================
 $idBranchHO = 40;
 
-// ==============================================================================
-// LOGIKA FILTER & EXCLUDE TRANSIT
-// Selaras 100% dengan Barang/index.php
-// ==============================================================================
 if ($isAdmin) {
-    /**
-     * ADMIN HO: hanya lihat barang yang fisiknya ada di HO (id_branch = 40)
-     * Barang disembunyikan jika sedang transit keluar ke cabang
-     */
     $whereLokasi      = "barang.id_branch = $idBranchHO";
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
-
 } else {
-    /**
-     * USER CABANG: hanya lihat barang di cabangnya sendiri
-     * Barang disembunyikan jika sedang transit ke/dari HO
-     */
     $whereLokasi      = "barang.id_branch = $myBranchId";
     $excludeTransitSql  = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
     $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
@@ -117,194 +104,52 @@ $stokAktifSql = $isAdmin
     ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') "
     : " AND barang.status IN ('Tersedia','Diterima') ";
 
-// ==============================================================================
-// WIDGET SUMMARY — 5 ANGKA ATAS
-// Selaras dengan Barang/index.php
-// ==============================================================================
-
-// 1. Total Inventaris
-$totalInventaris = fetchSingleValue($koneksi,
-    "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql $stokAktifSql"
-);
+$totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql $stokAktifSql");
 
 if ($isAdmin) {
-    // Admin HO:
-    // Masuk   = barang dari Cabang yang sudah diterima HO (pengiriman_cabang_ho)
-    // Keluar  = barang dari HO ke Cabang (barang_pengiriman)
-    // Transit = barang HO ke Cabang yang belum diterima (kebalikan masuk)
-    $totalMasuk         = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')"
-    );
-    $totalKeluar        = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman"
-    );
-    $totalSedangDikirim = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan'"
-    );
-
+    $totalMasuk         = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
+    $totalKeluar        = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
+    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan'");
 } else {
-    // User Cabang:
-    // Masuk   = barang dari HO ke Cabang yang sudah diterima (barang_pengiriman)
-    // Keluar  = barang dari Cabang ke HO (pengiriman_cabang_ho)
-    // Transit = barang Cabang ke HO yang belum selesai (kebalikan masuk)
-    $totalMasuk         = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'"
-    );
-    $totalKeluar        = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId"
-    );
-    $totalSedangDikirim = fetchSingleValue($koneksi,
-        "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')"
-    );
+    $totalMasuk         = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
+    $totalKeluar        = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
+    $totalSedangDikirim = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')");
 }
 
-// Bermasalah — mengikuti whereLokasi masing-masing
-$totalBermasalah = fetchSingleValue($koneksi,
-    "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi AND bermasalah = 'Iya'"
-);
+$totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi AND bermasalah = 'Iya'");
 
-// ==============================================================================
-// PANEL DETAIL — LIST AKTIVITAS
-// ==============================================================================
+// PANEL DETAIL QUERIES
 $previewLimit = 3;
 
-// --------------------------------------------------------------------------
-// PANEL 1: BARANG MASUK
-// Admin  = dari Cabang ke HO (pengiriman_cabang_ho) + pemilik_barang
-// User   = dari HO ke Cabang (barang_pengiriman) + nama_penerima
-// --------------------------------------------------------------------------
 if ($isAdmin) {
-    $qMasuk = "SELECT
-                    p.id_pengiriman_ho AS id,
-                    p.tanggal_pengajuan AS tanggal_kirim,
-                    p.status_pengiriman,
-                    tb.nama_barang,
-                    br.nama_branch AS nama_branch_aktif,
-                    CASE 
-                        WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user 
-                        ELSE p.pemilik_barang
-                    END AS nama_pemilik
-               FROM pengiriman_cabang_ho p
-               LEFT JOIN barang b ON p.serial_number = b.serial_number
-               LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-               LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-               ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
+    $qMasuk = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_kirim, p.status_pengiriman, tb.nama_barang, br.nama_branch AS nama_branch_aktif, CASE WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user ELSE p.pemilik_barang END AS nama_pemilik FROM pengiriman_cabang_ho p LEFT JOIN barang b ON p.serial_number = b.serial_number LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 } else {
-    $qMasuk = "SELECT
-                    p.id_pengiriman AS id,
-                    p.tanggal_keluar AS tanggal_kirim,
-                    p.status_pengiriman,
-                    tb.nama_barang,
-                    'PUSAT HO' AS nama_branch_aktif,
-                    CASE
-                        WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user
-                        ELSE 'Belum Ada Pemilik'
-                    END AS nama_pemilik
-               FROM barang_pengiriman p
-               LEFT JOIN barang b ON p.id_barang = b.id
-               LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-               WHERE p.branch_tujuan = $myBranchId
-               ORDER BY p.id_pengiriman DESC LIMIT 10";
+    $qMasuk = "SELECT p.id_pengiriman AS id, p.tanggal_keluar AS tanggal_kirim, p.status_pengiriman, tb.nama_barang, 'PUSAT HO' AS nama_branch_aktif, CASE WHEN b.user IS NOT NULL AND b.user != '' AND b.user != '0' THEN b.user ELSE 'Belum Ada Pemilik' END AS nama_pemilik FROM barang_pengiriman p LEFT JOIN barang b ON p.id_barang = b.id LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang WHERE p.branch_tujuan = $myBranchId ORDER BY p.id_pengiriman DESC LIMIT 10";
 }
 $barangMasukTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qMasuk));
 
-// --------------------------------------------------------------------------
-// PANEL 2: BARANG KELUAR
-// Admin  = dari HO ke Cabang (barang_pengiriman)
-// User   = dari Cabang ke HO (pengiriman_cabang_ho)
-// --------------------------------------------------------------------------
 if ($isAdmin) {
-    $qKeluar = "SELECT
-                    p.id_pengiriman AS id,
-                    p.tanggal_keluar,
-                    p.status_pengiriman,
-                    p.nomor_resi_keluar,
-                    tb.nama_barang,
-                    br.nama_branch AS nama_branch_tujuan
-                FROM barang_pengiriman p
-                LEFT JOIN barang b ON p.id_barang = b.id
-                LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-                LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch
-                ORDER BY p.id_pengiriman DESC LIMIT 10";
+    $qKeluar = "SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_tujuan FROM barang_pengiriman p LEFT JOIN barang b ON p.id_barang = b.id LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch ORDER BY p.id_pengiriman DESC LIMIT 10";
 } else {
-    $qKeluar = "SELECT
-                    p.id_pengiriman_ho AS id,
-                    p.tanggal_pengajuan AS tanggal_keluar,
-                    p.status_pengiriman,
-                    p.nomor_resi_keluar,
-                    tb.nama_barang,
-                    'Kantor Pusat' AS nama_branch_tujuan
-                FROM pengiriman_cabang_ho p
-                LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-                WHERE p.branch_asal = $myBranchId
-                ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
+    $qKeluar = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, 'Kantor Pusat' AS nama_branch_tujuan FROM pengiriman_cabang_ho p LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang WHERE p.branch_asal = $myBranchId ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 }
 $barangKeluarTerbaru = fetchAllAssoc(mysqli_query($koneksi, $qKeluar));
 
-// --------------------------------------------------------------------------
-// PANEL 3: BARANG BERMASALAH
-// Mengikuti whereLokasi masing-masing (selaras Barang/index.php)
-// --------------------------------------------------------------------------
-$qBermasalah = "SELECT
-                    barang.id,
-                    barang.serial_number,
-                    barang.keterangan_masalah,
-                    tb.nama_barang,
-                    br.nama_branch AS nama_branch_aktif
-                FROM barang
-                LEFT JOIN tb_barang tb ON barang.id_barang = tb.id_barang
-                LEFT JOIN tb_branch br ON barang.id_branch = br.id_branch
-                WHERE $whereLokasi AND barang.bermasalah = 'Iya'
-                ORDER BY barang.id DESC LIMIT 10";
+$qBermasalah = "SELECT barang.id, barang.serial_number, barang.keterangan_masalah, tb.nama_barang, br.nama_branch AS nama_branch_aktif FROM barang LEFT JOIN tb_barang tb ON barang.id_barang = tb.id_barang LEFT JOIN tb_branch br ON barang.id_branch = br.id_branch WHERE $whereLokasi AND barang.bermasalah = 'Iya' ORDER BY barang.id DESC LIMIT 10";
 $barangBermasalah = fetchAllAssoc(mysqli_query($koneksi, $qBermasalah));
 
-// --------------------------------------------------------------------------
-// PANEL 4: BELUM DITERIMA (kebalikan dari Masuk)
-// Admin  = HO kirim ke Cabang yang belum diterima (barang_pengiriman)
-// User   = Cabang kirim ke HO yang belum selesai (pengiriman_cabang_ho)
-// --------------------------------------------------------------------------
 if ($isAdmin) {
-    $qTransit = "SELECT
-                     p.id_pengiriman AS id,
-                     p.tanggal_keluar,
-                     p.status_pengiriman,
-                     p.nomor_resi_keluar,
-                     tb.nama_barang,
-                     'Pusat HO' AS nama_branch_asal,
-                     br.nama_branch AS nama_branch_tujuan
-                 FROM barang_pengiriman p
-                 LEFT JOIN barang b ON p.id_barang = b.id
-                 LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang
-                 LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch
-                 WHERE p.status_pengiriman = 'Sedang perjalanan'
-                 ORDER BY p.id_pengiriman DESC LIMIT 10";
+    $qTransit = "SELECT p.id_pengiriman AS id, p.tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, 'Pusat HO' AS nama_branch_asal, br.nama_branch AS nama_branch_tujuan FROM barang_pengiriman p LEFT JOIN barang b ON p.id_barang = b.id LEFT JOIN tb_barang tb ON b.id_barang = tb.id_barang LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch WHERE p.status_pengiriman = 'Sedang perjalanan' ORDER BY p.id_pengiriman DESC LIMIT 10";
 } else {
-    $qTransit = "SELECT
-                     p.id_pengiriman_ho AS id,
-                     p.tanggal_pengajuan AS tanggal_keluar,
-                     p.status_pengiriman,
-                     p.nomor_resi_keluar,
-                     tb.nama_barang,
-                     br.nama_branch AS nama_branch_asal,
-                     'Kantor Pusat' AS nama_branch_tujuan
-                 FROM pengiriman_cabang_ho p
-                 LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang
-                 LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
-                 WHERE p.branch_asal = $myBranchId
-                   AND p.status_pengiriman NOT IN ('Ditolak', 'Selesai')
-                 ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
+    $qTransit = "SELECT p.id_pengiriman_ho AS id, p.tanggal_pengajuan AS tanggal_keluar, p.status_pengiriman, p.nomor_resi_keluar, tb.nama_barang, br.nama_branch AS nama_branch_asal, 'Kantor Pusat' AS nama_branch_tujuan FROM pengiriman_cabang_ho p LEFT JOIN tb_barang tb ON p.id_barang = tb.id_barang LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch WHERE p.branch_asal = $myBranchId AND p.status_pengiriman NOT IN ('Ditolak', 'Selesai') ORDER BY p.id_pengiriman_ho DESC LIMIT 10";
 }
 $pengirimanBelumDiterima = fetchAllAssoc(mysqli_query($koneksi, $qTransit));
 
-// ==============================================================================
-// VIEW DATA
-// ==============================================================================
 $roleLabel    = $isAdmin ? 'Administrator HO' : 'Staff Cabang';
 $branchLabel  = fetchBranchName($koneksi, $myBranchId);
 $usernameLabel = (string) (current_user()['username'] ?? 'User');
 $heroTitle    = "Selamat Datang, " . $usernameLabel;
 
-// Notifikasi
 $role        = current_role();
 $branchFilter = '';
 if ($role === 'user') {
@@ -331,198 +176,180 @@ $notifications  = fetchAllAssoc($qNotifications);
 
     <style>
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --orange-4: #ffd166;
-            --orange-5: #fff3e0;
-            --dark-1: #111111;
-            --dark-2: #1f1f1f;
-            --dark-3: #2a2a2a;
-            --text-main: #1e1e1e;
+            --orange-1: #E64312;
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #2d3136;
             --text-soft: #6b7280;
-            --white: #ffffff;
-            --border-soft: rgba(255, 152, 0, 0.14);
-            --shadow-soft: 0 14px 40px rgba(17, 17, 17, 0.08);
-            --shadow-hover: 0 18px 46px rgba(255, 122, 0, 0.18);
-            --radius-xl: 28px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
+            --surface-bg: #F4F6F9;
+            --border-soft: #e5e7eb;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --shadow-hover: 0 10px 25px rgba(0, 0, 0, 0.08);
+            --radius-xl: 8px;
         }
 
-        * { box-sizing: border-box; }
-
         body {
-            background:
-                radial-gradient(circle at top left, rgba(255, 176, 0, 0.18), transparent 28%),
-                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 22%),
-                linear-gradient(180deg, #fff8f1 0%, #fffaf5 35%, #ffffff 100%);
+            background-color: var(--surface-bg);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
             min-height: 100vh;
         }
 
-        .page-content { padding: 30px; }
-        .text-warning-custom { color: var(--orange-2) !important; }
+        .page-content { padding: 24px 32px; }
 
-        /* Hero */
+        /* PERBAIKAN: Hero Section Lebih Elegan */
         .dashboard-hero {
-            position: relative;
-            overflow: hidden;
-            border: 0;
-            border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, rgba(17,17,17,.94) 0%, rgba(42,42,42,.90) 28%, rgba(255,122,0,.96) 100%);
-            box-shadow: 0 18px 45px rgba(255,122,0,.22);
-            padding: 1.8rem;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
             margin-bottom: 1.5rem;
-        }
-        .dashboard-hero::before {
-            content: "";
-            position: absolute;
-            width: 280px; height: 280px;
-            border-radius: 50%;
-            background: rgba(255,255,255,.08);
-            top: -100px; right: -60px;
-        }
-        .dashboard-hero::after {
-            content: "";
-            position: absolute;
-            width: 180px; height: 180px;
-            border-radius: 50%;
-            background: rgba(255,208,102,.18);
-            bottom: -70px; left: -50px;
-        }
-        .dashboard-hero h1 {
-            position: relative; z-index: 2;
-            font-size: 1.85rem; font-weight: 800;
-            color: #fff; margin-bottom: .45rem; letter-spacing: -0.02em;
-        }
-        .dashboard-hero p {
-            position: relative; z-index: 2;
-            color: rgba(255,255,255,.86); margin-bottom: 0;
-            max-width: 760px; line-height: 1.7; font-size: .95rem;
-        }
-        .role-badge {
-            position: relative; z-index: 2;
-            background: rgba(255,255,255,.14);
-            color: #fff; border: 1px solid rgba(255,255,255,.18);
-            border-radius: 999px; padding: .65rem 1rem;
-            font-weight: 700; font-size: .86rem;
-            white-space: nowrap; backdrop-filter: blur(10px);
-        }
-
-        /* Summary Cards */
-        .summary-card {
-            position: relative; overflow: hidden;
-            background: linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
-            border: 1px solid rgba(255,176,0,.15);
-            border-radius: 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
             box-shadow: var(--shadow-soft);
-            height: 100%; padding: 1.15rem 1.1rem;
-            transition: all .25s ease;
-        }
-        .summary-card::before {
-            content: ""; position: absolute;
-            inset: 0 0 auto 0; height: 6px;
-            background: linear-gradient(90deg, var(--orange-1), var(--orange-3));
-        }
-        .summary-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
-        .summary-label { font-size: .84rem; color: var(--text-soft); margin-bottom: .45rem; font-weight: 600; }
-        .summary-value { font-size: 2rem; line-height: 1; font-weight: 800; margin-bottom: .45rem; color: var(--dark-1); letter-spacing: -0.03em; }
-        .summary-note { font-size: .83rem; color: #7b7b7b; line-height: 1.5; }
-        .summary-icon {
-            width: 54px; height: 54px; border-radius: 16px;
-            display: inline-flex; align-items: center; justify-content: center;
-            font-size: 1.28rem; flex-shrink: 0;
-            color: #fff !important;
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3)) !important;
         }
 
-        /* Panel Cards */
+        .dashboard-hero h1 {
+            color: #fff;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .dashboard-hero p {
+            color: #9ca3af;
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        .role-badge {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 999px;
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* PERBAIKAN: Summary Cards Bersih (White) */
+        .summary-card {
+            background: #ffffff;
+            border: 1px solid var(--border-soft);
+            border-left: 4px solid var(--orange-1);
+            border-radius: 16px;
+            box-shadow: var(--shadow-soft);
+            height: 100%; 
+            padding: 1.25rem 1.5rem;
+            transition: all .2s ease;
+        }
+        
+        .summary-card.bermasalah { border-left-color: #ef4444; }
+
+        .summary-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+        .summary-label { font-size: .85rem; color: var(--text-soft); font-weight: 600; }
+        .summary-value { font-size: 1.8rem; font-weight: 800; color: var(--dark-1); margin: 0.2rem 0; }
+        .summary-note { font-size: .8rem; color: #9ca3af; }
+        
+        .summary-icon {
+            width: 45px; height: 45px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem;
+            background: rgba(255, 122, 0, 0.1);
+            color: var(--orange-1);
+        }
+        .summary-icon.bermasalah { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+        /* PERBAIKAN: Panel Cards Layout & Clean Header */
         .panel-card {
-            overflow: hidden; background: #ffffff;
-            border: 1px solid rgba(255,176,0,.13);
-            border-radius: var(--radius-xl);
+            background: #ffffff;
+            border: 1px solid var(--border-soft);
+            border-radius: 16px;
             box-shadow: var(--shadow-soft);
             height: 100%; display: flex; flex-direction: column;
         }
         .panel-header {
-            padding: 1.15rem 1.25rem;
-            border-bottom: 1px solid rgba(255,176,0,.16);
-            background: linear-gradient(135deg, #111111 0%, #2c2c2c 40%, #ff8f00 100%);
-            position: relative; overflow: hidden;
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid var(--border-soft);
+            background: #fff;
+            border-radius: 16px 16px 0 0;
+            display: flex; flex-direction: column; justify-content: center;
         }
         .panel-title {
-            position: relative; z-index: 1;
-            font-size: 1.02rem; font-weight: 800;
-            margin-bottom: .22rem; color: #fff; letter-spacing: -0.02em;
+            font-size: 1.05rem; font-weight: 700; color: var(--dark-1);
+            display: flex; align-items: center; gap: 8px;
         }
-        .panel-subtitle {
-            position: relative; z-index: 1;
-            font-size: .84rem; color: rgba(255,255,255,.80); line-height: 1.5;
+        .panel-subtitle { font-size: .85rem; color: var(--text-soft); margin-top: 2px; }
+        
+        .panel-body { padding: 1.2rem 1.5rem; flex: 1; display: flex; flex-direction: column; }
+
+        /* PERBAIKAN: Activity Items Dibuat Flex Horizontal */
+        .activity-list { display: flex; flex-direction: column; gap: 1rem; }
+        .activity-item {
+            background: #fff;
+            border: 1px solid var(--border-soft);
+            border-radius: 12px; 
+            padding: 1rem 1.25rem;
+            transition: all .2s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
-        .panel-body {
-            padding: 1.15rem 1.2rem;
-            background: linear-gradient(180deg, #fffdf9 0%, #fff8ef 100%);
-            flex: 1; display: flex; flex-direction: column;
+        .activity-item:hover { border-color: var(--orange-1); box-shadow: var(--shadow-soft); }
+        
+        /* Flex Header (Title + Badge sebaris) */
+        .activity-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
         }
 
-        /* Activity Items */
-        .activity-list { display: flex; flex-direction: column; gap: .9rem; }
-        .activity-item {
-            position: relative;
-            border: 1px solid rgba(255,176,0,.14);
-            border-left: 5px solid var(--orange-2);
-            border-radius: 18px; padding: 1rem;
-            background: #ffffff;
-            box-shadow: 0 8px 20px rgba(17,17,17,.04);
-            transition: all .22s ease;
-        }
-        .activity-item:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(255,122,0,.14); border-color: rgba(255,152,0,.28); }
-        .activity-title { font-weight: 800; margin-bottom: .38rem; color: var(--dark-1); letter-spacing: -0.01em; }
-        .meta-grid { display: grid; gap: .28rem; margin-top: .6rem; }
-        .meta-line { font-size: .88rem; color: #4b5563; line-height: 1.5; }
-        .meta-line strong { color: #111827; font-weight: 700; }
-        .meta-muted { font-size: .84rem; color: #6b7280; line-height: 1.5; }
-        .meta-muted i { width: 16px; color: var(--orange-2); }
+        .activity-title { font-weight: 700; color: var(--dark-1); font-size: 0.95rem; line-height: 1.3;}
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+        
+        /* Agar di layar kecil meta grid jadi 1 kolom */
+        @media (max-width: 576px) { .meta-grid { grid-template-columns: 1fr; } }
+
+        .meta-line { font-size: .85rem; color: var(--text-main); }
+        .meta-muted { font-size: .85rem; color: var(--text-soft); display: flex; align-items: center; gap: 6px; }
 
         .empty-state {
             text-align: center; color: var(--text-soft);
-            padding: 1.8rem 1rem;
-            border: 1px dashed rgba(255,152,0,.28);
-            border-radius: 18px;
-            background: linear-gradient(180deg, #fffaf2 0%, #fff5e8 100%);
+            padding: 2.5rem 1rem;
+            border: 1px dashed var(--border-soft);
+            border-radius: 12px;
+            background: #f9fafb;
+            height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
-        .empty-state i { display: block; font-size: 1.9rem; margin-bottom: .5rem; color: var(--orange-2); }
+        .empty-state i { font-size: 2rem; margin-bottom: .5rem; color: #d1d5db; }
 
-        .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2; line-clamp: 2;
-            -webkit-box-orient: vertical; overflow: hidden;
-        }
-
-        .section-action { margin-top: 1rem; text-align: center; }
+        .section-action { margin-top: 1.2rem; text-align: center; }
         .btn-toggle-list {
-            border: none; border-radius: 999px;
-            padding: .7rem 1.1rem; font-size: .85rem; font-weight: 700;
-            background: linear-gradient(135deg, #111111 0%, #ff8f00 100%);
-            color: #fff; box-shadow: 0 10px 24px rgba(255,143,0,.18);
-            transition: all .25s ease;
+            border: 1px solid var(--border-soft); border-radius: 8px;
+            padding: .6rem 1.2rem; font-size: .85rem; font-weight: 600;
+            background: #fff; color: var(--text-main);
+            transition: all .2s ease;
         }
-        .btn-toggle-list:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(255,143,0,.25); }
+        .btn-toggle-list:hover { background: var(--surface-bg); border-color: #d1d5db; }
 
         .extra-item.d-none { display: none !important; }
 
-        .badge.rounded-pill {
-            padding: .5rem .8rem; font-size: .75rem; font-weight: 700;
-            letter-spacing: .1px; white-space: normal;
-            text-align: left; line-height: 1.4;
-            display: inline-block; max-width: 100%;
-        }
-
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ff9800, #ffb000); border-radius: 999px; }
-        ::-webkit-scrollbar-track { background: #fff4e3; }
+        /* PERBAIKAN: Soft Badges */
+        .badge.rounded-pill { padding: 0.4em 0.8em; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.3px; }
+        .badge-soft-success { background-color: rgba(16, 185, 129, 0.15); color: #059669; }
+        .badge-soft-warning { background-color: rgba(245, 158, 11, 0.15); color: #d97706; }
+        .badge-soft-danger { background-color: rgba(239, 68, 68, 0.15); color: #b91c1c; }
+        .badge-soft-primary { background-color: rgba(59, 130, 246, 0.15); color: #1d4ed8; }
+        .badge-soft-secondary { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; }
     </style>
 </head>
 
@@ -537,31 +364,30 @@ $notifications  = fetchAllAssoc($qNotifications);
 
                     <!-- Header Hero -->
                     <div class="dashboard-hero">
-                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                            <div>
-                                <h1><?= h($heroTitle) ?></h1>
-                                <p>Ringkasan inventaris, kondisi perangkat, status pengiriman, dan aktivitas aset dalam tampilan modern sesuai peranan.</p>
-                            </div>
-                            <div class="role-badge">
-                                <i class="bi bi-person-badge me-1"></i><?= h($roleLabel) ?> · <?= h($branchLabel) ?>
-                            </div>
+                        <div>
+                            <h1><?= h($heroTitle) ?></h1>
+                            <p>Ringkasan inventaris, kondisi perangkat, dan aktivitas logistik aset Anda.</p>
+                        </div>
+                        <div class="role-badge">
+                            <i class="bi bi-person-badge"></i>
+                            <?= h($roleLabel) ?> &bull; <?= h($branchLabel) ?>
                         </div>
                     </div>
 
                     <!-- Notifikasi -->
                     <?php if (!empty($notifications)): ?>
-                        <div class="alert alert-warning border-0 shadow-sm mb-4">
-                            <div class="fw-bold mb-2"><i class="bi bi-bell me-2"></i>Notifikasi Terbaru</div>
+                        <div class="alert alert-warning border-0 shadow-sm mb-4" style="background-color: #fffbeb; color: #b45309; border-radius: 12px;">
+                            <div class="fw-bold mb-2"><i class="bi bi-bell-fill me-2"></i>Notifikasi Terbaru</div>
                             <?php foreach ($notifications as $notif): ?>
                                 <?php
                                 $notifId      = (int) ($notif['id'] ?? 0);
                                 $notifLink    = trim((string) ($notif['link'] ?? ''));
                                 $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
                                 ?>
-                                <div class="mb-2">
-                                    <div class="fw-semibold"><?= dv($notif['title'] ?? null) ?></div>
-                                    <div class="small"><?= dv($notif['message'] ?? null) ?></div>
-                                    <a href="<?= h($notifReadUrl) ?>" class="small">Buka detail</a>
+                                <div class="mb-2 pb-2 border-bottom border-warning border-opacity-25 last:border-0 last:mb-0 last:pb-0">
+                                    <div class="fw-semibold" style="color: #92400e;"><?= dv($notif['title'] ?? null) ?></div>
+                                    <div class="small mb-1"><?= dv($notif['message'] ?? null) ?></div>
+                                    <a href="<?= h($notifReadUrl) ?>" class="small fw-bold text-decoration-none" style="color: #d97706;">Lihat detail &rarr;</a>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -571,11 +397,11 @@ $notifications  = fetchAllAssoc($qNotifications);
                     <div class="row g-3 mb-4">
                         <div class="col-12 col-sm-6 col-xl">
                             <div class="summary-card">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <div class="summary-label">Total Inventaris</div>
                                         <div class="summary-value"><?= $totalInventaris ?></div>
-                                        <div class="summary-note">Aset aktif di lokasi saya</div>
+                                        <div class="summary-note">Aset aktif lokasi saya</div>
                                     </div>
                                     <div class="summary-icon"><i class="bi bi-box-seam"></i></div>
                                 </div>
@@ -584,13 +410,11 @@ $notifications  = fetchAllAssoc($qNotifications);
 
                         <div class="col-12 col-sm-6 col-xl">
                             <div class="summary-card">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <div class="summary-label">Barang Masuk</div>
                                         <div class="summary-value"><?= $totalMasuk ?></div>
-                                        <div class="summary-note">
-                                            <?= $isAdmin ? 'Diterima dari Cabang' : 'Diterima dari HO' ?>
-                                        </div>
+                                        <div class="summary-note"><?= $isAdmin ? 'Diterima dr Cabang' : 'Diterima dr HO' ?></div>
                                     </div>
                                     <div class="summary-icon"><i class="bi bi-box-arrow-in-down"></i></div>
                                 </div>
@@ -599,13 +423,11 @@ $notifications  = fetchAllAssoc($qNotifications);
 
                         <div class="col-12 col-sm-6 col-xl">
                             <div class="summary-card">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <div class="summary-label">Barang Keluar</div>
                                         <div class="summary-value"><?= $totalKeluar ?></div>
-                                        <div class="summary-note">
-                                            <?= $isAdmin ? 'Dikirim ke Cabang' : 'Dikirim ke HO' ?>
-                                        </div>
+                                        <div class="summary-note"><?= $isAdmin ? 'Dikirim ke Cabang' : 'Dikirim ke HO' ?></div>
                                     </div>
                                     <div class="summary-icon"><i class="bi bi-box-arrow-up"></i></div>
                                 </div>
@@ -613,29 +435,25 @@ $notifications  = fetchAllAssoc($qNotifications);
                         </div>
 
                         <div class="col-12 col-sm-6 col-xl">
-                            <div class="summary-card">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div class="summary-card bermasalah">
+                                <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <div class="summary-label">Bermasalah</div>
+                                        <div class="summary-label text-danger">Bermasalah</div>
                                         <div class="summary-value"><?= $totalBermasalah ?></div>
-                                        <div class="summary-note">Perlu perhatian khusus</div>
+                                        <div class="summary-note">Butuh perbaikan</div>
                                     </div>
-                                    <div class="summary-icon" style="background: linear-gradient(135deg,#dc3545,#ff6b6b) !important;">
-                                        <i class="bi bi-exclamation-triangle"></i>
-                                    </div>
+                                    <div class="summary-icon bermasalah"><i class="bi bi-exclamation-triangle"></i></div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="col-12 col-sm-6 col-xl">
                             <div class="summary-card">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div class="d-flex justify-content-between align-items-start">
                                     <div>
                                         <div class="summary-label">Belum Diterima</div>
                                         <div class="summary-value"><?= $totalSedangDikirim ?></div>
-                                        <div class="summary-note">
-                                            <?= $isAdmin ? 'Kiriman HO ke Cabang' : 'Kiriman Cabang ke HO' ?>
-                                        </div>
+                                        <div class="summary-note"><?= $isAdmin ? 'Kiriman HO → Cabang' : 'Cabang → HO' ?></div>
                                     </div>
                                     <div class="summary-icon"><i class="bi bi-truck"></i></div>
                                 </div>
@@ -643,42 +461,33 @@ $notifications  = fetchAllAssoc($qNotifications);
                         </div>
                     </div>
 
-                    <!-- Panel Detail (4 Kolom) -->
+                    <!-- Panel Detail (Ubah ke Grid 2x2: col-xl-6) -->
                     <div class="row g-4">
 
                         <!-- PANEL 1: BARANG MASUK -->
-                        <div class="col-xl-3 col-md-6">
+                        <div class="col-xl-6 col-lg-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-box-arrow-in-down me-2 text-warning-custom"></i>Barang Masuk
+                                        <i class="bi bi-box-arrow-in-down" style="color: var(--orange-1);"></i> Barang Masuk
                                     </div>
                                     <div class="panel-subtitle">
-                                        <?= $isAdmin ? 'Dari Cabang ke HO' : 'Dari HO ke Cabang' ?>
+                                        <?= $isAdmin ? 'Logistik dari Cabang masuk ke HO' : 'Logistik dari HO masuk ke Cabang' ?>
                                     </div>
                                 </div>
                                 <div class="panel-body">
                                     <?php if (!empty($barangMasukTerbaru)): ?>
                                         <div class="activity-list" id="barangMasukList">
                                             <?php foreach ($barangMasukTerbaru as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
-                                                    <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= dv($item['nama_barang'] ?? null) ?></div>
-                                                        <div class="meta-grid">
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-person me-1"></i>
-                                                                <?= dv($item['nama_pemilik'] ?? null, 'Belum Ada Pemilik') ?>
-                                                            </div>
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-geo-alt me-1"></i>Asal: <?= dv($item['nama_branch_aktif'] ?? null) ?>
-                                                            </div>
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-calendar3 me-1"></i><?= dv($item['tanggal_kirim'] ?? null) ?>
-                                                            </div>
-                                                        </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
+                                                    <div class="activity-item-header">
+                                                        <div class="activity-title"><?= dv($item['nama_barang'] ?? null) ?></div>
+                                                        <div><?= shippingBadge($item['status_pengiriman'] ?? 'Masuk') ?></div>
                                                     </div>
-                                                    <div class="pt-2 mt-3 text-start" style="border-top:1px dashed rgba(255,152,0,.2);">
-                                                        <?= shippingBadge($item['status_pengiriman'] ?? 'Masuk') ?>
+                                                    <div class="meta-grid">
+                                                        <div class="meta-muted"><i class="bi bi-person"></i> <?= dv($item['nama_pemilik'] ?? null, 'Belum Ada Pemilik') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-calendar3"></i> <?= dv($item['tanggal_kirim'] ?? null) ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-geo-alt"></i> Asal: <?= dv($item['nama_branch_aktif'] ?? null) ?></div>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -686,49 +495,44 @@ $notifications  = fetchAllAssoc($qNotifications);
                                         <?php if (count($barangMasukTerbaru) > $previewLimit): ?>
                                             <div class="section-action">
                                                 <button type="button" class="btn-toggle-list" onclick="toggleList('barangMasukList', this)">
-                                                    <i class="bi bi-chevron-down"></i> Lihat selengkapnya
+                                                    Lihat Semua (<?= count($barangMasukTerbaru) ?>)
                                                 </button>
                                             </div>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <div class="empty-state"><i class="bi bi-inbox"></i>Belum ada data barang masuk.</div>
+                                        <div class="empty-state">
+                                            <i class="bi bi-inbox"></i>
+                                            <span class="fw-semibold">Belum ada barang masuk</span>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
 
                         <!-- PANEL 2: BARANG KELUAR -->
-                        <div class="col-xl-3 col-md-6">
+                        <div class="col-xl-6 col-lg-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-box-arrow-up me-2 text-warning-custom"></i>Barang Keluar
+                                        <i class="bi bi-box-arrow-up" style="color: var(--orange-1);"></i> Barang Keluar
                                     </div>
                                     <div class="panel-subtitle">
-                                        <?= $isAdmin ? 'Dari HO ke Cabang' : 'Dari Cabang ke HO' ?>
+                                        <?= $isAdmin ? 'Logistik dikirim dari HO ke Cabang' : 'Logistik dikirim dari Cabang ke HO' ?>
                                     </div>
                                 </div>
                                 <div class="panel-body">
                                     <?php if (!empty($barangKeluarTerbaru)): ?>
                                         <div class="activity-list" id="barangKeluarList">
                                             <?php foreach ($barangKeluarTerbaru as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
-                                                    <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= dv($item['nama_barang'] ?? null) ?></div>
-                                                        <div class="meta-grid">
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-geo-alt me-1"></i>Tujuan: <?= dv($item['nama_branch_tujuan'] ?? 'Pusat HO') ?>
-                                                            </div>
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-receipt me-1"></i>Resi: <?= dv($item['nomor_resi_keluar'] ?? null) ?>
-                                                            </div>
-                                                            <div class="meta-muted">
-                                                                <i class="bi bi-calendar3 me-1"></i><?= dv($item['tanggal_keluar'] ?? null) ?>
-                                                            </div>
-                                                        </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
+                                                    <div class="activity-item-header">
+                                                        <div class="activity-title"><?= dv($item['nama_barang'] ?? null) ?></div>
+                                                        <div><?= shippingBadge($item['status_pengiriman'] ?? '-') ?></div>
                                                     </div>
-                                                    <div class="pt-2 mt-3 text-start" style="border-top:1px dashed rgba(255,152,0,.2);">
-                                                        <?= shippingBadge($item['status_pengiriman'] ?? '-') ?>
+                                                    <div class="meta-grid">
+                                                        <div class="meta-muted"><i class="bi bi-geo-alt"></i> Tujuan: <?= dv($item['nama_branch_tujuan'] ?? 'Pusat HO') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-calendar3"></i> <?= dv($item['tanggal_keluar'] ?? null) ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-receipt"></i> Resi: <?= dv($item['nomor_resi_keluar'] ?? 'Belum ada') ?></div>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -736,43 +540,44 @@ $notifications  = fetchAllAssoc($qNotifications);
                                         <?php if (count($barangKeluarTerbaru) > $previewLimit): ?>
                                             <div class="section-action">
                                                 <button type="button" class="btn-toggle-list" onclick="toggleList('barangKeluarList', this)">
-                                                    <i class="bi bi-chevron-down"></i> Lihat selengkapnya
+                                                    Lihat Semua (<?= count($barangKeluarTerbaru) ?>)
                                                 </button>
                                             </div>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <div class="empty-state"><i class="bi bi-inbox"></i>Belum ada data barang keluar.</div>
+                                        <div class="empty-state">
+                                            <i class="bi bi-send-x"></i>
+                                            <span class="fw-semibold">Belum ada barang keluar</span>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
 
                         <!-- PANEL 3: BARANG BERMASALAH -->
-                        <div class="col-xl-3 col-md-6">
+                        <div class="col-xl-6 col-lg-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-exclamation-triangle me-2 text-warning-custom"></i>Barang Bermasalah
+                                        <i class="bi bi-exclamation-triangle text-danger"></i> Barang Bermasalah
                                     </div>
-                                    <div class="panel-subtitle">Butuh perbaikan / rusak</div>
+                                    <div class="panel-subtitle">Aset yang dilaporkan rusak atau butuh perbaikan</div>
                                 </div>
                                 <div class="panel-body">
                                     <?php if (!empty($barangBermasalah)): ?>
                                         <div class="activity-list" id="barangBermasalahList">
                                             <?php foreach ($barangBermasalah as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
-                                                    <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                        <div class="meta-grid">
-                                                            <div class="meta-line"><strong>Serial:</strong> <?= h($item['serial_number'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i><?= h($item['nama_branch_aktif'] ?? '-') ?></div>
-                                                            <div class="meta-line text-danger line-clamp-2">
-                                                                <strong>Kendala:</strong> <?= h($item['keterangan_masalah'] ?? '-') ?>
-                                                            </div>
-                                                        </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>" style="border-left: 4px solid #ef4444;">
+                                                    <div class="activity-item-header">
+                                                        <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div><?= barangBadge('Iya') ?></div>
                                                     </div>
-                                                    <div class="pt-2 mt-3 text-start" style="border-top:1px dashed rgba(255,152,0,.2);">
-                                                        <?= barangBadge('Iya') ?>
+                                                    <div class="meta-grid">
+                                                        <div class="meta-muted"><i class="bi bi-upc-scan"></i> SN: <?= h($item['serial_number'] ?? '-') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-geo-alt"></i> <?= h($item['nama_branch_aktif'] ?? '-') ?></div>
+                                                    </div>
+                                                    <div class="mt-2 pt-2 border-top border-danger border-opacity-10 small text-danger">
+                                                        <strong>Kendala:</strong> <?= h($item['keterangan_masalah'] ?? 'Tidak ada keterangan') ?>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -780,44 +585,45 @@ $notifications  = fetchAllAssoc($qNotifications);
                                         <?php if (count($barangBermasalah) > $previewLimit): ?>
                                             <div class="section-action">
                                                 <button type="button" class="btn-toggle-list" onclick="toggleList('barangBermasalahList', this)">
-                                                    <i class="bi bi-chevron-down"></i> Lihat selengkapnya
+                                                    Lihat Semua (<?= count($barangBermasalah) ?>)
                                                 </button>
                                             </div>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <div class="empty-state"><i class="bi bi-check-circle"></i>Tidak ada barang bermasalah saat ini.</div>
+                                        <div class="empty-state">
+                                            <i class="bi bi-check-circle text-success"></i>
+                                            <span class="fw-semibold">Semua aset dalam kondisi normal</span>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
                         </div>
 
                         <!-- PANEL 4: BELUM DITERIMA -->
-                        <div class="col-xl-3 col-md-6">
+                        <div class="col-xl-6 col-lg-6">
                             <div class="panel-card">
                                 <div class="panel-header">
                                     <div class="panel-title">
-                                        <i class="bi bi-truck me-2 text-warning-custom"></i>Belum Diterima
+                                        <i class="bi bi-truck text-primary"></i> Sedang Dalam Perjalanan
                                     </div>
                                     <div class="panel-subtitle">
-                                        <?= $isAdmin ? 'Kiriman HO → Cabang' : 'Kiriman Cabang → HO' ?>
+                                        <?= $isAdmin ? 'Menunggu konfirmasi penerimaan dari Cabang' : 'Menunggu konfirmasi penerimaan dari HO' ?>
                                     </div>
                                 </div>
                                 <div class="panel-body">
                                     <?php if (!empty($pengirimanBelumDiterima)): ?>
                                         <div class="activity-list" id="pengirimanBelumDiterimaList">
                                             <?php foreach ($pengirimanBelumDiterima as $index => $item): ?>
-                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?> d-flex flex-column">
-                                                    <div class="flex-grow-1">
-                                                        <div class="activity-title mb-2"><?= h($item['nama_barang'] ?? '-') ?></div>
-                                                        <div class="meta-grid">
-                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Asal: <?= h($item['nama_branch_asal'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-geo-alt me-1"></i>Tujuan: <?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-receipt me-1"></i>Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
-                                                            <div class="meta-muted"><i class="bi bi-calendar3 me-1"></i><?= h($item['tanggal_keluar'] ?? '-') ?></div>
-                                                        </div>
+                                                <div class="activity-item <?= $index >= $previewLimit ? 'extra-item d-none' : '' ?>">
+                                                    <div class="activity-item-header">
+                                                        <div class="activity-title"><?= h($item['nama_barang'] ?? '-') ?></div>
+                                                        <div><?= shippingBadge($item['status_pengiriman'] ?? '-') ?></div>
                                                     </div>
-                                                    <div class="pt-2 mt-3 text-start" style="border-top:1px dashed rgba(255,152,0,.2);">
-                                                        <?= shippingBadge($item['status_pengiriman'] ?? '-') ?>
+                                                    <div class="meta-grid">
+                                                        <div class="meta-muted"><i class="bi bi-arrow-up-right"></i> Asal: <?= h($item['nama_branch_asal'] ?? '-') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-arrow-down-right"></i> Tujuan: <?= h($item['nama_branch_tujuan'] ?? '-') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-calendar3"></i> Dikirim: <?= h($item['tanggal_keluar'] ?? '-') ?></div>
+                                                        <div class="meta-muted"><i class="bi bi-receipt"></i> Resi: <?= h($item['nomor_resi_keluar'] ?? '-') ?></div>
                                                     </div>
                                                 </div>
                                             <?php endforeach; ?>
@@ -825,12 +631,15 @@ $notifications  = fetchAllAssoc($qNotifications);
                                         <?php if (count($pengirimanBelumDiterima) > $previewLimit): ?>
                                             <div class="section-action">
                                                 <button type="button" class="btn-toggle-list" onclick="toggleList('pengirimanBelumDiterimaList', this)">
-                                                    <i class="bi bi-chevron-down"></i> Lihat selengkapnya
+                                                    Lihat Semua (<?= count($pengirimanBelumDiterima) ?>)
                                                 </button>
                                             </div>
                                         <?php endif; ?>
                                     <?php else: ?>
-                                        <div class="empty-state"><i class="bi bi-check2-all"></i>Tidak ada pengiriman aktif saat ini.</div>
+                                        <div class="empty-state">
+                                            <i class="bi bi-check2-all"></i>
+                                            <span class="fw-semibold">Tidak ada pengiriman aktif saat ini</span>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -854,10 +663,10 @@ $notifications  = fetchAllAssoc($qNotifications);
 
             if (isExpanded) {
                 button.setAttribute('data-expanded', 'false');
-                button.innerHTML = '<i class="bi bi-chevron-down"></i> Lihat selengkapnya';
+                button.innerText = 'Lihat Semua (' + (hiddenItems.length + 3) + ')'; // Asumsi previewLimit = 3
             } else {
                 button.setAttribute('data-expanded', 'true');
-                button.innerHTML = '<i class="bi bi-chevron-up"></i> Tampilkan lebih sedikit';
+                button.innerText = 'Tutup Sebagian';
             }
         }
     </script>

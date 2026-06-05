@@ -123,17 +123,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
+        /* ==========================================
+           TEMA BARU MODERN CLEAN (Dashboard Match)
+           ========================================== */
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --dark-1: #111111;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --surface: #ffffff;
-            --shadow-soft: 0 16px 40px rgba(17, 17, 17, 0.08);
-            --shadow-strong: 0 22px 54px rgba(255, 122, 0, 0.16);
-            --radius-xl: 28px;
+            --orange-primary: #E64312;
+            --orange-hover: #F25C05;
+            --dark-main: #231F20;
+            --text-dark: #374151;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-body: #F4F6F9;
         }
 
         * { box-sizing: border-box; }
@@ -142,123 +142,327 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             margin: 0;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            color: var(--text-main);
-            background:
-                radial-gradient(circle at top left, rgba(255, 176, 0, 0.18), transparent 24%),
-                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 20%),
-                linear-gradient(180deg, #fff8f1 0%, #fffaf5 34%, #ffffff 100%);
+            color: var(--text-dark);
+            background-color: var(--bg-body);
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
         }
 
-        .login-wrap { width: 100%; max-width: 1120px; }
-
-        .login-card {
-            background: var(--surface);
-            border: 1px solid rgba(255, 176, 0, 0.14);
-            border-radius: var(--radius-xl);
-            overflow: hidden;
-            box-shadow: var(--shadow-soft);
+        .login-wrap {
+            width: 100%;
+            max-width: 1000px;
         }
 
-        /* ── LEFT PANEL ── */
+        .login-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+        }
+
+        /* --- Sisi Kiri (Informasi) --- */
         .login-left {
             position: relative;
-            overflow: hidden;
-            background: linear-gradient(135deg, rgba(17,17,17,0.96) 0%, rgba(42,42,42,0.92) 34%, rgba(255,122,0,0.96) 100%);
-            color: #fff;
-            padding: 52px 42px;
+            background-color: var(--dark-main);
+            color: #ffffff;
+            padding: 48px 40px;
             height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            overflow: hidden;
+        }
+
+        /* Ornamen Background Kiri */
+        .login-left::before {
+            content: "";
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: rgba(230, 67, 18, 0.1);
+            z-index: 1;
+        }
+        .login-left::after {
+            content: "";
+            position: absolute;
+            bottom: -80px;
+            left: -40px;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.03);
+            z-index: 1;
+        }
+
+        .login-left-content,
+        .login-left-footer {
+            position: relative;
+            z-index: 2;
         }
 
         .brand-badge {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 9px 15px;
-            border-radius: 999px;
-            background: rgba(255,193,7,0.12);
-            color: #ffe082;
-            font-size: .84rem;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            font-size: .85rem;
             font-weight: 700;
-            margin-bottom: 22px;
-            border: 1px solid rgba(255,193,7,0.18);
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .brand-badge i { color: var(--orange-primary); font-size: 1.1rem; }
+
+        .login-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 16px;
+            color: #ffffff;
         }
 
-        .brand-dot {
-            width: 10px; height: 10px;
-            border-radius: 999px;
-            background: #ffc107;
-            box-shadow: 0 0 0 4px rgba(255,193,7,0.14);
+        .login-desc {
+            color: #9ca3af;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
         }
 
-        .login-title { font-size: 2.1rem; font-weight: 800; line-height: 1.18; margin-bottom: 16px; letter-spacing: -0.03em; max-width: 470px; }
-        .login-desc { color: rgba(255,255,255,0.82); line-height: 1.72; max-width: 460px; font-size: .96rem; margin-bottom: 0; }
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+        .feature-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(230, 67, 18, 0.15);
+            color: var(--orange-primary);
+            flex-shrink: 0;
+            font-size: 1.1rem;
+        }
+        .feature-title { font-weight: 700; margin-bottom: 4px; color: #f3f4f6; font-size: 0.95rem; }
+        .feature-text { color: #9ca3af; font-size: 0.85rem; line-height: 1.5; }
 
-        .login-feature { margin-top: 30px; display: flex; flex-direction: column; gap: 14px; }
-        .feature-item { display: flex; align-items: flex-start; gap: 13px; padding: 14px 15px; border-radius: 18px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
-        .feature-icon { width: 40px; height: 40px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,193,7,0.14); color: #ffd166; flex-shrink: 0; font-size: 1rem; border: 1px solid rgba(255,193,7,0.16); }
-        .feature-title { font-weight: 700; margin-bottom: 3px; color: #fff; }
-        .feature-text { color: rgba(255,255,255,0.70); font-size: .9rem; line-height: 1.5; }
+        .login-left-footer {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
 
-        .login-left-footer { margin-top: 28px; display: flex; align-items: center; gap: 12px; color: rgba(255,255,255,0.74); font-size: .88rem; }
-        .footer-mark { width: 42px; height: 42px; border-radius: 14px; background: rgba(255,255,255,0.09); display: inline-flex; align-items: center; justify-content: center; color: #ffd166; font-weight: 800; border: 1px solid rgba(255,255,255,0.10); }
+        /* --- Sisi Kanan (Form) --- */
+        .login-right {
+            padding: 48px 40px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
 
-        /* ── RIGHT PANEL ── */
-        .login-right { padding: 44px 38px; background: linear-gradient(180deg, #ffffff 0%, #fffdf9 100%); }
+        .form-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 8px;
+            padding: 6px 12px;
+            background: rgba(230, 67, 18, 0.1);
+            color: var(--orange-primary);
+            font-size: .82rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
 
-        .form-badge { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 14px; background: #fff6e8; color: #9a640b; font-size: .82rem; font-weight: 700; border: 1px solid rgba(255,152,0,0.16); margin-bottom: 16px; }
-        .form-title { font-size: 1.75rem; font-weight: 800; color: var(--dark-1); margin-bottom: 8px; letter-spacing: -0.02em; }
-        .form-subtitle { color: var(--text-soft); margin-bottom: 28px; line-height: 1.65; font-size: .94rem; }
+        .form-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--dark-main);
+            margin-bottom: 6px;
+        }
 
-        .alert { border: none; border-radius: 16px; padding: 14px 16px; font-size: .92rem; box-shadow: 0 10px 24px rgba(17,17,17,0.04); }
-        .alert-danger { background: #fff1ef; color: #c2412d; border-left: 4px solid #c2412d; }
-        .alert-success { background: #eefaf0; color: #2f7d43; border-left: 4px solid #2f7d43; }
+        .form-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 24px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
 
-        .form-label { font-weight: 700; color: var(--dark-1); margin-bottom: .55rem; }
+        /* Notifikasi Alert */
+        .alert {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .alert-danger { background: #fef2f2; color: #b91c1c; border-left: 4px solid #ef4444; }
+        .alert-success { background: #f0fdf4; color: #15803d; border-left: 4px solid #22c55e; }
+
+        /* Form Input Modern */
+        .form-label {
+            font-weight: 700;
+            color: var(--dark-main);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
 
         .input-shell { position: relative; }
-        .input-icon { position: absolute; top: 50%; left: 15px; transform: translateY(-50%); color: #c27e12; font-size: 1rem; z-index: 2; }
-        .form-control { border-radius: 16px; padding: .95rem 1rem .95rem 2.85rem; border: 1px solid #e6dfd2; background: #fff; box-shadow: none; font-size: .95rem; transition: all .2s ease; }
-        .form-control:focus { border-color: #f0c63d; box-shadow: 0 0 0 0.22rem rgba(255,193,7,0.14); background: #fffdfa; }
+        .input-icon {
+            position: absolute;
+            top: 50%;
+            left: 16px;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 1.1rem;
+            z-index: 2;
+            transition: color 0.2s;
+        }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 0.75rem 1rem 0.75rem 2.8rem;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-dark);
+            transition: all 0.2s ease;
+            box-shadow: none !important;
+        }
+        
+        .form-control:focus {
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 4px rgba(230, 67, 18, 0.1) !important;
+        }
+        
+        .form-control:focus + .input-icon,
+        .input-shell:focus-within .input-icon {
+            color: var(--orange-primary);
+        }
 
         .password-shell .form-control { padding-right: 3.2rem; }
-        .password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); width: 38px; height: 38px; border: none; background: transparent; color: #c27e12; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all .2s ease; z-index: 3; }
-        .password-toggle:hover { background: #fff3e0; color: #111; }
+        .password-toggle {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 3;
+        }
+        .password-toggle:hover { background: var(--bg-body); color: var(--dark-main); }
+        .password-toggle:focus { outline: none; box-shadow: 0 0 0 2px rgba(230, 67, 18, 0.1); }
 
-        /* Saran Password Box */
+        /* Saran Password Box (Modernized) */
         .suggestion-box {
-            background: #f8fbff;
-            border: 1px dashed #a8c5ff;
-            border-radius: 16px;
+            background: var(--bg-body);
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
             padding: 16px;
             margin-bottom: 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-        .suggestion-text { font-size: 0.88rem; color: #3b5998; margin-bottom: 4px; font-weight: 600;}
-        .suggestion-pass { font-family: monospace; font-weight: bold; color: #0d6efd; font-size: 1.2rem; letter-spacing: 2px; background: #e9f0ff; padding: 4px 10px; border-radius: 8px; user-select: all; display: inline-block;}
-        .btn-use-suggestion { background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px;}
-        .btn-use-suggestion:hover { background: #0b5ed7; transform: translateY(-1px); }
+        .suggestion-text { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 600;}
+        .suggestion-pass { 
+            font-family: monospace; 
+            font-weight: 800; 
+            color: var(--dark-main); 
+            font-size: 1.2rem; 
+            letter-spacing: 2px; 
+            background: #ffffff; 
+            padding: 4px 10px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color); 
+            user-select: all; 
+            display: inline-block;
+        }
+        .btn-use-suggestion { 
+            background: var(--orange-primary); 
+            color: white; 
+            border: none; 
+            padding: 8px 16px; 
+            border-radius: 8px; 
+            font-size: 0.85rem; 
+            font-weight: 700; 
+            cursor: pointer; 
+            transition: 0.2s; 
+            display: flex; 
+            align-items: center; 
+            gap: 6px;
+        }
+        .btn-use-suggestion:hover { background: var(--orange-hover); transform: translateY(-1px); }
 
-        .btn-login { background: linear-gradient(135deg, var(--orange-1), var(--orange-3)); border: none; color: #fff; font-weight: 800; border-radius: 16px; padding: .95rem 1rem; box-shadow: var(--shadow-strong); transition: all .22s ease; letter-spacing: .01em; }
-        .btn-login:hover { color: #fff; transform: translateY(-1px); filter: brightness(.98); }
+        /* Tombol Modern */
+        .btn-login {
+            background-color: var(--orange-primary);
+            color: #ffffff;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+        .btn-login:hover {
+            background-color: var(--orange-hover);
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(230, 67, 18, 0.2);
+        }
 
-        .system-note { margin-top: 24px; background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%); border: 1px solid rgba(255,152,0,0.12); border-radius: 18px; padding: 15px 16px; color: var(--text-soft); font-size: .91rem; line-height: 1.6; }
+        .system-note {
+            margin-top: 24px;
+            background: var(--bg-body);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            border-left: 4px solid var(--border-color);
+        }
 
         /* strength bar */
-        .strength-bar { height: 5px; border-radius: 999px; background: #f0ece4; margin-top: 8px; overflow: hidden; }
+        .strength-bar { height: 6px; border-radius: 999px; background: var(--border-color); margin-top: 8px; overflow: hidden; }
         .strength-fill { height: 100%; border-radius: 999px; width: 0%; transition: width .3s ease, background .3s ease; }
-        .strength-label { font-size: .78rem; font-weight: 700; margin-top: 4px; color: var(--text-soft); }
+        .strength-label { font-size: .8rem; font-weight: 700; margin-top: 4px; color: var(--text-muted); }
 
-        @media (max-width: 991.98px) { .login-left, .login-right { padding: 34px 28px; } .login-title { font-size: 1.75rem; } .form-title { font-size: 1.45rem; } }
-        @media (max-width: 767.98px) { body { padding: 16px; } .login-card { border-radius: 22px; } .login-left, .login-right { padding: 26px 22px; } .suggestion-box { flex-direction: column; gap: 12px; align-items: stretch; text-align: center;} }
+        @media (max-width: 991.98px) { 
+            .login-left, .login-right { padding: 32px 24px; } 
+            .login-title { font-size: 1.6rem; } 
+            .form-title { font-size: 1.4rem; } 
+        }
+        @media (max-width: 767.98px) { 
+            .suggestion-box { flex-direction: column; gap: 12px; align-items: stretch; text-align: center;} 
+        }
     </style>
 </head>
 
@@ -267,21 +471,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="row g-0 login-card">
 
             <!-- LEFT PANEL -->
-            <div class="col-lg-6">
+            <div class="col-lg-5 d-none d-lg-block">
                 <div class="login-left">
                     <div class="login-left-content">
                         <div class="brand-badge">
-                            <span class="brand-dot"></span>
-                            <span>IT Asset Management System</span>
+                            <i class="bi bi-layers-fill"></i>
+                            <span>IT Asset System</span>
                         </div>
 
                         <div class="login-title">
-                            Wajib Ganti Password Sebelum Melanjutkan
+                            Wajib Ganti Password
                         </div>
 
                         <div class="login-desc">
-                            Akun Anda menggunakan password default dari sistem.
-                            Demi keamanan, harap buat password baru sebelum mengakses dashboard.
+                            Akun Anda saat ini menggunakan password bawaan dari sistem. Demi keamanan, buat password baru sebelum mengakses dashboard.
                         </div>
 
                         <div class="login-feature">
@@ -296,7 +499,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="feature-item">
                                 <div class="feature-icon"><i class="bi bi-key"></i></div>
                                 <div>
-                                    <div class="feature-title">Password Kuat</div>
+                                    <div class="feature-title">Kombinasi Kuat</div>
                                     <div class="feature-text">Gunakan kombinasi yang disarankan sistem agar akun Anda lebih aman dan sulit ditebak.</div>
                                 </div>
                             </div>
@@ -304,14 +507,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <div class="login-left-footer">
-                        <div class="footer-mark">IT</div>
-                        <div>Sistem inventaris internal untuk pengelolaan aset teknologi perusahaan.</div>
+                        &copy; <?= date('Y') ?> IT Asset Management Internal System.
                     </div>
                 </div>
             </div>
 
             <!-- RIGHT PANEL -->
-            <div class="col-lg-6">
+            <div class="col-lg-7">
                 <div class="login-right">
                     <div class="form-badge">
                         <i class="bi bi-shield-exclamation"></i>
@@ -338,11 +540,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <!-- Kotak Saran Password Profesional -->
                     <div class="suggestion-box">
                         <div>
-                            <div class="suggestion-text">Saran Password Sangat Kuat:</div>
+                            <div class="suggestion-text">Saran Kombinasi Kuat:</div>
                             <div class="suggestion-pass" id="suggestedPasswordTxt">Memuat...</div>
                         </div>
                         <button type="button" class="btn-use-suggestion" id="btnUseSuggestion">
-                            <i class="bi bi-magic"></i> Gunakan Password Ini
+                            <i class="bi bi-magic"></i> Gunakan
                         </button>
                     </div>
 
@@ -350,7 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mb-3">
                             <label class="form-label">Password Baru</label>
                             <div class="input-shell password-shell">
-                                <span class="input-icon"><i class="bi bi-lock"></i></span>
+                                <i class="bi bi-lock-fill input-icon"></i>
                                 <input
                                     type="password"
                                     name="new_password"
@@ -371,10 +573,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="strength-label" id="strengthLabel"></div>
                         </div>
 
-                        <div class="mb-4">
+                        <div class="mb-4 mt-3">
                             <label class="form-label">Konfirmasi Password Baru</label>
                             <div class="input-shell password-shell">
-                                <span class="input-icon"><i class="bi bi-lock-fill"></i></span>
+                                <i class="bi bi-check-circle-fill input-icon"></i>
                                 <input
                                     type="password"
                                     name="confirm_password"
@@ -388,17 +590,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
-                            <div id="matchMsg" style="font-size:.8rem; margin-top:5px; font-weight:700;"></div>
+                            <div id="matchMsg" style="font-size:0.85rem; margin-top:6px; font-weight:700;"></div>
                         </div>
 
                         <button type="submit" class="btn btn-login w-100">
-                            <i class="bi bi-check2-circle me-2"></i>Simpan Password Baru
+                            Simpan Password Baru <i class="bi bi-arrow-right ms-2"></i>
                         </button>
                     </form>
 
-                    <div class="system-note mt-4">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Halaman ini <b>tidak dapat dilewati</b>. Anda harus menyimpan password baru sebelum mengakses sistem.
+                    <div class="system-note">
+                        <i class="bi bi-info-circle me-1 text-muted"></i>
+                        Halaman ini <b>tidak dapat dilewati</b>. Anda diwajibkan untuk menyimpan password baru terlebih dahulu sebelum mengakses sistem utama.
                     </div>
                 </div>
             </div>
@@ -406,6 +608,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <!-- SCRIPT (Tidak diubah logikanya, hanya penyesuaian fungsi visual) -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
@@ -496,10 +699,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 const levels =[
                     { pct: '0%',   color: '',          label: '' },
-                    { pct: '25%',  color: '#e53935',   label: 'Lemah (Minimal 8 Karakter)' },
-                    { pct: '50%',  color: '#fb8c00',   label: 'Cukup (Tambahkan Angka / Huruf Besar)' },
-                    { pct: '75%',  color: '#fdd835',   label: 'Baik (Tambahkan Simbol Spesial)' },
-                    { pct: '100%', color: '#43a047',   label: 'Sangat Kuat' },
+                    { pct: '25%',  color: '#ef4444',   label: 'Lemah (Minimal 8 Karakter)' }, // Merah
+                    { pct: '50%',  color: '#f59e0b',   label: 'Cukup (Tambahkan Angka/Huruf Besar)' }, // Oren kekuningan
+                    { pct: '75%',  color: '#eab308',   label: 'Baik (Tambahkan Simbol Spesial)' }, // Kuning
+                    { pct: '100%', color: '#22c55e',   label: 'Sangat Kuat' }, // Hijau
                 ];
 
                 const level = val.length === 0 ? levels[0] : levels[score];
@@ -519,11 +722,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     return;
                 }
                 if (newPasswordInput.value === confirmPasswordInput.value) {
-                    matchMsg.textContent = '✓ Password cocok';
-                    matchMsg.style.color = '#43a047';
+                    matchMsg.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Password cocok';
+                    matchMsg.style.color = '#22c55e'; // Hijau
                 } else {
-                    matchMsg.textContent = '✗ Password tidak cocok';
-                    matchMsg.style.color = '#e53935';
+                    matchMsg.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> Password tidak cocok';
+                    matchMsg.style.color = '#ef4444'; // Merah
                 }
             }
 

@@ -196,129 +196,132 @@ $q = mysqli_query($koneksi, "
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
+    <!-- CSS SINKRONISASI HEXINDO THEME -->
     <style>
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --dark-1: #111111;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --surface: #ffffff;
-            --border-soft: rgba(255, 152, 0, 0.14);
-            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07);
-            --radius-xl: 28px;
+            /* TEMA HEXINDO / HITACHI */
+            --orange-1: #E64312; 
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #333333;
+            --text-soft: #666666;
+            --surface-bg: #F4F6F9;
+            --border-soft: #E0E4E8;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --radius-xl: 8px; /* Lebih kotak / industrial */
         }
 
         body {
-            background: radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
-                linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
+            background-color: var(--surface-bg);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
             min-height: 100vh;
         }
 
         .page-shell {
-            padding: 25px;
+            padding: 24px 32px;
         }
 
-        /* Style Card Header Gradient */
+        /* Hero Banner tersinkronisasi */
         .page-hero {
             position: relative;
-            overflow: hidden;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
             border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(255, 122, 0, 0.96) 100%);
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
-            padding: 1.8rem 2rem;
+            padding: 1.5rem 2rem;
             margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            box-shadow: var(--shadow-soft);
         }
 
         .page-title {
             color: #fff;
-            font-size: 1.8rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.3rem;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
         }
 
         .page-desc {
-            color: rgba(255, 255, 255, 0.84);
-            font-size: .95rem;
-            max-width: 800px;
+            color: #9ca3af;
+            font-size: 0.95rem;
             margin-bottom: 0;
+            max-width: 800px;
         }
 
-        /* Style Card Table Putih */
+        /* Table Card & UI */
         .ui-card {
-            background: var(--surface);
+            background: #ffffff;
             border: 1px solid var(--border-soft);
-            border-radius: 22px;
+            border-radius: var(--radius-xl);
             box-shadow: var(--shadow-soft);
             overflow: hidden;
         }
 
-        /* Styling Table Modern */
         .table-custom {
             margin-bottom: 0;
         }
 
         .table-custom thead th {
-            background-color: #fcfcfc;
-            color: #555;
+            background-color: #f9fafb;
+            color: var(--text-soft);
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-weight: 700;
-            padding: 1rem 1.5rem;
-            border-bottom: 2px solid #eee;
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid var(--border-soft);
         }
 
         .table-custom tbody td {
             padding: 1.2rem 1.5rem;
             vertical-align: middle;
-            border-bottom: 1px solid #f5f5f5;
+            border-bottom: 1px solid var(--border-soft);
         }
 
-        /* Badge and Meta Line Customization */
+        /* Teks & Meta Data */
         .meta-line {
             display: block;
-            font-size: 0.88rem;
-            margin-bottom: 3px;
-            color: var(--text-soft);
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: var(--text-main);
         }
 
         .meta-strong {
             color: var(--dark-1);
-            font-weight: 700;
+            font-weight: 600;
         }
 
+        /* Soft Badge Hexindo Style */
         .badge-custom {
-            padding: 0.55em 1em;
-            font-weight: 700;
+            padding: 0.5em 1em;
+            font-weight: 600;
             font-size: 0.8rem;
             border-radius: 999px;
-            background-color: #fff4e6;
+            background-color: rgba(245, 158, 11, 0.15); /* Soft Warning */
             color: #d97706;
-            border: 1px solid rgba(255, 152, 0, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        /* Custom Modern Button */
+        /* Button Action Approval */
         .btn-modern {
-            background: linear-gradient(135deg, var(--dark-1), #333);
+            background-color: var(--orange-1);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 6px;
             padding: 0.6rem 1.2rem;
-            font-weight: 700;
+            font-weight: 600;
             font-size: 0.85rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            transition: all 0.2s ease;
         }
 
         .btn-modern:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-2));
+            background-color: var(--orange-2);
             color: white;
         }
 
@@ -326,23 +329,26 @@ $q = mysqli_query($koneksi, "
         .empty-state {
             padding: 4rem 2rem;
             text-align: center;
+            background-color: #f9fafb;
         }
 
         .empty-state i {
             font-size: 3.5rem;
-            color: #ffd8a8;
+            color: #d1d5db;
             margin-bottom: 1rem;
             display: block;
         }
 
         .empty-state-title {
-            font-weight: 800;
+            font-weight: 700;
             color: var(--dark-1);
-            font-size: 1.2rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.2rem;
         }
 
         .empty-state-desc {
             color: var(--text-soft);
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -350,20 +356,18 @@ $q = mysqli_query($koneksi, "
 <body>
 
     <div class="container-fluid p-0">
-        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
         <div class="d-flex flex-nowrap w-100 overflow-hidden">
 
             <?php include '../layout/sidebar.php'; ?>
 
-            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
 
                 <div class="page-shell">
 
-                    <!-- Header Hero Gradient -->
+                    <!-- Header Hero Hexindo Style -->
                     <div class="page-hero">
                         <div class="hero-content">
-                            <h1 class="page-title"><i class="bi bi-inboxes-fill me-2 text-warning"></i>Approval Pengiriman ke HO</h1>
+                            <h1 class="page-title"><i class="bi bi-inboxes-fill me-2" style="color: var(--orange-1);"></i> Approval Pengiriman ke HO</h1>
                             <p class="page-desc">Konfirmasi penerimaan barang rusak dari cabang yang sudah tiba secara fisik di Head Office Jakarta.</p>
                         </div>
                     </div>
@@ -374,7 +378,7 @@ $q = mysqli_query($koneksi, "
                             <table class="table table-custom">
                                 <thead>
                                     <tr>
-                                        <th>No</th>
+                                        <th width="60">No</th>
                                         <th>Informasi Barang & User</th>
                                         <th>Rute & Tanggal</th>
                                         <th>Jasa Logistik</th>
@@ -391,38 +395,39 @@ $q = mysqli_query($koneksi, "
                                             $canApprove = $status === STATUS_MENUNGGU_PERSETUJUAN;
                                             ?>
                                             <tr>
-                                                <td class="text-muted fw-bold"><?= $no++ ?></td>
+                                                <td class="text-muted fw-semibold"><?= $no++ ?></td>
                                                 <td>
-                                                    <div class="fw-bold fs-6 text-dark mb-1"><?= h($row['nama_barang'] ?? '-') ?></div>
-                                                    <span class="meta-line"><i class="bi bi-upc-scan me-1"></i> SN: <span class="meta-strong"><?= h($row['serial_number'] ?? 'Belum ada SN') ?></span></span>
-                                                    <span class="meta-line"><i class="bi bi-person-badge me-1"></i> User: <span class="meta-strong"><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></span></span>
+                                                    <div class="fw-bold fs-6 text-dark mb-2"><?= h($row['nama_barang'] ?? '-') ?></div>
+                                                    <span class="meta-line"><i class="bi bi-upc-scan me-2 text-muted"></i> SN: <span class="meta-strong"><?= h($row['serial_number'] ?? 'Belum ada SN') ?></span></span>
+                                                    <span class="meta-line"><i class="bi bi-person me-2 text-muted"></i> User: <span class="meta-strong"><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></span></span>
                                                     <?php if (!empty($row['catatan_user'])): ?>
-                                                        <span class="meta-line text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Kerusakan: <?= h($row['catatan_user']) ?></span>
+                                                        <span class="meta-line text-danger mt-1"><i class="bi bi-exclamation-triangle me-1"></i> <?= h($row['catatan_user']) ?></span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <div class="fw-bold text-dark mb-1">
-                                                        <?= h($row['nama_branch_asal'] ?? '-') ?> <i class="bi bi-arrow-right mx-1 text-warning"></i> <?= h($row['nama_branch_tujuan'] ?? '-') ?>
+                                                    <div class="fw-bold text-dark mb-2">
+                                                        <?= h($row['nama_branch_asal'] ?? '-') ?> <i class="bi bi-arrow-right mx-1 text-muted"></i> <?= h($row['nama_branch_tujuan'] ?? '-') ?>
                                                     </div>
-                                                    <span class="meta-line"><i class="bi bi-calendar-event me-1"></i> Tgl kirim: <?= h($row['tanggal_keluar'] ?? '-') ?></span>
+                                                    <span class="meta-line"><i class="bi bi-calendar3 me-2 text-muted"></i> Tgl kirim: <span class="meta-strong"><?= h($row['tanggal_keluar'] ?? '-') ?></span></span>
                                                 </td>
                                                 <td>
-                                                    <div class="fw-bold text-dark mb-1"><?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
-                                                    <span class="meta-line"><i class="bi bi-truck me-1"></i> <?= h($row['jasa_pengiriman'] ?? '-') ?></span>
+                                                    <div class="fw-bold text-dark mb-2"><i class="bi bi-receipt me-1 text-muted"></i> <?= h($row['nomor_resi_keluar'] ?? '-') ?></div>
+                                                    <span class="meta-line"><i class="bi bi-truck me-2 text-muted"></i> <?= h($row['jasa_pengiriman'] ?? '-') ?></span>
                                                 </td>
                                                 <td>
                                                     <span class="badge-custom">
-                                                        <i class="bi bi-clock-history me-1"></i><?= h($status !== '' ? $status : '-') ?>
+                                                        <i class="bi bi-hourglass-split"></i> <?= h($status !== '' ? $status : '-') ?>
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
                                                     <?php if ($canApprove): ?>
-                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>">
+                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Konfirmasi Terima Barang">
                                                             <i class="bi bi-check2-all me-1"></i> Terima Barang
                                                         </button>
                                                     <?php else: ?>
-                                                        <button class="btn btn-light rounded-pill fw-bold text-muted btn-sm" disabled>
-                                                            <i class="bi bi-check-circle-fill text-success me-1"></i>Selesai
+                                                        <!-- Status Selesai (Meskipun query men-filter ini, dibiarkan sbg fallback) -->
+                                                        <button class="btn btn-light border rounded-2 fw-bold text-muted btn-sm" disabled>
+                                                            <i class="bi bi-check-circle-fill text-success me-1"></i> Selesai
                                                         </button>
                                                     <?php endif; ?>
                                                 </td>
@@ -430,9 +435,9 @@ $q = mysqli_query($koneksi, "
                                         <?php endwhile; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="border-0">
+                                            <td colspan="6" class="border-0 p-0">
                                                 <div class="empty-state">
-                                                    <i class="bi bi-box2-heart"></i>
+                                                    <i class="bi bi-inbox"></i>
                                                     <div class="empty-state-title">Tidak ada pengiriman tertunda</div>
                                                     <div class="empty-state-desc">Saat ini tidak ada barang dari cabang yang menunggu persetujuan penerimaan di HO Jakarta.</div>
                                                 </div>
@@ -449,6 +454,7 @@ $q = mysqli_query($koneksi, "
         </div>
     </div>
 
+    <!-- SCRIPT TIDAK DIUBAH SAMA SEKALI (HANYA WARNA SWEETALERT DISESUAIKAN) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
@@ -464,8 +470,8 @@ $q = mysqli_query($koneksi, "
                     text: "Pastikan fisik barang sudah tiba dan sesuai.",
                     icon: 'question',
                     showCancelButton: true,
-                    confirmButtonColor: '#ff7a00',
-                    cancelButtonColor: '#111111',
+                    confirmButtonColor: '#E64312', /* Warna tombol YA Hexindo */
+                    cancelButtonColor: '#231F20',  /* Warna tombol BATAL Dark */
                     confirmButtonText: 'Ya, Terima Barang',
                     cancelButtonText: 'Batal'
                 });
@@ -489,7 +495,7 @@ $q = mysqli_query($koneksi, "
                             icon: 'success',
                             title: 'Berhasil Diterima!',
                             text: data.message,
-                            confirmButtonColor: '#111111'
+                            confirmButtonColor: '#E64312'
                         });
                         location.reload();
                     } else {
@@ -497,7 +503,7 @@ $q = mysqli_query($koneksi, "
                             icon: 'error',
                             title: 'Gagal',
                             text: data.message || 'Terjadi kesalahan',
-                            confirmButtonColor: '#111111'
+                            confirmButtonColor: '#231F20'
                         });
                     }
                 }

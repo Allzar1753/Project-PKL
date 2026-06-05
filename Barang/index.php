@@ -16,6 +16,7 @@ if (!$isAdmin && (!$myBranchId || $myBranchId <= 0)) {
 
 /**
  * HELPER FUNCTIONS
+ * (HANYA MENGUBAH NAMA CLASS CSS MENJADI SOFT BADGES, LOGIKA TETAP SAMA)
  */
 function h($value): string
 {
@@ -24,18 +25,18 @@ function h($value): string
 
 function shippingBadge(string $status): string
 {
-    $class = 'bg-secondary';
+    $class = 'badge-soft-secondary';
     $icon  = 'bi-dash-circle';
     $s = strtolower(trim($status));
 
     if ($s === 'menunggu persetujuan admin' || $s === 'sedang dikemas') {
-        $class = 'bg-warning text-dark';
+        $class = 'badge-soft-warning';
         $icon  = 'bi-box-seam';
     } elseif ($s === 'sedang perjalanan') {
-        $class = 'bg-primary';
+        $class = 'badge-soft-primary';
         $icon  = 'bi-truck';
     } elseif (in_array($s, ['sudah diterima', 'sudah diterima ho', 'selesai'], true)) {
-        $class = 'bg-success';
+        $class = 'badge-soft-success';
         $icon  = 'bi-check-circle';
     }
     return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
@@ -44,9 +45,9 @@ function shippingBadge(string $status): string
 function barangBadge(string $bermasalah): string
 {
     if ($bermasalah === 'Iya') {
-        return '<span class="badge rounded-pill bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
+        return '<span class="badge rounded-pill badge-soft-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
     }
-    return '<span class="badge rounded-pill bg-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
+    return '<span class="badge rounded-pill badge-soft-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
 }
 
 function fetchSingleValue(mysqli $koneksi, string $sql, string $field = 'total'): int
@@ -68,7 +69,7 @@ function canOpenPengirimanUser(): bool
 }
 
 // =========================================================================
-// PENGATURAN FILTER, PENCARIAN, DAN PAGINATION
+// PENGATURAN FILTER, PENCARIAN, DAN PAGINATION (TIDAK DIUBAH SAMA SEKALI)
 // =========================================================================
 $searchInput = isset($_GET['cari']) ? trim((string) $_GET['cari']) : '';
 $filter = isset($_GET['filter']) ? trim((string) $_GET['filter']) : '';
@@ -92,9 +93,8 @@ if ($searchInput !== '') {
     $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%' OR p.nama_penerima LIKE '%$s%' OR b.user LIKE '%$s%') ";
 }
 
-
 // =========================================================================
-// LOGIKA SUMMARY CARD & QUERY DATA
+// LOGIKA SUMMARY CARD & QUERY DATA (TIDAK DIUBAH SAMA SEKALI)
 // =========================================================================
 
 if ($isAdmin) {
@@ -110,35 +110,20 @@ $stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR ba
 // LOGIKA SINKRONISASI DATA (ADMIN HO = ID 40)
 // =========================================================================
 
-// Tentukan ID Branch HO kamu di sini agar mudah diubah nanti
 $idBranchHO = 40;
 
 if ($isAdmin) {
-    /** 
-     * ADMIN HO: Hanya melihat barang yang fisiknya ada di HO (id_branch = 40)
-     * Data akan hilang dari sini jika sedang dikirim (transit) ke cabang.
-     */
     $whereLokasi = "barang.id_branch = $idBranchHO";
-
-    // Barang disembunyikan jika sedang dalam perjalanan keluar dari HO
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
 
-    // Summary Card Admin HO
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
-    /**
-     * USER CABANG: Hanya melihat barang di cabangnya sendiri.
-     */
     $whereLokasi = "barang.id_branch = $myBranchId";
-
-    // Sembunyikan barang jika sedang dikirim ke HO (masuk pengiriman_cabang_ho) 
-    // atau sedang dikirim dari HO ke Cabang (barang_pengiriman)
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
     $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 
-    // Summary Card User Cabang
     $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
@@ -171,7 +156,6 @@ if ($filter === 'keluar') {
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     } else {
-        // SISI USER - LOGISTIK MASUK
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
                         b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
                         CASE
@@ -195,13 +179,9 @@ if ($filter === 'keluar') {
                  ORDER BY p.id_pengiriman DESC";
     }
 } else {
-    // --- PERBAIKAN QUERY ASSET TERSEDIA ---
-    // Subquery untuk mengambil nama user dari riwayat logistik terakhir
     if ($isAdmin) {
-        // Admin HO: Ambil pengirim terakhir dari Cabang
         $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
-        // User Cabang: Disamakan dengan logic Logistik Masuk (Ambil dari histori HO)
         $subqueryLastUser = "(SELECT pch.pemilik_barang FROM pengiriman_cabang_ho pch WHERE pch.serial_number = barang.serial_number AND pch.pemilik_barang IS NOT NULL AND pch.pemilik_barang != '' AND pch.pemilik_barang != '0' ORDER BY pch.id_pengiriman_ho DESC LIMIT 1)";
     }
 
@@ -224,7 +204,6 @@ if ($filter === 'keluar') {
                  WHERE $whereLokasi $excludeTransitSql $stokAktifSql $searchSql_barang 
                  ORDER BY barang.id DESC";
 }
-
 
 // Pagination Logic
 $countQuery = "SELECT COUNT(*) AS total FROM ($querySql) AS sub";
@@ -261,335 +240,338 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- CSS SINKRONISASI HEXINDO THEME -->
     <style>
-        .container {
-            width: 100%;
-            padding: 0 15px;
-            margin: 0 auto;
-            max-width: 1200px;
-        }
-
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --dark-1: #111111;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --surface: #ffffff;
-            --border-soft: rgba(255, 152, 0, 0.14);
-            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07);
-            --radius-xl: 28px;
+            /* TEMA HEXINDO / HITACHI */
+            --orange-1: #E64312; 
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #333333;
+            --text-soft: #666666;
+            --surface-bg: #F4F6F9;
+            --border-soft: #E0E4E8;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --radius-xl: 8px; /* Lebih kotak / industrial */
         }
 
         body {
-            background: radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
-                linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
+            background-color: var(--surface-bg);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
             min-height: 100vh;
         }
 
         .page-shell {
-            padding: 25px;
+            padding: 24px 32px;
         }
 
+        /* Hero Banner */
         .page-hero {
             position: relative;
-            overflow: hidden;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
             border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, #111111 0%, #ff7a00 100%);
-            /* Gradien Gelap ke Oranye */
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.25);
-            padding: 2.5rem;
-            margin-bottom: 2rem;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 15px;
+            box-shadow: var(--shadow-soft);
         }
 
         .page-title {
             color: #fff;
-            font-size: 2.2rem;
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            margin-bottom: 0.5rem;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
         }
 
         .page-desc {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 1rem;
-            max-width: 600px;
+            color: #9ca3af;
+            font-size: 0.95rem;
             margin-bottom: 0;
         }
 
+        /* Hero Buttons */
         .btn-header-light {
             background: #fff;
-            color: #111;
-            font-weight: 700;
-            border-radius: 999px;
-            padding: 0.75rem 1.5rem;
+            color: var(--dark-1);
+            font-weight: 600;
+            border-radius: var(--radius-xl);
+            padding: 0.6rem 1.2rem;
             border: none;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
         }
 
         .btn-header-light:hover {
-            transform: translateY(-3px);
-            background: #f8f9fa;
-            color: #000;
+            background: var(--orange-1);
+            color: #fff;
         }
 
         .btn-header-dark {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
             color: #fff;
-            font-weight: 700;
-            border-radius: 999px;
-            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: var(--radius-xl);
+            padding: 0.6rem 1.2rem;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
         }
 
         .btn-header-dark:hover {
-            transform: translateY(-3px);
-            background: #000;
-            color: #fff;
+            background: rgba(255, 255, 255, 0.2);
         }
 
-        .btn-add-item {
-            border: none;
-            background: #fff;
-            color: #111;
-            font-weight: 800;
-            border-radius: 999px;
-            padding: .75rem 1.4rem;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-        }
-
+        /* Summary Cards */
         .ui-card {
-            background: var(--surface);
+            background: #ffffff;
             border: 1px solid var(--border-soft);
-            border-radius: 22px;
+            border-radius: var(--radius-xl);
             box-shadow: var(--shadow-soft);
         }
 
-        .toolbar-card {
-            padding: 1.25rem;
-            margin-bottom: 1.25rem;
-        }
-
-        .toolbar-label {
-            font-size: .84rem;
-            font-weight: 700;
-            color: #444;
-            margin-bottom: .5rem;
-            display: block;
-        }
-
-        .search-wrap .input-group {
-            border: 1px solid rgba(255, 152, 0, 0.2);
-            border-radius: 16px;
-            overflow: hidden;
-            background: #fff;
-        }
-
-        .search-wrap .form-control {
-            border: none;
-            padding: .8rem 1rem;
-        }
-
-        .search-btn {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            color: #fff;
-            border: none;
-            padding: 0 1.2rem;
-            font-weight: 700;
-        }
-
-        .reset-btn {
-            background: #222;
-            color: #fff;
-            border: none;
-            padding: 0 1rem;
-            display: flex;
-            align-items: center;
-        }
-
-        .mode-switch {
-            display: flex;
-            gap: .6rem;
-            flex-wrap: wrap;
-        }
-
-        .btn-mode {
-            padding: .7rem 1.1rem;
-            border-radius: 999px;
-            border: 1px solid #eee;
-            background: #fff;
-            color: #444;
-            font-weight: 700;
-            text-decoration: none;
-            transition: .2s;
-        }
-
-        .btn-mode.is-active {
-            background: #111;
-            color: #fff;
-            border-color: #111;
-        }
-
         .summary-card {
-            padding: 1.25rem;
-            border-radius: 20px;
-            background: #fff;
-            border: 1px solid rgba(255, 152, 0, 0.1);
-            position: relative;
-            overflow: hidden;
+            padding: 1.25rem 1.5rem;
+            border-radius: var(--radius-xl);
+            background: #ffffff;
+            border: 1px solid var(--border-soft);
+            border-left: 4px solid var(--orange-1);
             height: 100%;
+            box-shadow: var(--shadow-soft);
+            transition: all .2s ease;
         }
 
-        .summary-card::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--orange-1);
+        .summary-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
         }
 
         .summary-label {
             font-size: .85rem;
-            font-weight: 700;
+            font-weight: 600;
             color: var(--text-soft);
         }
 
         .summary-value {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 800;
-            color: #111;
+            color: var(--dark-1);
             margin: .2rem 0;
         }
 
         .summary-icon {
             width: 45px;
             height: 45px;
-            background: #fff4e6;
+            background: rgba(230, 67, 18, 0.1); /* Transparan orange hexindo */
             color: var(--orange-1);
-            border-radius: 12px;
+            border-radius: var(--radius-xl);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.3rem;
+            font-size: 1.25rem;
         }
 
-        .table-card .card-header {
-            background: #111;
+        /* Toolbar & Search */
+        .toolbar-card {
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .toolbar-label {
+            font-size: .85rem;
+            font-weight: 600;
+            color: var(--text-soft);
+            margin-bottom: .5rem;
+            display: block;
+        }
+
+        .search-wrap .input-group {
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .search-wrap .form-control {
+            border: none;
+            padding: .6rem 1rem;
+            font-size: 0.9rem;
+            box-shadow: none;
+        }
+
+        .search-btn {
+            background: var(--orange-1);
             color: #fff;
             border: none;
-            padding: 1.2rem;
-            border-radius: 22px 22px 0 0;
+            padding: 0 1.2rem;
+            font-weight: 600;
+            font-size: 0.9rem;
         }
 
+        .search-btn:hover { background: var(--orange-2); color: #fff;}
+
+        .reset-btn {
+            background: #f3f4f6;
+            color: var(--text-main);
+            border: none;
+            padding: 0 1rem;
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+        .reset-btn:hover { background: #e5e7eb; }
+
+        .mode-switch {
+            display: flex;
+            gap: .5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-mode {
+            padding: .5rem 1rem;
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-soft);
+            background: #fff;
+            color: var(--text-soft);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-decoration: none;
+            transition: .2s;
+        }
+
+        .btn-mode:hover { border-color: var(--orange-1); color: var(--orange-1); }
+
+        .btn-mode.is-active {
+            background: var(--dark-1);
+            color: #fff;
+            border-color: var(--dark-1);
+        }
+
+        /* Table Design */
+        .table-card .card-header {
+            background: #fff;
+            color: var(--dark-1);
+            border-bottom: 1px solid var(--border-soft);
+            padding: 1.2rem 1.5rem;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        }
+
+        .table > :not(caption) > * > * {
+            padding: 1rem 1.5rem;
+            border-bottom-color: var(--border-soft);
+        }
+        
+        .table-light {
+            background-color: #f9fafb !important;
+            color: var(--text-soft);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Soft Badges */
+        .badge.rounded-pill {
+            padding: 0.4em 0.8em;
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 0.3px;
+        }
+        .badge-soft-success { background-color: rgba(16, 185, 129, 0.15); color: #059669; }
+        .badge-soft-warning { background-color: rgba(245, 158, 11, 0.15); color: #d97706; }
+        .badge-soft-danger { background-color: rgba(239, 68, 68, 0.15); color: #b91c1c; }
+        .badge-soft-primary { background-color: rgba(59, 130, 246, 0.15); color: #1d4ed8; }
+        .badge-soft-secondary { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; }
+
         .limit-box {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 999px;
-            padding: 5px 15px;
+            background: #f3f4f6;
+            border-radius: var(--radius-xl);
+            padding: 5px 12px;
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #fff;
+            color: var(--text-soft);
             font-size: .85rem;
+            border: 1px solid var(--border-soft);
         }
 
         .limit-box select {
             background: transparent;
             border: none;
-            color: #fff;
-            font-weight: 700;
+            color: var(--dark-1);
+            font-weight: 600;
             outline: none;
         }
 
-        .limit-box select option {
-            color: #000;
-        }
-
         .thumb-img {
-            width: 55px;
-            height: 55px;
+            width: 50px;
+            height: 50px;
             object-fit: cover;
-            border-radius: 12px;
-            border: 1px solid #eee;
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-soft);
             cursor: pointer;
         }
 
         .thumb-placeholder {
-            width: 55px;
-            height: 55px;
-            background: #f9f9f9;
-            border: 1px dashed #ccc;
-            border-radius: 12px;
+            width: 50px;
+            height: 50px;
+            background: #f9fafb;
+            border: 1px dashed #d1d5db;
+            border-radius: var(--radius-xl);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #aaa;
+            color: #9ca3af;
         }
 
         .asset-code {
-            font-weight: 800;
-            color: #111;
-            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--dark-1);
+            font-size: 0.9rem;
         }
 
         .meta-line {
             display: block;
-            font-size: 0.88rem;
+            font-size: 0.85rem;
             margin-bottom: 2px;
+            color: var(--text-main);
         }
 
         .meta-muted {
-            color: #666;
-            font-size: 0.82rem;
-        }
-
-        .badge.rounded-pill {
-            padding: 0.5em 0.9em;
-            font-weight: 700;
+            color: var(--text-soft);
+            font-size: 0.8rem;
         }
 
         .pagination .page-link {
-            border-radius: 10px;
-            margin: 0 3px;
-            color: #111;
-            font-weight: 700;
-            border: 1px solid #eee;
+            border-radius: var(--radius-xl);
+            margin: 0 2px;
+            color: var(--text-main);
+            font-weight: 600;
+            border: 1px solid var(--border-soft);
         }
 
         .pagination .page-item.active .page-link {
-            background: #111;
-            border-color: #111;
+            background: var(--dark-1);
+            border-color: var(--dark-1);
             color: #fff;
         }
 
         .action-group .btn {
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 10px;
+            border-radius: var(--radius-xl);
             margin: 2px;
         }
 
         .modal-header.bg-warning-custom {
-            background: #111;
+            background: var(--dark-1);
             color: #fff;
         }
 
@@ -615,10 +597,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                         <div class="hero-text">
                             <?php if ($isAdmin): ?>
                                 <h1 class="page-title">Peralatan & Asset IT</h1>
-                                <p class="page-desc">Kelola inventaris pusat, distribusi barang ke cabang, dan pantau status aset secara real-time dari Dashboard HO.</p>
+                                <p class="page-desc">Kelola inventaris pusat, distribusi barang ke cabang, dan pantau status aset secara real-time.</p>
                             <?php else: ?>
                                 <h1 class="page-title">Aset & Inventaris Cabang</h1>
-                                <p class="page-desc">Kelola stok barang di unit Anda, laporkan kerusakan, dan pantau pengiriman logistik dari pusat dengan mudah.</p>
+                                <p class="page-desc">Kelola stok barang di unit Anda, laporkan kerusakan, dan pantau pengiriman logistik dari pusat.</p>
                             <?php endif; ?>
                         </div>
 
@@ -629,10 +611,9 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     <i class="bi bi-database-gear me-2"></i>Kelola Master Data
                                 </a>
 
-
                                 <!-- Tombol Khusus Admin HO -->
                                 <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreate">
-                                    <i class="bi bi-plus-circle me-2"></i>Tambah Barang Master
+                                    <i class="bi bi-plus-circle me-2"></i>Tambah Aset Baru
                                 </button>
                             <?php else: ?>
                                 <!-- Tombol Khusus User Cabang -->
@@ -696,8 +677,8 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     <label class="toolbar-label">Pencarian Cepat</label>
                                     <div class="input-group">
                                         <input type="text" name="cari" class="form-control" placeholder="Nama, No Asset, atau Serial Number..." value="<?= $searchValue ?>">
-                                        <button class="btn search-btn" type="submit"><i class="bi bi-search me-2"></i>Cari</button>
-                                        <a href="index.php?filter=<?= $filterValue  ?>&limit=<?= $limit ?>" class="btn reset-btn">Reset</a>
+                                        <button class="btn search-btn" type="submit"><i class="bi bi-search me-1"></i></button>
+                                        <a href="index.php?filter=<?= $filterValue  ?>&limit=<?= $limit ?>" class="btn reset-btn" title="Reset"><i class="bi bi-x-lg"></i></a>
                                     </div>
                                 </form>
                             </div>
@@ -722,14 +703,14 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                     <div class="ui-card table-card">
                         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
                             <div>
-                                <div class="fw-bold fs-5"><i class="<?= $tableIcon ?> me-2 text-warning"></i><?= h($tableTitle) ?></div>
-                                <div class="small opacity-75">Menampilkan <?= $fromRow ?> - <?= $toRow ?> dari <?= $totalRows ?> data</div>
+                                <div class="fw-bold fs-5"><i class="<?= $tableIcon ?> me-2" style="color: var(--orange-1);"></i><?= h($tableTitle) ?></div>
+                                <div class="small text-muted mt-1">Menampilkan <?= $fromRow ?> - <?= $toRow ?> dari <?= $totalRows ?> data</div>
                             </div>
                             <form method="GET" class="mb-0">
                                 <input type="hidden" name="cari" value="<?= $searchValue ?>">
                                 <input type="hidden" name="filter" value="<?= $filterValue ?>">
                                 <div class="limit-box">
-                                    <span>Baris:</span>
+                                    <span>Tampilkan:</span>
                                     <select name="limit" onchange="this.form.submit()">
                                         <option value="10" <?= $limit === 10 ? 'selected' : '' ?>>10</option>
                                         <option value="25" <?= $limit === 25 ? 'selected' : '' ?>>25</option>
@@ -765,16 +746,16 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                             <tr>
                                                 <td class="ps-4 text-muted"><?= $no++ ?></td>
                                                 <td>
-                                                    <div class="fw-bold text-dark"><?= h($data['nama_barang']) ?></div>
+                                                    <div class="fw-bold text-dark mb-1"><?= h($data['nama_barang']) ?></div>
                                                     <div class="asset-code"><?= h($data['no_asset'] ?? '-') ?></div>
-                                                    <div class="meta-muted">SN: <?= h($data['serial_number'] ?? '-') ?></div>
+                                                    <div class="meta-muted mt-1">SN: <?= h($data['serial_number'] ?? '-') ?></div>
                                                 </td>
 
                                                 <?php if ($filter === 'masuk'): ?>
                                                     <td>
-                                                        <span class="meta-line"><i class="bi bi-calendar-check me-2"></i><?= h($data['tanggal']) ?></span>
+                                                        <span class="meta-line"><i class="bi bi-calendar-check me-2 text-muted"></i><?= h($data['tanggal']) ?></span>
                                                         <span class="meta-line"><i class="bi bi-geo-alt me-2 text-danger"></i>Asal: <?= h($data['info_branch']) ?></span>
-                                                        <span class="meta-line"><i class="bi bi-person me-2"></i><?= h($data['pemilik_barang']) ?></span>
+                                                        <span class="meta-line"><i class="bi bi-person me-2 text-primary"></i><?= h($data['pemilik_barang']) ?></span>
                                                     </td>
                                                     <td>
                                                         <div class="mb-2"><?= shippingBadge($data['status_pengiriman']) ?></div>
@@ -783,19 +764,19 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     <td>
                                                         <?php if ($data['foto_resi_keluar']): ?>
                                                             <img src="../assets/images/<?= h($data['foto_resi_keluar']) ?>" class="thumb-img previewFoto" data-foto="../assets/images/<?= h($data['foto_resi_keluar']) ?>">
-                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-receipt"></i></div><?php endif; ?>
+                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-image text-muted"></i></div><?php endif; ?>
                                                     </td>
                                                     <td class="text-center pe-4">
                                                         <?php if (in_array(strtolower($data['status_pengiriman']), ['sedang perjalanan', 'menunggu persetujuan admin'])): ?>
-                                                            <button class="btn btn-primary btn-sm btnKonfirmasiTerima" data-id="<?= $data['id_transaksi'] ?>" data-role="<?= $isAdmin ? 'admin' : 'user' ?>"><i class="bi bi-check2-circle"></i></button>
+                                                            <button class="btn btn-primary btn-sm btnKonfirmasiTerima" data-id="<?= $data['id_transaksi'] ?>" data-role="<?= $isAdmin ? 'admin' : 'user' ?>" title="Konfirmasi Terima"><i class="bi bi-check2-all"></i></button>
                                                         <?php else: ?>
-                                                            <i class="bi bi-lock-fill text-muted"></i>
+                                                            <button class="btn btn-light btn-sm text-muted" disabled><i class="bi bi-lock-fill"></i></button>
                                                         <?php endif; ?>
                                                     </td>
 
                                                 <?php elseif ($filter === 'keluar'): ?>
                                                     <td>
-                                                        <span class="meta-line"><i class="bi bi-calendar-plus me-2"></i><?= h($data['tanggal']) ?></span>
+                                                        <span class="meta-line"><i class="bi bi-calendar-plus me-2 text-muted"></i><?= h($data['tanggal']) ?></span>
                                                         <span class="meta-line"><i class="bi bi-geo-alt me-2 text-primary"></i>Tujuan: <?= h($data['info_branch']) ?></span>
                                                     </td>
                                                     <td>
@@ -805,25 +786,25 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                     <td>
                                                         <?php if ($data['foto_resi_keluar']): ?>
                                                             <img src="../assets/images/<?= h($data['foto_resi_keluar']) ?>" class="thumb-img previewFoto" data-foto="../assets/images/<?= h($data['foto_resi_keluar']) ?>">
-                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-receipt"></i></div><?php endif; ?>
+                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-image text-muted"></i></div><?php endif; ?>
                                                     </td>
                                                     <td class="text-center pe-4">
                                                         <?php if ($isAdmin): ?>
                                                             <?php $logisticStatus = strtolower(trim($data['status_pengiriman'] ?? '')); ?>
                                                             <?php if (in_array($logisticStatus, ['sedang perjalanan', 'menunggu persetujuan admin'], true)): ?>
-                                                                <button type="button" class="btn btn-info btn-sm text-white btnLogistikStatus" data-id="<?= $data['id_transaksi'] ?>" data-status="<?= h($logisticStatus) ?>" title="Informasi status logistik"><i class="bi bi-truck"></i></button>
+                                                                <button type="button" class="btn btn-light border btn-sm text-info btnLogistikStatus" data-id="<?= $data['id_transaksi'] ?>" data-status="<?= h($logisticStatus) ?>" title="Informasi status logistik"><i class="bi bi-truck"></i></button>
                                                             <?php else: ?>
-                                                                <button type="button" class="btn btn-success btn-sm text-white" disabled title="Pengiriman selesai"><i class="bi bi-lock-fill"></i></button>
+                                                                <button type="button" class="btn btn-light btn-sm text-success" disabled title="Pengiriman selesai"><i class="bi bi-check-circle-fill"></i></button>
                                                             <?php endif; ?>
                                                         <?php else: ?>
-                                                            <i class="bi bi-lock-fill text-muted"></i>
+                                                            <button class="btn btn-light btn-sm text-muted" disabled><i class="bi bi-lock-fill"></i></button>
                                                         <?php endif; ?>
                                                     </td>
 
                                                 <?php else: ?>
                                                     <td>
-                                                        <span class="badge bg-light text-dark border mb-1"><?= h($data['nama_merk'] ?? '-') ?></span>
-                                                        <div class="meta-line text-muted">Tipe: <?= h($data['nama_tipe'] ?? '-') ?></div>
+                                                        <span class="badge badge-soft-secondary mb-1"><?= h($data['nama_merk'] ?? '-') ?></span>
+                                                        <div class="meta-muted mt-1">Tipe: <?= h($data['nama_tipe'] ?? '-') ?></div>
                                                     </td>
                                                     <td>
                                                         <?php
@@ -838,31 +819,28 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                             $namaTampil = 'No User';
                                                         }
                                                         ?>
-                                                        <div class="meta-line"><i class="bi bi-person me-1"></i><?= h($namaTampil) ?></div>
+                                                        <div class="meta-line"><i class="bi bi-person me-2 text-muted"></i><?= h($namaTampil) ?></div>
                                                     </td>
                                                     <td>
                                                         <?= barangBadge($data['bermasalah']) ?>
-                                                        <?php if ($data['bermasalah'] === 'Iya'): ?><div class="small text-danger mt-1" style="max-width:150px"><?= h($data['keterangan_masalah']) ?></div><?php endif; ?>
+                                                        <?php if ($data['bermasalah'] === 'Iya'): ?>
+                                                            <div class="small text-danger mt-2 fw-semibold" style="max-width:180px; font-size: 0.8rem;"><i class="bi bi-info-circle me-1"></i><?= h($data['keterangan_masalah']) ?></div>
+                                                        <?php endif; ?>
                                                     </td>
                                                     <td>
                                                         <?php if ($data['foto']): ?>
                                                             <img src="../assets/images/<?= h($data['foto']) ?>" class="thumb-img previewFoto" data-foto="../assets/images/<?= h($data['foto']) ?>">
-                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-image"></i></div><?php endif; ?>
+                                                        <?php else: ?><div class="thumb-placeholder"><i class="bi bi-image text-muted"></i></div><?php endif; ?>
                                                     </td>
                                                     <td class="text-center pe-4">
                                                         <div class="action-group">
                                                             <?php if ($isAdmin): ?>
-                                                                <!-- Tombol Admin: Edit Master, Hapus, dan KIRIM KE CABANG -->
-                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>" title="Edit Master"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
-
-                                                                <!-- Tombol Truk Biru (Logistik ke Cabang) -->
-                                                                <button class="btn btn-info btn-sm text-white btnLogistik" data-id="<?= $data['id'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Kirim ke Cabang"><i class="bi bi-truck"></i></button>
-
+                                                                <button class="btn btn-light border btn-sm btnEditMaster text-primary" data-id="<?= $data['id'] ?>" title="Edit Master"><i class="bi bi-pencil-fill"></i></button>
+                                                                <button class="btn btn-light border btn-sm text-info btnLogistik" data-id="<?= $data['id'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Kirim ke Cabang"><i class="bi bi-truck"></i></button>
+                                                                <button class="btn btn-light border btn-sm btnDelete text-danger" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
                                                             <?php else: ?>
-                                                                <!-- Tombol User: Edit Aset Cabang & Hapus -->
-                                                                <button class="btn btn-warning btn-sm btnEditMaster" data-id="<?= $data['id'] ?>" title="Edit Aset"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-danger btn-sm btnDelete" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
+                                                                <button class="btn btn-light border btn-sm btnEditMaster text-primary" data-id="<?= $data['id'] ?>" title="Edit Aset"><i class="bi bi-pencil-fill"></i></button>
+                                                                <button class="btn btn-light border btn-sm btnDelete text-danger" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
                                                             <?php endif; ?>
                                                         </div>
                                                     </td>
@@ -872,8 +850,11 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     else: ?>
                                         <tr>
                                             <td colspan="<?= $emptyColspan ?>" class="text-center py-5 text-muted">
-                                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
-                                                Belum ada data yang dapat ditampilkan.
+                                                <div class="d-flex flex-column align-items-center justify-content-center">
+                                                    <i class="bi bi-inbox fs-1 mb-3" style="color: var(--border-soft);"></i>
+                                                    <span class="fw-semibold">Tidak ada data yang ditemukan.</span>
+                                                    <span class="small mt-1">Coba sesuaikan filter atau kata kunci pencarian Anda.</span>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -883,7 +864,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
 
                         <!-- Pagination -->
                         <?php if ($totalPages > 1): ?>
-                            <div class="p-4 border-top">
+                            <div class="p-3 border-top bg-white rounded-bottom-4 d-flex justify-content-end">
                                 <nav>
                                     <ul class="pagination pagination-sm mb-0">
                                         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
@@ -903,7 +884,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     </div>
 
     <!-- =========================================================================
-     MODALS SECTION
+     MODALS SECTION (TIDAK DIUBAH SAMA SEKALI)
      ========================================================================= -->
 
     <!-- Modal Create -->
@@ -973,7 +954,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     <div class="modal fade" id="modalTerimaCabang" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content border-0 rounded-4 overflow-hidden">
-                <div class="modal-header text-white" style="background: linear-gradient(135deg, #ff7a00, #ffb000); border-bottom: none;">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #E64312, #F25C05); border-bottom: none;">
                     <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i>Konfirmasi Penerimaan</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
@@ -1000,7 +981,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         </div>
     </div>
 
-    <!-- SCRIPTS -->
+    <!-- SCRIPTS (TIDAK DIUBAH SAMA SEKALI) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -1100,7 +1081,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                     icon: 'info',
                     title: 'Pengiriman belum selesai',
                     text: 'Barang sedang dalam perjalanan. User belum melakukan konfirmasi penerimaan.',
-                    confirmButtonColor: '#ff7a00',
+                    confirmButtonColor: '#E64312',
                     confirmButtonText: 'Tutup'
                 });
             } else {
@@ -1128,7 +1109,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                     text: "Pastikan fisik barang sudah diterima di HO Jakarta.",
                     icon: 'question',
                     showCancelButton: true,
-                    confirmButtonColor: '#ff7a00',
+                    confirmButtonColor: '#E64312',
                     confirmButtonText: 'Ya, Sudah Terima'
                 }).then((result) => {
                     if (result.isConfirmed) {

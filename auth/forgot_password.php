@@ -112,24 +112,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
+        /* ==========================================
+           TEMA BARU MODERN CLEAN (Dashboard Match)
+           ========================================== */
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --orange-4: #ffd166;
-            --orange-5: #fff3e0;
-            --dark-1: #111111;
-            --dark-2: #1f1f1f;
-            --dark-3: #2f2f2f;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --border-soft: rgba(255, 152, 0, 0.14);
-            --surface: #ffffff;
-            --shadow-soft: 0 16px 40px rgba(17, 17, 17, 0.08);
-            --shadow-strong: 0 22px 54px rgba(255, 122, 0, 0.16);
-            --radius-xl: 28px;
-            --radius-lg: 22px;
-            --radius-md: 16px;
+            --orange-primary: #E64312;
+            --orange-hover: #F25C05;
+            --dark-main: #231F20;
+            --text-dark: #374151;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --bg-body: #F4F6F9;
         }
 
         * { box-sizing: border-box; }
@@ -138,284 +131,161 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             margin: 0;
             font-family: 'Plus Jakarta Sans', sans-serif;
-            color: var(--text-main);
-            background:
-                radial-gradient(circle at top left, rgba(255, 176, 0, 0.18), transparent 24%),
-                radial-gradient(circle at bottom right, rgba(255, 122, 0, 0.10), transparent 20%),
-                linear-gradient(180deg, #fff8f1 0%, #fffaf5 34%, #ffffff 100%);
+            color: var(--text-dark);
+            background-color: var(--bg-body);
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
         }
 
-        .login-wrap { width: 100%; max-width: 1120px; }
-
-        .login-card {
-            background: var(--surface);
-            border: 1px solid rgba(255, 176, 0, 0.14);
-            border-radius: var(--radius-xl);
-            overflow: hidden;
-            box-shadow: var(--shadow-soft);
+        .login-wrap {
+            width: 100%;
+            max-width: 1000px;
         }
 
-        /* ── LEFT PANEL ── */
+        .login-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+        }
+
+        /* --- Sisi Kiri (Informasi) --- */
         .login-left {
             position: relative;
-            overflow: hidden;
-            background: linear-gradient(135deg, rgba(17,17,17,0.96) 0%, rgba(42,42,42,0.92) 34%, rgba(255,122,0,0.96) 100%);
-            color: #fff;
-            padding: 52px 42px;
+            background-color: var(--dark-main);
+            color: #ffffff;
+            padding: 48px 40px;
             height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            overflow: hidden;
         }
 
+        /* Ornamen Background Kiri */
         .login-left::before {
             content: "";
             position: absolute;
-            top: -80px; right: -70px;
-            width: 220px; height: 220px;
+            top: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.08);
+            background: rgba(230, 67, 18, 0.1);
+            z-index: 1;
         }
-
         .login-left::after {
             content: "";
             position: absolute;
-            bottom: -70px; left: -60px;
-            width: 180px; height: 180px;
+            bottom: -80px;
+            left: -40px;
+            width: 150px;
+            height: 150px;
             border-radius: 50%;
-            background: rgba(255,209,102,0.18);
+            background: rgba(255, 255, 255, 0.03);
+            z-index: 1;
         }
 
         .login-left-content,
-        .login-left-footer { position: relative; z-index: 2; }
+        .login-left-footer {
+            position: relative;
+            z-index: 2;
+        }
 
         .brand-badge {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 9px 15px;
-            border-radius: 999px;
-            background: rgba(255,193,7,0.12);
-            color: #ffe082;
-            font-size: .84rem;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
+            font-size: .85rem;
             font-weight: 700;
-            margin-bottom: 22px;
-            border: 1px solid rgba(255,193,7,0.18);
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-
-        .brand-dot {
-            width: 10px; height: 10px;
-            border-radius: 999px;
-            background: #ffc107;
-            box-shadow: 0 0 0 4px rgba(255,193,7,0.14);
-        }
+        .brand-badge i { color: var(--orange-primary); font-size: 1.1rem; }
 
         .login-title {
-            font-size: 2.1rem;
+            font-size: 1.8rem;
             font-weight: 800;
-            line-height: 1.18;
+            line-height: 1.2;
             margin-bottom: 16px;
-            letter-spacing: -0.03em;
-            max-width: 470px;
+            color: #ffffff;
         }
 
         .login-desc {
-            color: rgba(255,255,255,0.82);
-            line-height: 1.72;
-            max-width: 460px;
-            font-size: .96rem;
-            margin-bottom: 0;
-        }
-
-        .login-feature {
-            margin-top: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
+            color: #9ca3af;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            margin-bottom: 30px;
         }
 
         .feature-item {
             display: flex;
             align-items: flex-start;
-            gap: 13px;
-            padding: 14px 15px;
-            border-radius: 18px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
+            gap: 14px;
+            margin-bottom: 16px;
         }
-
         .feature-icon {
-            width: 40px; height: 40px;
-            border-radius: 13px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255,193,7,0.14);
-            color: #ffd166;
+            background: rgba(230, 67, 18, 0.15);
+            color: var(--orange-primary);
             flex-shrink: 0;
-            font-size: 1rem;
-            border: 1px solid rgba(255,193,7,0.16);
+            font-size: 1.1rem;
         }
-
-        .feature-title { font-weight: 700; margin-bottom: 3px; color: #fff; }
-
-        .feature-text {
-            color: rgba(255,255,255,0.70);
-            font-size: .9rem;
-            line-height: 1.5;
-        }
+        .feature-title { font-weight: 700; margin-bottom: 4px; color: #f3f4f6; font-size: 0.95rem; }
+        .feature-text { color: #9ca3af; font-size: 0.85rem; line-height: 1.5; }
 
         .login-left-footer {
-            margin-top: 28px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: rgba(255,255,255,0.74);
-            font-size: .88rem;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 500;
         }
 
-        .footer-mark {
-            width: 42px; height: 42px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.09);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffd166;
-            font-weight: 800;
-            border: 1px solid rgba(255,255,255,0.10);
-        }
-
-        /* ── RIGHT PANEL ── */
+        /* --- Sisi Kanan (Form) --- */
         .login-right {
-            padding: 44px 38px;
-            background: linear-gradient(180deg, #ffffff 0%, #fffdf9 100%);
-        }
-
-        .form-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 8px 14px;
-            background: #fff6e8;
-            color: #9a640b;
-            font-size: .82rem;
-            font-weight: 700;
-            border: 1px solid rgba(255,152,0,0.16);
-            margin-bottom: 16px;
+            padding: 48px 40px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
         }
 
         .form-title {
-            font-size: 1.75rem;
+            font-size: 1.6rem;
             font-weight: 800;
-            color: var(--dark-1);
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
+            color: var(--dark-main);
+            margin-bottom: 6px;
         }
 
         .form-subtitle {
-            color: var(--text-soft);
-            margin-bottom: 28px;
-            line-height: 1.65;
-            font-size: .94rem;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+            line-height: 1.5;
+            font-size: 0.95rem;
         }
 
-        .alert {
-            border: none;
-            border-radius: 16px;
-            padding: 14px 16px;
-            font-size: .92rem;
-            box-shadow: 0 10px 24px rgba(17,17,17,0.04);
-        }
-
-        .alert-danger  { background: #fff1ef; color: #c2412d; }
-        .alert-success { background: #eefaf0; color: #2f7d43; }
-
-        .form-label {
-            font-weight: 700;
-            color: var(--dark-1);
-            margin-bottom: .55rem;
-        }
-
-        .input-shell { position: relative; }
-
-        .input-icon {
-            position: absolute;
-            top: 50%; left: 15px;
-            transform: translateY(-50%);
-            color: #c27e12;
-            font-size: 1rem;
-            z-index: 2;
-        }
-
-        .form-control {
-            border-radius: 16px;
-            padding: .95rem 1rem .95rem 2.85rem;
-            border: 1px solid #e6dfd2;
-            background: #fff;
-            box-shadow: none;
-            font-size: .95rem;
-            transition: all .2s ease;
-        }
-
-        textarea.form-control {
-            padding-top: .85rem;
-            resize: none;
-        }
-
-        .form-control:focus {
-            border-color: #f0c63d;
-            box-shadow: 0 0 0 0.22rem rgba(255,193,7,0.14);
-            background: #fffdfa;
-        }
-
-        /* Textarea tidak perlu padding kiri extra untuk icon */
-        textarea.form-control {
-            padding-left: 1rem;
-        }
-
-        .btn-login {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            border: none;
-            color: #fff;
-            font-weight: 800;
-            border-radius: 16px;
-            padding: .95rem 1rem;
-            box-shadow: var(--shadow-strong);
-            transition: all .22s ease;
-            letter-spacing: .01em;
-        }
-
-        .btn-login:hover {
-            color: #fff;
-            transform: translateY(-1px);
-            filter: brightness(.98);
-        }
-
-        .system-note {
-            margin-top: 24px;
-            background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%);
-            border: 1px solid rgba(255,152,0,0.12);
-            border-radius: 18px;
-            padding: 15px 16px;
-            color: var(--text-soft);
-            font-size: .91rem;
-            line-height: 1.6;
-        }
-
-        /* Status tracker */
+        /* Tracker Lupa Password */
         .status-tracker {
             display: flex;
             align-items: center;
             gap: 0;
-            margin-bottom: 28px;
+            margin-bottom: 32px;
         }
-
         .status-step {
             display: flex;
             flex-direction: column;
@@ -423,79 +293,148 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flex: 1;
             position: relative;
         }
-
         .status-step:not(:last-child)::after {
             content: "";
             position: absolute;
-            top: 18px;
-            left: 60%;
-            width: 80%;
+            top: 16px;
+            left: 55%;
+            width: 90%;
             height: 2px;
-            background: #e9dfd0;
+            background: var(--border-color);
         }
-
         .status-dot {
-            width: 36px; height: 36px;
-            border-radius: 999px;
+            width: 32px; height: 32px;
+            border-radius: 50%;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: .88rem;
-            font-weight: 800;
-            background: #f3ece2;
-            color: #9a8060;
-            border: 2px solid #e4d8c5;
-            margin-bottom: 6px;
+            font-size: .85rem;
+            background: #ffffff;
+            color: var(--text-muted);
+            border: 2px solid var(--border-color);
+            margin-bottom: 8px;
             position: relative;
             z-index: 1;
+            transition: all 0.2s;
         }
-
-        .status-step.active .status-dot {
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            color: #fff;
-            border-color: transparent;
-            box-shadow: 0 8px 18px rgba(255,152,0,0.24);
-        }
-
         .status-label {
-            font-size: .74rem;
+            font-size: .75rem;
             font-weight: 700;
-            color: #9a8060;
+            color: var(--text-muted);
             text-align: center;
+            line-height: 1.2;
+        }
+        .status-step.active .status-dot {
+            background: rgba(230, 67, 18, 0.1);
+            color: var(--orange-primary);
+            border-color: rgba(230, 67, 18, 0.3);
+        }
+        .status-step.active .status-label {
+            color: var(--orange-primary);
         }
 
-        .status-step.active .status-label { color: var(--orange-1); }
+        /* Notifikasi Alert */
+        .alert {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        .alert-danger { background: #fef2f2; color: #b91c1c; border-left: 4px solid #ef4444; }
+        .alert-success { background: #f0fdf4; color: #15803d; border-left: 4px solid #22c55e; }
+
+        /* Form Input Modern */
+        .form-label {
+            font-weight: 700;
+            color: var(--dark-main);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-shell { position: relative; }
+        .input-icon {
+            position: absolute;
+            top: 50%;
+            left: 16px;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 1.1rem;
+            z-index: 2;
+            transition: color 0.2s;
+        }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 0.75rem 1rem 0.75rem 2.8rem;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-dark);
+            transition: all 0.2s ease;
+            box-shadow: none !important;
+        }
+        
+        textarea.form-control {
+            padding: 0.75rem 1rem; /* Textarea tidak butuh icon padding kiri */
+            resize: vertical;
+        }
+
+        .form-control:focus {
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 4px rgba(230, 67, 18, 0.1) !important;
+        }
+        
+        .form-control:focus + .input-icon,
+        .input-shell:focus-within .input-icon {
+            color: var(--orange-primary);
+        }
+
+        /* Tombol Modern */
+        .btn-login {
+            background-color: var(--orange-primary);
+            color: #ffffff;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            margin-top: 10px;
+        }
+        .btn-login:hover {
+            background-color: var(--orange-hover);
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(230, 67, 18, 0.2);
+        }
 
         .back-link {
-            color: #c27e12;
-            font-weight: 700;
-            text-decoration: none;
-        }
-
-        .back-link:hover { color: #a96708; }
-
-        .note-text {
-            color: var(--text-soft);
-            font-size: .88rem;
-            text-align: center;
-            margin-top: 18px;
+            color: var(--orange-primary);
             font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: 0.2s;
         }
+        .back-link:hover { color: var(--orange-hover); text-decoration: underline; }
 
-        .note-text span { color: #9a640b; }
+        .system-note {
+            margin-top: 36px;
+            background: var(--bg-body);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            border-left: 4px solid var(--border-color);
+        }
 
         @media (max-width: 991.98px) {
-            .login-left  { padding: 34px 28px; }
-            .login-right { padding: 34px 28px; }
-            .login-title { font-size: 1.75rem; }
-            .form-title  { font-size: 1.45rem; }
-        }
-
-        @media (max-width: 767.98px) {
-            body { padding: 16px; }
-            .login-card { border-radius: 22px; }
-            .login-left, .login-right { padding: 26px 22px; }
-            .login-title { font-size: 1.5rem; }
+            .login-left, .login-right { padding: 32px 24px; }
+            .login-title { font-size: 1.6rem; }
+            .form-title { font-size: 1.4rem; }
         }
     </style>
 </head>
@@ -505,99 +444,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="row g-0 login-card">
 
             <!-- LEFT PANEL -->
-            <div class="col-lg-6">
+            <div class="col-lg-5 d-none d-lg-block">
                 <div class="login-left">
                     <div class="login-left-content">
                         <div class="brand-badge">
-                            <span class="brand-dot"></span>
-                            <span>IT Asset Management System</span>
+                            <i class="bi bi-layers-fill"></i>
+                            <span>IT Asset System</span>
                         </div>
 
                         <div class="login-title">
-                            Lupa Password? Ajukan ke Administrator
+                            Ajukan Pemulihan Password
                         </div>
 
                         <div class="login-desc">
-                            Tidak perlu khawatir. Isi form pengajuan dan administrator akan
-                            membuatkan password baru untuk akun Anda secepatnya.
+                            Isi form pengajuan dan administrator akan membuatkan password baru untuk akun Anda secepatnya.
                         </div>
 
-                        <div class="login-feature">
+                        <div>
                             <div class="feature-item">
                                 <div class="feature-icon"><i class="bi bi-send"></i></div>
                                 <div>
                                     <div class="feature-title">1. Kirim Pengajuan</div>
-                                    <div class="feature-text">Isi username, email, dan alasan lupa password. Pengajuan akan langsung masuk ke administrator.</div>
+                                    <div class="feature-text">Isi data akun. Pengajuan langsung dikirim ke admin.</div>
                                 </div>
                             </div>
 
                             <div class="feature-item">
-                                <div class="feature-icon"><i class="bi bi-shield-check"></i></div>
+                                <div class="feature-icon"><i class="bi bi-person-check"></i></div>
                                 <div>
                                     <div class="feature-title">2. Admin Proses</div>
-                                    <div class="feature-text">Administrator akan memverifikasi dan membuatkan password baru untuk akun Anda.</div>
+                                    <div class="feature-text">Admin akan memverifikasi dan mereset password Anda.</div>
                                 </div>
                             </div>
 
                             <div class="feature-item">
                                 <div class="feature-icon"><i class="bi bi-key"></i></div>
                                 <div>
-                                    <div class="feature-title">3. Login & Ganti Password</div>
-                                    <div class="feature-text">Gunakan password baru dari admin untuk login, lalu Anda akan diminta membuat password sendiri.</div>
+                                    <div class="feature-title">3. Ganti Password</div>
+                                    <div class="feature-text">Gunakan password baru dari admin untuk login kembali.</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="login-left-footer">
-                        <div class="footer-mark">IT</div>
-                        <div>Sistem inventaris internal untuk pengelolaan aset teknologi perusahaan.</div>
+                        &copy; <?= date('Y') ?> IT Asset Management Internal System.
                     </div>
                 </div>
             </div>
 
             <!-- RIGHT PANEL -->
-            <div class="col-lg-6">
+            <div class="col-lg-7">
                 <div class="login-right">
-                    <div class="form-badge">
-                        <i class="bi bi-envelope-exclamation"></i>
-                        <span>Pengajuan Reset Password</span>
-                    </div>
 
-                    <div class="form-title">Ajukan Reset Password</div>
+                    <div class="form-title">Lupa Password</div>
                     <div class="form-subtitle">
-                        Isi form berikut. Administrator akan memproses pengajuan Anda dan memberikan password baru.
+                        Isi form berikut. Administrator akan memproses pengajuan Anda.
                     </div>
 
-                    <!-- Status Tracker -->
+                    <!-- Status Tracker (Desain Baru) -->
                     <div class="status-tracker">
                         <div class="status-step active">
                             <div class="status-dot"><i class="bi bi-send"></i></div>
                             <div class="status-label">Kirim<br>Pengajuan</div>
                         </div>
                         <div class="status-step">
-                            <div class="status-dot"><i class="bi bi-hourglass"></i></div>
+                            <div class="status-dot"><i class="bi bi-hourglass-split"></i></div>
                             <div class="status-label">Tunggu<br>Admin</div>
                         </div>
                         <div class="status-step">
-                            <div class="status-dot"><i class="bi bi-key"></i></div>
+                            <div class="status-dot"><i class="bi bi-envelope-paper"></i></div>
                             <div class="status-label">Dapat<br>Password</div>
                         </div>
                         <div class="status-step">
                             <div class="status-dot"><i class="bi bi-check2"></i></div>
-                            <div class="status-label">Ganti<br>Password</div>
+                            <div class="status-label">Siap<br>Digunakan</div>
                         </div>
                     </div>
 
                     <?php if ($error): ?>
                         <div class="alert alert-danger">
-                            <i class="bi bi-exclamation-circle me-2"></i><?= e($error) ?>
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i><?= e($error) ?>
                         </div>
                     <?php endif; ?>
 
                     <?php if ($success): ?>
                         <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-2"></i><?= e($success) ?>
+                            <i class="bi bi-check-circle-fill me-2"></i><?= e($success) ?>
                         </div>
                     <?php endif; ?>
 
@@ -605,7 +538,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mb-3">
                             <label class="form-label">Username <span class="text-danger">*</span></label>
                             <div class="input-shell">
-                                <span class="input-icon"><i class="bi bi-person"></i></span>
+                                <i class="bi bi-person-fill input-icon"></i>
                                 <input
                                     type="text"
                                     name="username"
@@ -619,7 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="mb-3">
                             <label class="form-label">Email <span class="text-danger">*</span></label>
                             <div class="input-shell">
-                                <span class="input-icon"><i class="bi bi-envelope"></i></span>
+                                <i class="bi bi-envelope-fill input-icon"></i>
                                 <input
                                     type="email"
                                     name="email"
@@ -631,40 +564,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label">Alasan / Keterangan <span style="color:#9a8060; font-weight:600;">(opsional)</span></label>
+                            <label class="form-label">Keterangan Tambahan <span class="text-muted fw-normal">(Opsional)</span></label>
                             <textarea
                                 name="alasan"
                                 class="form-control"
-                                rows="3"
-                                placeholder="Ceritakan kendala yang Anda alami (opsional)..."></textarea>
+                                rows="2"
+                                placeholder="Ceritakan alasan pengajuan (opsional)..."></textarea>
                         </div>
 
                         <button type="submit" class="btn btn-login w-100" id="btnKirim">
-                            <i class="bi bi-send me-2"></i>Kirim Pengajuan
+                            Kirim Pengajuan <i class="bi bi-send-fill ms-2"></i>
                         </button>
                     </form>
 
                     <div class="text-center mt-3">
                         <a href="<?= e(base_url('auth/login.php')) ?>" class="back-link">
-                            <i class="bi bi-arrow-left me-1"></i>Kembali ke Login
+                            <i class="bi bi-arrow-left me-1"></i> Kembali ke Login
                         </a>
                     </div>
 
                     <div class="system-note">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Pengajuan hanya dapat diproses oleh <b>Administrator</b>. Pastikan username dan email
-                        yang dimasukkan sesuai dengan data akun terdaftar di sistem.
+                        <i class="bi bi-info-circle me-1 text-muted"></i>
+                        Pengajuan hanya dapat diproses oleh <b>Administrator</b>. Pastikan username dan email yang Anda masukkan valid.
                     </div>
 
-                    <div class="note-text">
-                        <span>IT Asset Management</span> — Password Reset Request
-                    </div>
                 </div>
             </div>
 
         </div>
     </div>
 
+    <!-- SCRIPT ALERT -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
@@ -682,9 +612,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!username || !email) {
                         Swal.fire({
                             icon: 'warning',
-                            title: 'Data belum lengkap',
+                            title: 'Data Belum Lengkap',
                             text: 'Username dan email wajib diisi.',
-                            confirmButtonColor: '#ff9800'
+                            confirmButtonColor: '#E64312'
                         });
                         return;
                     }
@@ -694,10 +624,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         html: 'Pengajuan reset password untuk akun <b>' + username + '</b> akan dikirim ke administrator.',
                         icon: 'question',
                         showCancelButton: true,
-                        confirmButtonText: 'Ya, kirim',
+                        confirmButtonText: 'Ya, Kirim',
                         cancelButtonText: 'Batal',
-                        confirmButtonColor: '#ff9800',
-                        cancelButtonColor: '#6c757d'
+                        confirmButtonColor: '#E64312',
+                        cancelButtonColor: '#6c757d',
+                        reverseButtons: true
                     }).then((result) => {
                         if (result.isConfirmed) {
                             form.submit();
@@ -712,8 +643,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 icon: 'success',
                 title: 'Pengajuan Terkirim!',
                 html: 'Pengajuan reset password Anda sudah diterima.<br><b>Silakan tunggu konfirmasi dari administrator.</b>',
-                confirmButtonText: 'OK, mengerti',
-                confirmButtonColor: '#ff9800',
+                confirmButtonText: 'OK, Mengerti',
+                confirmButtonColor: '#E64312',
                 timer: 6000,
                 timerProgressBar: true
             });
@@ -724,7 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 icon: 'error',
                 title: 'Gagal',
                 text: '<?= addslashes(e($error)) ?>',
-                confirmButtonColor: '#ff9800'
+                confirmButtonColor: '#E64312'
             });
             <?php endif; ?>
         });

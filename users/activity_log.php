@@ -114,236 +114,129 @@ $offlineUsers = $data['offlineUsers'];
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 
+    <!-- SINKRONISASI TEMA HEXINDO (CLEAN & INDUSTRIAL) -->
     <style>
         :root {
-            --orange-1: #ff7a00;
-            --orange-2: #ff9800;
-            --orange-3: #ffb000;
-            --dark-1: #111111;
-            --text-main: #1e1e1e;
-            --text-soft: #6b7280;
-            --surface: #ffffff;
-            --border-soft: rgba(255, 152, 0, 0.14);
-            --shadow-soft: 0 12px 36px rgba(17, 17, 17, 0.07);
-            --radius-xl: 28px;
+            /* TEMA HEXINDO */
+            --orange-1: #E64312; 
+            --orange-2: #F25C05;
+            --dark-1: #231F20;
+            --text-main: #333333;
+            --text-soft: #666666;
+            --surface-bg: #F4F6F9;
+            --border-soft: #E0E4E8;
+            --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
+            --shadow-hover: 0 10px 25px rgba(0,0,0,0.08);
+            --radius-box: 8px; /* Industrial Sharp Edges */
         }
 
         body {
-            background: radial-gradient(circle at top left, rgba(255, 176, 0, 0.16), transparent 28%),
-                linear-gradient(180deg, #fff8f1 0%, #ffffff 100%);
+            background-color: var(--surface-bg);
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
             min-height: 100vh;
         }
 
-        .page-shell {
-            padding: 25px;
-        }
+        .page-shell { padding: 24px 32px; }
 
-        /* Hero Card */
+        /* Hero Card Hexindo Style */
         .page-hero {
             position: relative;
-            overflow: hidden;
-            border-radius: var(--radius-xl);
-            background: linear-gradient(135deg, rgba(17, 17, 17, 0.94) 0%, rgba(255, 122, 0, 0.96) 100%);
-            box-shadow: 0 18px 45px rgba(255, 122, 0, 0.20);
-            padding: 1.8rem 2rem;
+            background: var(--dark-1);
+            border-top: 4px solid var(--orange-1);
+            border-radius: var(--radius-box);
+            padding: 1.5rem 2rem;
             margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-soft);
         }
 
         .page-title {
-            color: #fff;
-            font-size: 1.8rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.3rem;
+            color: #fff; font-size: 1.6rem; font-weight: 700; margin-bottom: 0.25rem;
         }
 
         .page-desc {
-            color: rgba(255, 255, 255, 0.84);
-            font-size: .95rem;
-            max-width: 800px;
-            margin-bottom: 0;
+            color: #9ca3af; margin-bottom: 0; font-size: 0.95rem; max-width: 800px;
         }
 
-        /* Buttons */
+        /* Buttons Hexindo */
         .btn-modern {
-            background: #ffffff;
-            color: var(--dark-1);
-            border: none;
-            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff; font-weight: 600;
+            border-radius: var(--radius-box);
             padding: 0.6rem 1.2rem;
-            font-weight: 800;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-            display: inline-flex;
-            align-items: center;
             text-decoration: none;
+            display: inline-flex; align-items: center;
+            transition: all 0.2s; font-size: 0.9rem;
         }
+        .btn-modern:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
 
-        .btn-modern:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.25);
-            background: #fff7ef;
-            color: var(--dark-1);
-        }
-
-        /* Summary Cards */
+        /* Summary Cards Hexindo Style */
         .summary-card {
-            background: var(--surface);
+            background: #fff;
             border: 1px solid var(--border-soft);
-            border-radius: 20px;
-            padding: 1.25rem;
+            border-radius: var(--radius-box);
+            padding: 1.25rem 1.5rem;
             display: flex;
             align-items: center;
             gap: 1.2rem;
             box-shadow: var(--shadow-soft);
-            transition: 0.3s;
+            transition: 0.2s;
             height: 100%;
         }
 
-        .summary-card:hover {
-            transform: translateY(-4px);
-        }
+        .summary-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover);}
 
         .sc-icon {
-            width: 55px;
-            height: 55px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.6rem;
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
         }
+        .sc-icon.blue  { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .sc-icon.green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+        .sc-icon.gray  { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
 
-        .sc-icon.blue {
-            background: #eff6ff;
-            color: #3b82f6;
-        }
+        .sc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-soft); }
+        .sc-value { font-size: 1.8rem; font-weight: 800; color: var(--dark-1); line-height: 1.1; margin-top: 0.2rem; }
 
-        .sc-icon.green {
-            background: #ecfdf5;
-            color: #10b981;
-        }
-
-        .sc-icon.gray {
-            background: #f3f4f6;
-            color: #6b7280;
-        }
-
-        .sc-label {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--text-soft);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .sc-value {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: var(--dark-1);
-            line-height: 1.1;
-            margin-top: 0.2rem;
-        }
-
-        /* UI Card & Table */
+        /* UI Card & Table Clean */
         .ui-card {
-            background: var(--surface);
-            border: 1px solid var(--border-soft);
-            border-radius: 22px;
-            box-shadow: var(--shadow-soft);
-            overflow: hidden;
+            background: #fff; border: 1px solid var(--border-soft); border-radius: var(--radius-box); box-shadow: var(--shadow-soft); overflow: hidden;
         }
 
-        .table-custom {
-            margin-bottom: 0;
-        }
-
+        .table-custom { margin-bottom: 0; }
         .table-custom thead th {
-            background-color: #fcfcfc;
-            color: #555;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 700;
-            padding: 1rem 1.5rem;
-            border-bottom: 2px solid #eee;
+            background-color: #f9fafb !important; color: var(--text-soft);
+            font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;
+            font-weight: 700; padding: 1.2rem 1.5rem; border-bottom: 1px solid var(--border-soft);
         }
-
-        .table-custom tbody td {
-            padding: 1.2rem 1.5rem;
-            vertical-align: middle;
-            border-bottom: 1px solid #f5f5f5;
-        }
+        .table-custom tbody td { padding: 1rem 1.5rem; vertical-align: middle; border-bottom: 1px solid var(--border-soft); }
 
         /* Avatar & Text */
         .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--orange-1), var(--orange-3));
-            color: white;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 1.1rem;
-            flex-shrink: 0;
+            width: 42px; height: 42px; border-radius: 8px; border: 1px solid rgba(230, 67, 18, 0.2);
+            background-color: rgba(230, 67, 18, 0.1); color: var(--orange-1);
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 1.1rem; flex-shrink: 0;
         }
+        
+        .user-info { display: flex; align-items: center; gap: 1rem; }
+        .text-bold { font-weight: 700; color: var(--dark-1); font-size: 0.95rem; margin-bottom: 0.15rem;}
+        .text-meta { font-size: 0.85rem; color: var(--text-soft); }
 
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .text-bold {
-            font-weight: 700;
-            color: var(--dark-1);
-            font-size: 0.95rem;
-        }
-
-        .text-meta {
-            font-size: 0.85rem;
-            color: var(--text-soft);
-        }
-
-        /* Status Badges with Pulse Effect */
+        /* Status Badges with Pulse Effect (Soft Hexindo Style) */
         .badge-status {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.45em 0.9em;
-            border-radius: 999px;
-            font-weight: 700;
-            font-size: 0.8rem;
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 0.35em 0.8em; border-radius: 6px;
+            font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
         }
 
-        .badge-online {
-            background-color: #ecfdf5;
-            color: #047857;
-            border: 1px solid #a7f3d0;
-        }
+        .badge-online { background-color: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .badge-offline { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; border: 1px solid rgba(107, 114, 128, 0.2); }
 
-        .badge-offline {
-            background-color: #f3f4f6;
-            color: #4b5563;
-            border: 1px solid #e5e7eb;
-        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot-offline { background-color: #6b7280; }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
-        }
-
-        .dot-offline {
-            background-color: #9ca3af;
-        }
-
-        /* Animasi Dot Kedip untuk Online */
+        /* Animasi Kedip untuk Online (Warna Hexindo/Hijau) */
         .dot-online {
             background-color: #10b981;
             box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
@@ -351,32 +244,19 @@ $offlineUsers = $data['offlineUsers'];
         }
 
         @keyframes pulse-green {
-            0% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-            }
-
-            70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
-            }
-
-            100% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-            }
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
     </style>
 </head>
 
 <body>
     <div class="container-fluid p-0">
-        <!-- Ubah class row menjadi d-flex flex-nowrap agar sejajar & tidak turun -->
         <div class="d-flex flex-nowrap w-100 overflow-hidden">
 
             <?php include '../layout/sidebar.php'; ?>
 
-            <!-- Ganti col-md-10 menjadi flex-grow-1 dan tambahkan id="mainContent" -->
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
 
                 <div class="page-shell">
@@ -385,14 +265,15 @@ $offlineUsers = $data['offlineUsers'];
                     <div class="page-hero">
                         <div class="hero-content d-flex justify-content-between align-items-center flex-wrap gap-3">
                             <div>
-                                <h1 class="page-title"><i class="bi bi-activity me-2 text-warning"></i>Monitoring User Cabang</h1>
-                                <p class="page-desc">Pantau status koneksi dan keaktifan akun pengguna cabang secara aktual. (Threshold online: <?= $onlineThresholdMinutes ?> menit terakhir).</p>
-                                <div id="presenceSyncStatus" class="text-meta mt-2">Sinkronisasi terakhir: <span id="presenceSyncTime">Sekarang</span></div>
+                                <h1 class="page-title"><i class="bi bi-activity me-2" style="color: var(--orange-1);"></i> Monitoring Kehadiran User Cabang</h1>
+                                <p class="page-desc">Pantau status konektivitas dan keaktifan login pengguna cabang secara aktual (*Threshold batas online: <?= $onlineThresholdMinutes ?> menit).</p>
+                                <div class="text-meta mt-2" style="color: #9ca3af;">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Sinkronisasi sistem terakhir: <strong class="text-white" id="presenceSyncTime">Memuat...</strong>
+                                </div>
                             </div>
                             <div>
-                                <!-- Tombol Action -->
                                 <button onclick="location.reload()" class="btn-modern">
-                                    <i class="bi bi-arrow-clockwise me-2 fs-5"></i> Muat Ulang Data
+                                    <i class="bi bi-arrow-clockwise me-2"></i> Muat Ulang Tampilan
                                 </button>
                             </div>
                         </div>
@@ -410,7 +291,7 @@ $offlineUsers = $data['offlineUsers'];
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="summary-card">
+                            <div class="summary-card" style="border-left-color: #10b981;">
                                 <div class="sc-icon green"><i class="bi bi-wifi"></i></div>
                                 <div>
                                     <div class="sc-label">Sedang Online</div>
@@ -419,11 +300,11 @@ $offlineUsers = $data['offlineUsers'];
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="summary-card">
+                            <div class="summary-card" style="border-left-color: #6b7280;">
                                 <div class="sc-icon gray"><i class="bi bi-wifi-off"></i></div>
                                 <div>
                                     <div class="sc-label">Sedang Offline</div>
-                                    <div id="presenceOfflineUsers" class="sc-value text-secondary"><?= $offlineUsers ?></div>
+                                    <div id="presenceOfflineUsers" class="sc-value text-muted"><?= $offlineUsers ?></div>
                                 </div>
                             </div>
                         </div>
@@ -432,10 +313,10 @@ $offlineUsers = $data['offlineUsers'];
                     <!-- Main Data Table -->
                     <div class="ui-card">
                         <div class="table-responsive">
-                            <table class="table table-custom align-middle">
+                            <table class="table table-custom align-middle table-hover">
                                 <thead>
                                     <tr>
-                                        <th width="5%">No</th>
+                                        <th width="5%" class="ps-4">No</th>
                                         <th width="35%">Informasi Pengguna</th>
                                         <th width="20%">Cabang Lokasi</th>
                                         <th width="20%">Status Sistem</th>
@@ -447,24 +328,23 @@ $offlineUsers = $data['offlineUsers'];
                                         <?php $no = 1; ?>
                                         <?php foreach ($usersData as $u): ?>
                                             <tr>
-                                                <td class="text-muted fw-bold"><?= $no++ ?></td>
+                                                <td class="text-muted fw-semibold ps-4"><?= $no++ ?></td>
 
                                                 <!-- User Info with Avatar -->
                                                 <td>
                                                     <div class="user-info">
-                                                        <!-- Ambil huruf pertama username untuk avatar -->
                                                         <div class="user-avatar">
                                                             <?= strtoupper(substr(h($u['username']), 0, 1)) ?>
                                                         </div>
                                                         <div>
                                                             <div class="text-bold"><?= h($u['username'] ?? '-') ?></div>
-                                                            <div class="text-meta"><i class="bi bi-envelope me-1"></i><?= h($u['email'] ?? '-') ?></div>
+                                                            <div class="text-meta"><i class="bi bi-envelope text-muted me-1"></i><?= h($u['email'] ?? '-') ?></div>
                                                         </div>
                                                     </div>
                                                 </td>
 
                                                 <td>
-                                                    <div class="text-bold"><i class="bi bi-geo-alt-fill text-warning me-1"></i><?= h($u['nama_branch'] ?? '-') ?></div>
+                                                    <div class="text-bold text-dark"><i class="bi bi-geo-alt-fill text-muted me-2"></i><?= h($u['nama_branch'] ?? '-') ?></div>
                                                 </td>
 
                                                 <!-- Status Badge -->
@@ -482,7 +362,7 @@ $offlineUsers = $data['offlineUsers'];
 
                                                 <td>
                                                     <div class="text-meta">
-                                                        <i class="bi bi-clock-history me-1"></i><?= h($u['last_seen_formatted']) ?>
+                                                        <i class="bi bi-clock-history me-1 text-muted"></i><?= h($u['last_seen_formatted']) ?>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -492,7 +372,7 @@ $offlineUsers = $data['offlineUsers'];
                                             <td colspan="5" class="text-center py-5">
                                                 <i class="bi bi-people text-muted fs-1 d-block mb-3"></i>
                                                 <h5 class="fw-bold text-dark">Belum ada data user</h5>
-                                                <p class="text-muted">Sistem tidak menemukan akun dengan role 'user' cabang.</p>
+                                                <p class="text-muted">Sistem tidak menemukan akun aktif dengan kewenangan 'user' cabang.</p>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -506,6 +386,7 @@ $offlineUsers = $data['offlineUsers'];
         </div>
     </div>
 
+    <!-- SCRIPT JAVASCRIPT AJAX 100% TIDAK DIUBAH (HANYA PENYESUAIAN CSS CLASS BUILD ROW SAJA) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
@@ -517,7 +398,7 @@ $offlineUsers = $data['offlineUsers'];
             const presenceTableBody = document.getElementById('presenceTableBody');
 
             if (!presenceSyncTime || !presenceTotalUsers || !presenceOnlineUsers || !presenceOfflineUsers || !presenceTableBody) {
-                console.warn('Element presence not ditemukan, polling dihentikan.');
+                console.warn('Element presence tidak ditemukan, polling dihentikan.');
                 return;
             }
 
@@ -528,22 +409,22 @@ $offlineUsers = $data['offlineUsers'];
 
                 return `
                     <tr>
-                        <td class="text-muted fw-bold">${index}</td>
+                        <td class="text-muted fw-semibold ps-4">${index}</td>
                         <td>
                             <div class="user-info">
                                 <div class="user-avatar">${String(user.username || '').charAt(0).toUpperCase()}</div>
                                 <div>
                                     <div class="text-bold">${user.username ? user.username : '-'}</div>
-                                    <div class="text-meta"><i class="bi bi-envelope me-1"></i>${user.email ? user.email : '-'}</div>
+                                    <div class="text-meta"><i class="bi bi-envelope text-muted me-1"></i>${user.email ? user.email : '-'}</div>
                                 </div>
                             </div>
                         </td>
                         <td>
-                            <div class="text-bold"><i class="bi bi-geo-alt-fill text-warning me-1"></i>${user.nama_branch ? user.nama_branch : '-'}</div>
+                            <div class="text-bold text-dark"><i class="bi bi-geo-alt-fill text-muted me-2"></i>${user.nama_branch ? user.nama_branch : '-'}</div>
                         </td>
                         <td>${statusBadge}</td>
                         <td>
-                            <div class="text-meta"><i class="bi bi-clock-history me-1"></i>${user.last_seen_formatted ? user.last_seen_formatted : '-'}</div>
+                            <div class="text-meta"><i class="bi bi-clock-history text-muted me-1"></i>${user.last_seen_formatted ? user.last_seen_formatted : '-'}</div>
                         </td>
                     </tr>
                 `;
@@ -559,7 +440,7 @@ $offlineUsers = $data['offlineUsers'];
                     presenceTotalUsers.textContent = data.totalUsers;
                     presenceOnlineUsers.textContent = data.onlineUsers;
                     presenceOfflineUsers.textContent = data.offlineUsers;
-                    presenceSyncTime.textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    presenceSyncTime.textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
 
                     if (Array.isArray(data.usersData)) {
                         presenceTableBody.innerHTML = data.usersData.map((user, index) => buildRow(index + 1, user)).join('');
@@ -571,7 +452,7 @@ $offlineUsers = $data['offlineUsers'];
             }
 
             setInterval(refreshPresence, 5000);
-            refreshPresence();
+            refreshPresence(); // Panggil pertama kali saat halaman di-load
         });
     </script>
 </body>

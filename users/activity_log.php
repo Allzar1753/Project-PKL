@@ -318,8 +318,8 @@ $offlineUsers = $data['offlineUsers'];
                                     <tr>
                                         <th width="5%" class="ps-4">No</th>
                                         <th width="35%">Informasi Pengguna</th>
-                                        <th width="20%">Cabang Lokasi</th>
-                                        <th width="20%">Status Sistem</th>
+                                        <th width="20%">Lokasi Cabang</th>
+                                        <th width="20%">Status User</th>
                                         <th width="20%">Aktivitas Terakhir</th>
                                     </tr>
                                 </thead>

@@ -158,6 +158,10 @@ function validate_single_user_input(
         return 'Username dan email wajib diisi.';
     }
 
+    if (!preg_match('/^[a-zA-Z\s]+$/', $username)) {
+        return 'Username hanya boleh berisi huruf.';
+    }
+
     if ($idBranch === null || $idBranch <= 0) {
         return 'Cabang wajib dipilih.';
     }
@@ -503,6 +507,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($row['username'] === '') {
                 $rowErrors[$index]['username'] = 'Username wajib diisi.';
+            } elseif (!preg_match('/^[a-zA-Z\s]+$/', $row['username'])) {
+                $rowErrors[$index]['username'] = 'Username hanya boleh berisi huruf.';
             }
 
             if ($row['email'] === '') {
@@ -622,6 +628,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($row['username'] === '') {
                 $rowErrors[$index]['username'] = 'Username wajib diisi.';
+            } elseif (!preg_match('/^[a-zA-Z\s]+$/', $row['username'])) {
+                $rowErrors[$index]['username'] = 'Username hanya boleh berisi huruf.';
             }
 
             if ($row['email'] === '') {
@@ -2057,6 +2065,9 @@ function role_icon(string $role): string
                     if (data.username === '') {
                         setBulkFieldError(row, 'username', 'Username wajib diisi.');
                         isValid = false;
+                    } else if (!/^[a-zA-Z\s]+$/.test(data.username)) {
+                        setBulkFieldError(row, 'username', 'Username hanya boleh berisi huruf.');
+                        isValid = false;
                     }
                     if (data.email === '') {
                         setBulkFieldError(row, 'email', 'Email wajib diisi.');
@@ -2246,6 +2257,9 @@ function role_icon(string $role): string
                     if (data.username === '') {
                         setFieldError(row, 'username', 'Username wajib diisi.');
                         isValid = false;
+                    } else if (!/^[a-zA-Z\s]+$/.test(data.username)) {
+                        setFieldError(row, 'username', 'Username hanya boleh berisi huruf.');
+                        isValid = false;
                     }
                     if (data.email === '') {
                         setFieldError(row, 'email', 'Email wajib diisi.');
@@ -2391,7 +2405,14 @@ function role_icon(string $role): string
                     });
                 });
             });
+
         });
+        // Batasi input username hanya huruf
+            document.addEventListener('input', function(e) {
+                if (e.target.name === 'username' || e.target.dataset.field === 'username') {
+                    e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '');  
+                }
+            });
     </script>
 </body>
 </html>

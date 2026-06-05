@@ -453,60 +453,100 @@ $q = mysqli_query($koneksi, "
             </div>
         </div>
     </div>
+    
+    <!-- MODAL PENERIMAAN BARANG HO -->
+    <div class="modal fade" id="modalTerimaCabang" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content border-0 rounded-4 overflow-hidden">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #231F20, #374151); border-bottom: none;">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i>Penerimaan di Head Office</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="contentTerimaCabang">
+                    <!-- Form dari terima_barang_form.php akan dimuat di sini -->
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- SCRIPT TIDAK DIUBAH SAMA SEKALI (HANYA WARNA SWEETALERT DISESUAIKAN) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        document.addEventListener('click', async (e) => {
+        // 1. KETIKA TOMBOL "TERIMA BARANG" DIKLIK
+        document.addEventListener('click', function(e) {
             const approveBtn = e.target.closest('.btnApprove');
 
             if (approveBtn) {
                 const id = approveBtn.getAttribute('data-id');
+                const contentDiv = document.getElementById('contentTerimaCabang');
+                
+                // Tampilkan animasi loading di dalam modal
+                contentDiv.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-dark"></div><div class="mt-2 text-muted">Memuat form...</div></div>';
+                
+                // Buka Modal Pop-up
+                const modal = new bootstrap.Modal(document.getElementById('modalTerimaCabang'));
+                modal.show();
 
-                // Tambahkan konfirmasi SweetAlert yang modern sebelum mengeksekusi
-                const confirmResult = await Swal.fire({
-                    title: 'Konfirmasi Penerimaan',
-                    text: "Pastikan fisik barang sudah tiba dan sesuai.",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#E64312', /* Warna tombol YA Hexindo */
-                    cancelButtonColor: '#231F20',  /* Warna tombol BATAL Dark */
-                    confirmButtonText: 'Ya, Terima Barang',
-                    cancelButtonText: 'Batal'
-                });
-
-                if (confirmResult.isConfirmed) {
-                    const res = await fetch('pengiriman_approval.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        },
-                        body: new URLSearchParams({
-                            id_pengiriman: id,
-                            nama_penerima: 'Admin HO Jakarta'
-                        })
+                // Ambil form dari file terima_barang_form.php dan masukkan ke dalam modal
+                fetch('terima_barang_form.php?id=' + id)
+                    .then(response => response.text())
+                    .then(html => {
+                        contentDiv.innerHTML = html;
+                    })
+                    .catch(err => {
+                        contentDiv.innerHTML = '<div class="alert alert-danger">Gagal memuat form penerimaan.</div>';
                     });
+            }
+        });
 
-                    const data = await res.json();
+        // 2. KETIKA FORM DI DALAM MODAL DI-SUBMIT
+        document.addEventListener('submit', function(e) {
+            if (e.target && e.target.id === 'formTerimaCabang') {
+                e.preventDefault(); // Cegah reload halaman
+                
+                const form = e.target;
+                const btn = form.querySelector('button[type="submit"]');
+                const originalText = btn.innerHTML;
+                
+                // Ubah tombol jadi loading
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
 
-                    if (data.status === 'success') {
-                        await Swal.fire({
-                            icon: 'success',
-                            title: 'Berhasil Diterima!',
-                            text: data.message,
-                            confirmButtonColor: '#E64312'
-                        });
-                        location.reload();
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Gagal',
-                            text: data.message || 'Terjadi kesalahan',
-                            confirmButtonColor: '#231F20'
-                        });
-                    }
-                }
+                // Kirim data form (termasuk foto) ke terima_barang_proses.php
+                fetch('terima_barang_proses.php', {
+                    method: 'POST',
+                    body: new FormData(form)
+                })
+                .then(res => res.json())
+                .then(data => {
+                    // Kasih jeda 1 detik agar animasi loading terlihat natural
+                    setTimeout(() => {
+                        if (data.status === 'success') {
+                            Swal.fire({ 
+                                icon: 'success', 
+                                title: 'Berhasil!', 
+                                text: data.message, 
+                                confirmButtonColor: '#E64312' 
+                            }).then(() => location.reload());
+                        } else {
+                            Swal.fire({ 
+                                icon: 'error', 
+                                title: 'Gagal', 
+                                text: data.message, 
+                                confirmButtonColor: '#231F20' 
+                            });
+                            btn.disabled = false;
+                            btn.innerHTML = originalText;
+                        }
+                    }, 1000);
+                })
+                .catch(err => {
+                    Swal.fire('Error', 'Terjadi kesalahan komunikasi dengan server.', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                });
             }
         });
     </script>

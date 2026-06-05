@@ -10,13 +10,13 @@ $error   = get_flash('error');
 $success = get_flash('success');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = trim((string) ($_POST['username'] ?? ''));
+    // HANYA MENGGUNAKAN EMAIL DAN ALASAN
     $email    = trim((string) ($_POST['email']    ?? ''));
     $alasan   = trim((string) ($_POST['alasan']   ?? ''));
 
     // Validasi input
-    if ($username === '' || $email === '') {
-        set_flash('error', 'Username dan email wajib diisi.');
+    if ($email === '') {
+        set_flash('error', 'Email wajib diisi.');
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
@@ -25,10 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
-    // Cek apakah user dengan username + email tersebut ada
+    // Cek apakah user dengan email tersebut ada
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id FROM users WHERE BINARY username = ? AND BINARY email = ? LIMIT 1"
+        "SELECT id FROM users WHERE BINARY email = ? LIMIT 1"
     );
 
     if (!$stmt) {
@@ -36,14 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
-    mysqli_stmt_bind_param($stmt, 'ss', $username, $email);
+    // Bind parameter hanya untuk email ('s')
+    mysqli_stmt_bind_param($stmt, 's', $email);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $user   = mysqli_fetch_assoc($result);
     mysqli_stmt_close($stmt);
 
     if (!$user) {
-        set_flash('error', 'Username dan email tidak cocok. Pastikan data yang dimasukkan benar.');
+        set_flash('error', 'Email tidak terdaftar. Pastikan email yang dimasukkan benar.');
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
@@ -301,7 +302,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 90%;
             height: 2px;
             background: var(--border-color);
+            transition: all 0.2s;
         }
+        
+        /* Tambahan: Agar garis ikut oranye jika step setelahnya aktif */
+        .status-step.active:not(:last-child)::after {
+            background: rgba(230, 67, 18, 0.3);
+        }
+
         .status-dot {
             width: 32px; height: 32px;
             border-radius: 50%;
@@ -465,7 +473,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="feature-icon"><i class="bi bi-send"></i></div>
                                 <div>
                                     <div class="feature-title">1. Kirim Pengajuan</div>
-                                    <div class="feature-text">Isi data akun. Pengajuan langsung dikirim ke admin.</div>
+                                    <div class="feature-text">Isi data email. Pengajuan langsung dikirim ke admin.</div>
                                 </div>
                             </div>
 
@@ -502,21 +510,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         Isi form berikut. Administrator akan memproses pengajuan Anda.
                     </div>
 
-                    <!-- Status Tracker (Desain Baru) -->
+                    <!-- Status Tracker (Semua dijadikan 'active' sesuai permintaan) -->
                     <div class="status-tracker">
                         <div class="status-step active">
                             <div class="status-dot"><i class="bi bi-send"></i></div>
                             <div class="status-label">Kirim<br>Pengajuan</div>
                         </div>
-                        <div class="status-step">
+                        <div class="status-step active">
                             <div class="status-dot"><i class="bi bi-hourglass-split"></i></div>
                             <div class="status-label">Tunggu<br>Admin</div>
                         </div>
-                        <div class="status-step">
+                        <div class="status-step active">
                             <div class="status-dot"><i class="bi bi-envelope-paper"></i></div>
                             <div class="status-label">Dapat<br>Password</div>
                         </div>
-                        <div class="status-step">
+                        <div class="status-step active">
                             <div class="status-dot"><i class="bi bi-check2"></i></div>
                             <div class="status-label">Siap<br>Digunakan</div>
                         </div>
@@ -535,22 +543,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
 
                     <form method="POST" action="" id="formPengajuan">
+                        
+                        <!-- Form Username dihapus, hanya menyisakan Email -->
                         <div class="mb-3">
-                            <label class="form-label">Username <span class="text-danger">*</span></label>
-                            <div class="input-shell">
-                                <i class="bi bi-person-fill input-icon"></i>
-                                <input
-                                    type="text"
-                                    name="username"
-                                    class="form-control"
-                                    required
-                                    placeholder="Masukkan username akun Anda"
-                                    autocomplete="username">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                            <label class="form-label">Email Terdaftar <span class="text-danger">*</span></label>
                             <div class="input-shell">
                                 <i class="bi bi-envelope-fill input-icon"></i>
                                 <input
@@ -585,7 +581,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="system-note">
                         <i class="bi bi-info-circle me-1 text-muted"></i>
-                        Pengajuan hanya dapat diproses oleh <b>Administrator</b>. Pastikan username dan email yang Anda masukkan valid.
+                        Pengajuan hanya dapat diproses oleh <b>Administrator</b>. Pastikan email yang Anda masukkan valid.
                     </div>
 
                 </div>
@@ -606,14 +602,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 form.addEventListener('submit', function (e) {
                     e.preventDefault();
 
-                    const username = form.querySelector('[name="username"]').value.trim();
-                    const email    = form.querySelector('[name="email"]').value.trim();
+                    // Hanya mengambil nilai email
+                    const email = form.querySelector('[name="email"]').value.trim();
 
-                    if (!username || !email) {
+                    if (!email) {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Data Belum Lengkap',
-                            text: 'Username dan email wajib diisi.',
+                            text: 'Email wajib diisi.',
                             confirmButtonColor: '#E64312'
                         });
                         return;
@@ -621,7 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     Swal.fire({
                         title: 'Kirim Pengajuan?',
-                        html: 'Pengajuan reset password untuk akun <b>' + username + '</b> akan dikirim ke administrator.',
+                        html: 'Pengajuan reset password untuk email <b>' + email + '</b> akan dikirim ke administrator.',
                         icon: 'question',
                         showCancelButton: true,
                         confirmButtonText: 'Ya, Kirim',

@@ -32,8 +32,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    if (strlen($newPassword) < 8) {
-        set_flash('error', 'Password baru minimal 8 karakter.');
+    // --- VALIDASI KOMBINASI PASSWORD DI BACKEND (PHP) ---
+    // Cek minimal 8 karakter, ada huruf besar, huruf kecil, angka, dan simbol
+    if (strlen($newPassword) < 8 || 
+        !preg_match('/[A-Z]/', $newPassword) || 
+        !preg_match('/[a-z]/', $newPassword) || 
+        !preg_match('/[0-9]/', $newPassword) || 
+        !preg_match('/[^A-Za-z0-9]/', $newPassword)) {
+        
+        set_flash('error', 'Password gagal disimpan. Pastikan password minimal 8 karakter dan mengandung huruf besar, huruf kecil, angka, serta simbol.');
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
@@ -117,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -379,7 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .password-toggle:hover { background: var(--bg-body); color: var(--dark-main); }
         .password-toggle:focus { outline: none; box-shadow: 0 0 0 2px rgba(230, 67, 18, 0.1); }
 
-        /* Saran Password Box (Modernized) */
+        /* Saran Password Box */
         .suggestion-box {
             background: var(--bg-body);
             border: 1px dashed var(--border-color);
@@ -420,6 +428,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         .btn-use-suggestion:hover { background: var(--orange-hover); transform: translateY(-1px); }
 
+        /* Peringatan Aturan Password Baru (List Checklist) */
+        .password-rules-box {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        .rule-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        .rule-item {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+        .rule-item:last-child { margin-bottom: 0; }
+        .rule-item i { font-size: 1rem; transition: color 0.3s ease; }
+        /* Warna saat terpenuhi */
+        .rule-item.valid { color: #15803d; }
+        .rule-item.valid i { color: #22c55e; }
+
         /* Tombol Modern */
         .btn-login {
             background-color: var(--orange-primary);
@@ -451,9 +489,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         /* strength bar */
-        .strength-bar { height: 6px; border-radius: 999px; background: var(--border-color); margin-top: 8px; overflow: hidden; }
+        .strength-bar { height: 6px; border-radius: 999px; background: var(--border-color); margin-top: 12px; overflow: hidden; }
         .strength-fill { height: 100%; border-radius: 999px; width: 0%; transition: width .3s ease, background .3s ease; }
-        .strength-label { font-size: .8rem; font-weight: 700; margin-top: 4px; color: var(--text-muted); }
 
         @media (max-width: 991.98px) { 
             .login-left, .login-right { padding: 32px 24px; } 
@@ -537,7 +574,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     <?php endif; ?>
 
-                    <!-- Kotak Saran Password Profesional -->
+                    <!-- Kotak Saran Password -->
                     <div class="suggestion-box">
                         <div>
                             <div class="suggestion-text">Saran Kombinasi Kuat:</div>
@@ -548,7 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </button>
                     </div>
 
-                    <form method="POST" action="">
+                    <form method="POST" action="" id="passwordForm">
                         <div class="mb-3">
                             <label class="form-label">Password Baru</label>
                             <div class="input-shell password-shell">
@@ -566,14 +603,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
-                            <!-- Strength indicator -->
+                            
+                            <!-- Strength Indicator Bar -->
                             <div class="strength-bar">
                                 <div class="strength-fill" id="strengthFill"></div>
                             </div>
-                            <div class="strength-label" id="strengthLabel"></div>
+
+                            <!-- CHECKLIST ATURAN PASSWORD -->
+                            <div class="password-rules-box">
+                                <div class="rule-title">Password harus mengandung:</div>
+                                <div class="rule-item" id="rule-length">
+                                    <i class="bi bi-x-circle text-danger"></i> Minimal 8 Karakter
+                                </div>
+                                <div class="rule-item" id="rule-upper">
+                                    <i class="bi bi-x-circle text-danger"></i> Minimal 1 Huruf Besar (A-Z)
+                                </div>
+                                <div class="rule-item" id="rule-lower">
+                                    <i class="bi bi-x-circle text-danger"></i> Minimal 1 Huruf Kecil (a-z)
+                                </div>
+                                <div class="rule-item" id="rule-number">
+                                    <i class="bi bi-x-circle text-danger"></i> Minimal 1 Angka (0-9)
+                                </div>
+                                <div class="rule-item" id="rule-symbol">
+                                    <i class="bi bi-x-circle text-danger"></i> Minimal 1 Simbol Khusus (!@#$%^&*)
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="mb-4 mt-3">
+                        <div class="mb-4 mt-4">
                             <label class="form-label">Konfirmasi Password Baru</label>
                             <div class="input-shell password-shell">
                                 <i class="bi bi-check-circle-fill input-icon"></i>
@@ -593,7 +650,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div id="matchMsg" style="font-size:0.85rem; margin-top:6px; font-weight:700;"></div>
                         </div>
 
-                        <button type="submit" class="btn btn-login w-100">
+                        <button type="submit" class="btn btn-login w-100" id="btnSubmit">
                             Simpan Password Baru <i class="bi bi-arrow-right ms-2"></i>
                         </button>
                     </form>
@@ -608,7 +665,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
-    <!-- SCRIPT (Tidak diubah logikanya, hanya penyesuaian fungsi visual) -->
+    <!-- SCRIPT LOGIKA CHECKLIST DAN VALIDASI -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
@@ -620,23 +677,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const symbols = "!@#$%^&*";
                 
                 let pass = "";
-                // Paksa agar ada minimal 1 huruf besar, kecil, angka, dan simbol
                 pass += uppers[Math.floor(Math.random() * uppers.length)];
                 pass += lowers[Math.floor(Math.random() * lowers.length)];
                 pass += numbers[Math.floor(Math.random() * numbers.length)];
                 pass += symbols[Math.floor(Math.random() * symbols.length)];
                 
-                // Tambahkan 8 karakter sisanya secara acak (Total 12 Karakter)
                 const all = uppers + lowers + numbers + symbols;
                 for(let i=0; i<8; i++) {
                     pass += all[Math.floor(Math.random() * all.length)];
                 }
                 
-                // Acak urutan stringnya
                 return pass.split('').sort(() => 0.5 - Math.random()).join('');
             }
 
-            // Tampilkan saran password di kotak UI
             const suggestedPass = generateStrongPassword();
             document.getElementById('suggestedPasswordTxt').textContent = suggestedPass;
 
@@ -645,25 +698,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 const newPassInput = document.getElementById('newPassword');
                 const confPassInput = document.getElementById('confirmPassword');
                 
-                // Jadikan type text agar kelihatan saat diisi otomatis
                 newPassInput.type = 'text';
                 confPassInput.type = 'text';
 
-                // Isi form otomatis
                 newPassInput.value = suggestedPass;
                 confPassInput.value = suggestedPass;
 
-                // Update icon mata jadi dicoret
                 document.querySelectorAll('.password-toggle i').forEach(icon => {
                     icon.classList.remove('bi-eye');
                     icon.classList.add('bi-eye-slash');
                 });
 
-                // Trigger input event agar bar warna dan tulisan "cocok" muncul
                 newPassInput.dispatchEvent(new Event('input'));
                 confPassInput.dispatchEvent(new Event('input'));
             });
-
 
             // --- 2. Toggle password visibility (Mata) ---
             document.querySelectorAll('.password-toggle').forEach(function (button) {
@@ -683,55 +731,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 });
             });
 
-            // --- 3. Password strength indicator ---
+            // --- 3. LOGIKA CHECKLIST ATURAN PASSWORD & STRENGTH BAR ---
             const newPasswordInput = document.getElementById('newPassword');
             const strengthFill     = document.getElementById('strengthFill');
-            const strengthLabel    = document.getElementById('strengthLabel');
+            
+            // Definisikan regex untuk setiap rule
+            const rules = {
+                length: val => val.length >= 8,
+                upper: val => /[A-Z]/.test(val),
+                lower: val => /[a-z]/.test(val),
+                number: val => /[0-9]/.test(val),
+                symbol: val => /[^A-Za-z0-9]/.test(val)
+            };
+
+            let isPasswordStrong = false; // Flag status kombinasi
 
             newPasswordInput.addEventListener('input', function () {
                 const val = this.value;
                 let score = 0;
 
-                if (val.length >= 8)              score++;
-                if (/[A-Z]/.test(val))            score++;
-                if (/[0-9]/.test(val))            score++;
-                if (/[^A-Za-z0-9]/.test(val))     score++;
+                // Cek masing-masing aturan
+                for (const key in rules) {
+                    const el = document.getElementById(`rule-${key}`);
+                    const icon = el.querySelector('i');
+                    
+                    if (rules[key](val)) {
+                        el.classList.add('valid');
+                        icon.className = 'bi bi-check-circle-fill';
+                        score++;
+                    } else {
+                        el.classList.remove('valid');
+                        icon.className = 'bi bi-x-circle text-danger';
+                    }
+                }
 
+                // Update Status Global (True jika semua 5 syarat terpenuhi)
+                isPasswordStrong = (score === 5);
+
+                // Update Bar Kekuatan
                 const levels =[
-                    { pct: '0%',   color: '',          label: '' },
-                    { pct: '25%',  color: '#ef4444',   label: 'Lemah (Minimal 8 Karakter)' }, // Merah
-                    { pct: '50%',  color: '#f59e0b',   label: 'Cukup (Tambahkan Angka/Huruf Besar)' }, // Oren kekuningan
-                    { pct: '75%',  color: '#eab308',   label: 'Baik (Tambahkan Simbol Spesial)' }, // Kuning
-                    { pct: '100%', color: '#22c55e',   label: 'Sangat Kuat' }, // Hijau
+                    { pct: '0%',   color: '' },
+                    { pct: '20%',  color: '#ef4444' }, // 1 Syarat: Merah
+                    { pct: '40%',  color: '#f59e0b' }, // 2 Syarat: Oren
+                    { pct: '60%',  color: '#eab308' }, // 3 Syarat: Kuning
+                    { pct: '80%',  color: '#84cc16' }, // 4 Syarat: Hijau Muda
+                    { pct: '100%', color: '#22c55e' }  // 5 Syarat: Hijau Full
                 ];
 
                 const level = val.length === 0 ? levels[0] : levels[score];
                 strengthFill.style.width      = level.pct;
                 strengthFill.style.background = level.color;
-                strengthLabel.textContent     = level.label;
-                strengthLabel.style.color     = level.color;
             });
 
-            // --- 4. Confirm password match indicator ---
+            // --- 4. LOGIKA KECOCOKAN PASSWORD (CONFIRM) ---
             const confirmPasswordInput = document.getElementById('confirmPassword');
             const matchMsg             = document.getElementById('matchMsg');
+            let isPasswordMatched      = false;
 
             function checkMatch() {
                 if (confirmPasswordInput.value === '') {
                     matchMsg.textContent = '';
+                    isPasswordMatched = false;
                     return;
                 }
                 if (newPasswordInput.value === confirmPasswordInput.value) {
                     matchMsg.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Password cocok';
                     matchMsg.style.color = '#22c55e'; // Hijau
+                    isPasswordMatched = true;
                 } else {
                     matchMsg.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> Password tidak cocok';
                     matchMsg.style.color = '#ef4444'; // Merah
+                    isPasswordMatched = false;
                 }
             }
 
-            newPasswordInput.addEventListener('input',     checkMatch);
+            newPasswordInput.addEventListener('input', checkMatch);
             confirmPasswordInput.addEventListener('input', checkMatch);
+
+            // --- 5. CEGAT SUBMIT FORM JIKA SYARAT BELUM TERPENUHI ---
+            document.getElementById('passwordForm').addEventListener('submit', function(e) {
+                if (!isPasswordStrong) {
+                    e.preventDefault(); // Hentikan proses simpan
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Kombinasi Lemah',
+                        text: 'Pastikan password memenuhi semua persyaratan: minimal 8 karakter, huruf besar, huruf kecil, angka, dan simbol.',
+                        confirmButtonColor: '#E64312'
+                    });
+                    return;
+                }
+
+                if (!isPasswordMatched) {
+                    e.preventDefault();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Password Tidak Cocok',
+                        text: 'Konfirmasi password harus sama dengan password baru.',
+                        confirmButtonColor: '#E64312'
+                    });
+                    return;
+                }
+            });
         });
     </script>
 </body>

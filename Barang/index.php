@@ -131,7 +131,7 @@ if ($isAdmin) {
 
 if ($filter === 'keluar') {
     if ($isAdmin) {
-        $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
+        $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima,
                             b.id AS id_barang, b.bermasalah, b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
                      FROM barang_pengiriman p
                      JOIN barang b ON p.id_barang = b.id
@@ -139,7 +139,7 @@ if ($filter === 'keluar') {
                      LEFT JOIN tb_branch br ON p.branch_tujuan = br.id_branch
                      WHERE 1=1 $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     } else {
-        $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
+        $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima_ho AS foto_barang_diterima,
                             p.serial_number, p.pemilik_barang, tb_barang.nama_barang, 'Pusat HO' AS info_branch, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
@@ -148,7 +148,7 @@ if ($filter === 'keluar') {
     }
 } elseif ($filter === 'masuk') {
     if ($isAdmin) {
-        $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
+        $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima_ho AS foto_barang_diterima,
                             p.serial_number, p.pemilik_barang, tb_barang.nama_barang, br.nama_branch AS info_branch, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
@@ -156,7 +156,7 @@ if ($filter === 'keluar') {
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     } else {
-        $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
+        $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima,
                         b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
                         CASE
                             WHEN b.`user` IS NOT NULL AND b.`user` != '' AND b.`user` != '0' 
@@ -179,6 +179,7 @@ if ($filter === 'keluar') {
                  ORDER BY p.id_pengiriman DESC";
     }
 } else {
+// ... (Bagian else yang bawah ini biarkan saja, jangan diubah)
     if ($isAdmin) {
         $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
@@ -730,14 +731,14 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                         <?php if ($filter === 'masuk' || $filter === 'keluar'): ?>
                                             <th>Informasi Logistik</th>
                                             <th>Status & Resi</th>
-                                            <th>Bukti</th>
+                                            <th>Bukti Kirim</th>
                                         <?php else: ?>
                                             <th>Spesifikasi</th>
                                             <th>Lokasi / User</th>
                                             <th>Kondisi</th>
                                             <th>Foto</th>
                                         <?php endif; ?>
-                                        <th class="text-center pe-4">Aksi</th>
+                                        <th class="text-center pe-4">Bukti Terima</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -770,7 +771,12 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                         <?php if (in_array(strtolower($data['status_pengiriman']), ['sedang perjalanan', 'menunggu persetujuan admin'])): ?>
                                                             <button class="btn btn-primary btn-sm btnKonfirmasiTerima" data-id="<?= $data['id_transaksi'] ?>" data-role="<?= $isAdmin ? 'admin' : 'user' ?>" title="Konfirmasi Terima"><i class="bi bi-check2-all"></i></button>
                                                         <?php else: ?>
-                                                            <button class="btn btn-light btn-sm text-muted" disabled><i class="bi bi-lock-fill"></i></button>
+                                                            <!-- MENAMPILKAN THUMBNAIL FOTO BUKTI TERIMA -->
+                                                            <?php if (!empty($data['foto_barang_diterima'])): ?>
+                                                                <img src="../assets/images/<?= h($data['foto_barang_diterima']) ?>" class="thumb-img previewFoto border-success" style="border-width: 2px;" data-foto="../assets/images/<?= h($data['foto_barang_diterima']) ?>" title="Bukti Terima (Klik untuk perbesar)" alt="Bukti">
+                                                            <?php else: ?>
+                                                                <button class="btn btn-light btn-sm text-muted" disabled title="Selesai (Tidak ada foto)"><i class="bi bi-lock-fill"></i></button>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </td>
 
@@ -794,10 +800,25 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                             <?php if (in_array($logisticStatus, ['sedang perjalanan', 'menunggu persetujuan admin'], true)): ?>
                                                                 <button type="button" class="btn btn-light border btn-sm text-info btnLogistikStatus" data-id="<?= $data['id_transaksi'] ?>" data-status="<?= h($logisticStatus) ?>" title="Informasi status logistik"><i class="bi bi-truck"></i></button>
                                                             <?php else: ?>
-                                                                <button type="button" class="btn btn-light btn-sm text-success" disabled title="Pengiriman selesai"><i class="bi bi-check-circle-fill"></i></button>
+                                                                <!-- ADMIN MELIHAT THUMBNAIL CABANG -->
+                                                                <?php if (!empty($data['foto_barang_diterima'])): ?>
+                                                                    <img src="../assets/images/<?= h($data['foto_barang_diterima']) ?>" class="thumb-img previewFoto border-success" style="border-width: 2px;" data-foto="../assets/images/<?= h($data['foto_barang_diterima']) ?>" title="Bukti Terima Cabang (Klik perbesar)" alt="Bukti">
+                                                                <?php else: ?>
+                                                                    <button type="button" class="btn btn-light btn-sm text-success" disabled title="Pengiriman selesai (Tidak ada foto)"><i class="bi bi-check-circle-fill"></i></button>
+                                                                <?php endif; ?>
                                                             <?php endif; ?>
                                                         <?php else: ?>
-                                                            <button class="btn btn-light btn-sm text-muted" disabled><i class="bi bi-lock-fill"></i></button>
+                                                            <!-- USER CABANG MELIHAT THUMBNAIL HO -->
+                                                            <?php $logisticStatus = strtolower(trim($data['status_pengiriman'] ?? '')); ?>
+                                                            <?php if (in_array($logisticStatus, ['sudah diterima ho', 'selesai'], true)): ?>
+                                                                <?php if (!empty($data['foto_barang_diterima'])): ?>
+                                                                    <img src="../assets/images/<?= h($data['foto_barang_diterima']) ?>" class="thumb-img previewFoto border-success" style="border-width: 2px;" data-foto="../assets/images/<?= h($data['foto_barang_diterima']) ?>" title="Bukti Terima HO (Klik perbesar)" alt="Bukti">
+                                                                <?php else: ?>
+                                                                    <button class="btn btn-light btn-sm text-muted" disabled title="Selesai (Tidak ada foto)"><i class="bi bi-lock-fill"></i></button>
+                                                                <?php endif; ?>
+                                                            <?php else: ?>
+                                                                <button class="btn btn-light btn-sm text-muted" disabled><i class="bi bi-lock-fill"></i></button>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </td>
 
@@ -1100,37 +1121,11 @@ $emptyColspan = ($filter === '' ? 7 : 6);
          */
         $(document).on('click', '.btnKonfirmasiTerima', function() {
             const id = $(this).data('id');
-            const role = $(this).data('role');
-
-            if (role === 'admin') {
-                // Admin Konfirmasi Terima Barang dari Cabang
-                Swal.fire({
-                    title: 'Konfirmasi Terima?',
-                    text: "Pastikan fisik barang sudah diterima di HO Jakarta.",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#E64312',
-                    confirmButtonText: 'Ya, Sudah Terima'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $.post('pengiriman_approval.php', {
-                            id_pengiriman: id,
-                            nama_penerima: 'Admin HO'
-                        }, function(res) {
-                            if (res.status === 'success') {
-                                Swal.fire('Berhasil', res.message, 'success').then(() => location.reload());
-                            } else {
-                                Swal.fire('Error', res.message, 'error');
-                            }
-                        }, 'json');
-                    }
-                });
-            } else {
-                // User Cabang Membuka Form Terima Barang dari HO
-                $('#contentTerimaCabang').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
-                $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id);
-                bootstrap.Modal.getOrCreateInstance('#modalTerimaCabang').show();
-            }
+            // Entah Admin atau User, sekarang keduanya memanggil modal form yang sama
+            // Modal secara otomatis mendeteksi is_admin() di form.php
+            $('#contentTerimaCabang').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
+            $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id);
+            bootstrap.Modal.getOrCreateInstance('#modalTerimaCabang').show();
         });
 
         /**

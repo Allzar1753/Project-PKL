@@ -2,6 +2,10 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
+require_once '../config/warranty_helper.php';
+require_once '../config/asset_code_helper.php';
+require_once '../config/validation_helper.php';
 
 if (is_admin()) {
     exit('Akses ditolak. Form ini khusus untuk user cabang.');
@@ -46,6 +50,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonResponse('error', 'Semua field bertanda * wajib diisi!');
     }
 
+    $nameError = validate_person_name($user);
+    if ($nameError !== null) {
+        jsonResponse('error', $nameError);
+    }
+
     // 1. Cek Duplikat Serial Number
     $cekSerial = mysqli_query($koneksi, "SELECT id FROM barang WHERE serial_number = '$serial_number' LIMIT 1");
     if (mysqli_num_rows($cekSerial) > 0) {
@@ -66,14 +75,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         move_uploaded_file($_FILES['foto']['tmp_name'], $targetDir . $foto);
     }
 
+    $tanggal_pembelian = date('Y-m-d');
+    $masa_garansi_bulan = normalize_warranty_months($_POST['masa_garansi_bulan'] ?? 12);
+    $tanggal_garansi_berakhir = compute_warranty_end_date($tanggal_pembelian, $masa_garansi_bulan);
+    $kode_aset = esc($koneksi, generate_kode_aset($koneksi, $id_barang, $tanggal_terima));
+
     // 3. Simpan ke Database
     $queryBarang = "INSERT INTO barang 
-        (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, id_status, id_branch, foto, `user`, user_id, status) 
+        (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, id_status, id_branch, foto, `user`, user_id, status) 
         VALUES 
-        ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', '$id_status', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem', 'Tersedia')";
+        ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', '$id_status', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem', 'Tersedia')";
 
     if (mysqli_query($koneksi, $queryBarang)) {
-        jsonResponse('success', 'Aset baru berhasil ditambahkan ke inventaris cabang Anda.');
+        $newId = (int) mysqli_insert_id($koneksi);
+        log_activity($koneksi, 'create_barang', "User cabang tambah barang - Kode: {$kode_aset}, Serial: {$serial_number}", [
+            'id' => $newId,
+            'kode_aset' => $kode_aset,
+            'serial_number' => $serial_number,
+            'no_asset' => $no_asset,
+            'id_branch' => $myBranchId,
+        ]);
+        jsonResponse('success', "Aset berhasil ditambahkan! Kode Asset: {$kode_aset}");
     } else {
         jsonResponse('error', 'Gagal menyimpan data: ' . mysqli_error($koneksi));
     }
@@ -176,6 +198,12 @@ $barang = mysqli_query($koneksi, "SELECT * FROM tb_barang ORDER BY nama_barang A
                 <i class="bi bi-info-circle-fill me-2"></i>
                 <b>Informasi:</b> Aset yang Anda input akan otomatis terdaftar sebagai stok di cabang Anda pada hari ini dengan status <b>Normal & Tersedia</b>.
             </div>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">Kode Asset (Otomatis)</label>
+            <input type="text" class="form-control bg-light" value="HXI-KATEGORI-TAHUN-00001" readonly disabled>
+            <small class="text-muted">Dibuat otomatis saat simpan. Contoh: HXI-MON-2026-00012</small>
         </div>
 
         <div class="col-md-6">

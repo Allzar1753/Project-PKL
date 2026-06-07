@@ -5,6 +5,9 @@ require_once __DIR__ . '/../vendor/autoload.php';
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
+require_once '../config/validation_helper.php';
+require_once '../config/password_helper.php';
 
 require_admin();
 refresh_permissions($koneksi);
@@ -64,7 +67,7 @@ function find_user_by_id(mysqli $koneksi, int $id): ?array
 {
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id, username, email, password, role, id_branch, created_at, password_changed_at
+        "SELECT id, username, email, password, role, id_branch, created_at, password_changed_at, employment_status
          FROM users
          WHERE id = ?
          LIMIT 1"
@@ -131,11 +134,6 @@ function email_exists(mysqli $koneksi, string $email, ?int $ignoreId = null): bo
     return $exists;
 }
 
-function default_password_for_role(string $role): string
-{
-    return normalize_role($role) === 'admin' ? 'Admin@123' : 'user@123';
-}
-
 function resolve_password_input(string $role, ?string $inputPassword): string
 {
     $inputPassword = trim((string) $inputPassword);
@@ -144,7 +142,7 @@ function resolve_password_input(string $role, ?string $inputPassword): string
         return $inputPassword;
     }
 
-    return default_password_for_role($role);
+    return generate_strong_password();
 }
 
 function validate_single_user_input(
@@ -194,8 +192,8 @@ function insert_user(
 
     $stmt = mysqli_prepare(
         $koneksi,
-        "INSERT INTO users (username, email, password, role, must_change_password, id_branch)
-         VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users (username, email, password, role, must_change_password, id_branch, employment_status)
+         VALUES (?, ?, ?, ?, ?, ?, 'active')"
     );
 
     if (!$stmt) {
@@ -230,7 +228,6 @@ function bulk_row_has_input(array $row): bool
 {
     return $row['username'] !== ''
         || $row['email'] !== ''
-        || $row['password'] !== ''
         || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
@@ -307,7 +304,6 @@ function create_user_row_has_value(array $row): bool
 {
     return $row['username'] !== ''
         || $row['email'] !== ''
-        || $row['password'] !== ''
         || (int) ($row['id_branch'] ?? 0) > 0;
 }
 
@@ -376,8 +372,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect_users_index();
         }
 
-        if (strlen($newPassword) < 8) {
-            set_flash('error', 'Password baru minimal 8 karakter.');
+        $passwordError = validate_password_strength($newPassword);
+        if ($passwordError !== null) {
+            set_flash('error', $passwordError);
             redirect_users_index();
         }
 
@@ -473,6 +470,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect_users_index();
         }
 
+        log_activity($koneksi, 'create_user', "Admin tambah user - Username: {$username}, Role: {$role}, Status: " . employment_status_label('active'), [
+            'username' => $username,
+            'email' => $email,
+            'role' => $role,
+            'id_branch' => $idBranch,
+        ]);
+
+        stash_user_credentials_flash([[
+            'username' => $username,
+            'email' => $email,
+            'password' => $password,
+        ]]);
         set_flash('success', 'User berhasil dibuat.');
         redirect_users_index();
     }
@@ -579,6 +588,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             $insertedCount = 0;
+            $createdCredentials = [];
 
             foreach ($filledRows as $row) {
                 $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
@@ -588,12 +598,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Gagal menyimpan salah satu user.');
                 }
 
+                log_activity($koneksi, 'create_user', "Admin tambah user (bulk) - Username: {$row['username']}, Role: {$row['role']}", [
+                    'username' => $row['username'],
+                    'email' => $row['email'],
+                    'role' => $row['role'],
+                    'id_branch' => $idBranch,
+                ]);
+
+                $createdCredentials[] = [
+                    'username' => $row['username'],
+                    'email' => $row['email'],
+                    'password' => $plainPassword,
+                ];
                 $insertedCount++;
             }
 
             mysqli_commit($koneksi);
 
             clear_create_user_form_state();
+            stash_user_credentials_flash($createdCredentials);
             set_flash('success', $insertedCount . ' user berhasil dibuat.');
         } catch (Throwable $e) {
             mysqli_rollback($koneksi);
@@ -701,6 +724,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             $insertedCount = 0;
+            $createdCredentials = [];
 
             foreach ($filledRows as $row) {
                 $plainPassword = resolve_password_input($row['role'], $row['password'] ?? '');
@@ -710,12 +734,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Gagal membuat salah satu user.');
                 }
 
+                log_activity($koneksi, 'create_user', "Admin tambah user (bulk) - Username: {$row['username']}, Role: {$row['role']}", [
+                    'username' => $row['username'],
+                    'email' => $row['email'],
+                    'role' => $row['role'],
+                    'id_branch' => $idBranch,
+                ]);
+
+                $createdCredentials[] = [
+                    'username' => $row['username'],
+                    'email' => $row['email'],
+                    'password' => $plainPassword,
+                ];
                 $insertedCount++;
             }
 
             mysqli_commit($koneksi);
 
             clear_bulk_form_state();
+            stash_user_credentials_flash($createdCredentials);
             set_flash('success', $insertedCount . ' user berhasil dibuat.');
         } catch (Throwable $e) {
             mysqli_rollback($koneksi);
@@ -734,6 +771,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = normalize_role((string) ($_POST['role'] ?? 'user'));
         $idBranch = (int) ($_POST['id_branch'] ?? 0);
         $idBranch = $idBranch > 0 ? $idBranch : null;
+        $employmentStatus = normalize_employment_status($_POST['employment_status'] ?? 'active');
 
         $targetUser = find_user_by_id($koneksi, $id);
         if (!$targetUser) {
@@ -750,31 +788,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $isSelf = current_user_id() === $id;
 
+        if ($isSelf && !is_employment_active($employmentStatus)) {
+            set_flash('error', 'Anda tidak bisa menonaktifkan akun sendiri.');
+            redirect_users_index();
+        }
+
         if ($newPassword !== '') {
+            $passwordError = validate_password_strength($newPassword);
+            if ($passwordError !== null) {
+                set_flash('error', $passwordError);
+                redirect_users_index();
+            }
+
             $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-            $mustChangePassword = 0;
+            $mustChangePassword = 1;
 
             $stmt = mysqli_prepare(
                 $koneksi,
                 "UPDATE users
-                 SET username = ?, email = ?, role = ?, id_branch = ?, password = ?, must_change_password = ?
+                 SET username = ?, email = ?, role = ?, id_branch = ?, password = ?, must_change_password = ?, employment_status = ?
                  WHERE id = ?"
             );
 
-            mysqli_stmt_bind_param($stmt, 'sssissi', $username, $email, $role, $idBranch, $hash, $mustChangePassword, $id);
+            mysqli_stmt_bind_param($stmt, 'sssisisi', $username, $email, $role, $idBranch, $hash, $mustChangePassword, $employmentStatus, $id);
         } else {
             $stmt = mysqli_prepare(
                 $koneksi,
                 "UPDATE users
-                 SET username = ?, email = ?, role = ?, id_branch = ?
+                 SET username = ?, email = ?, role = ?, id_branch = ?, employment_status = ?
                  WHERE id = ?"
             );
 
-            mysqli_stmt_bind_param($stmt, 'sssii', $username, $email, $role, $idBranch, $id);
+            mysqli_stmt_bind_param($stmt, 'sssisi', $username, $email, $role, $idBranch, $employmentStatus, $id);
         }
 
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+
+        if ($newPassword !== '') {
+            stash_user_credentials_flash([[
+                'username' => $username,
+                'email' => $email,
+                'password' => $newPassword,
+            ]]);
+        }
 
         if ($isSelf && isset($_SESSION['user'])) {
             $_SESSION['user']['username'] = $username;
@@ -782,6 +839,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user']['role'] = $role;
             $_SESSION['user']['id_branch'] = $idBranch;
             refresh_permissions($koneksi);
+        }
+
+        $oldEmploymentStatus = normalize_employment_status($targetUser['employment_status'] ?? 'active');
+
+        log_activity($koneksi, 'update_user', "Admin edit user - ID: {$id}, Username: {$username}, Status: " . employment_status_label($employmentStatus), [
+            'target_user_id' => $id,
+            'username' => $username,
+            'email' => $email,
+            'role' => $role,
+            'id_branch' => $idBranch,
+            'employment_status' => $employmentStatus,
+        ]);
+
+        if ($oldEmploymentStatus !== $employmentStatus) {
+            log_activity($koneksi, 'update_user_status', "Ubah status kerja {$username}: " . employment_status_label($oldEmploymentStatus) . ' → ' . employment_status_label($employmentStatus), [
+                'target_user_id' => $id,
+                'username' => $username,
+                'from' => $oldEmploymentStatus,
+                'to' => $employmentStatus,
+            ]);
         }
 
         set_flash('success', 'Data user berhasil diperbarui.');
@@ -806,6 +883,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_bind_param($stmt, 'i', $id);
         mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+
+        log_activity($koneksi, 'delete_user', "Admin hapus user - Username: {$targetUser['username']}, ID: {$id}", [
+            'target_user_id' => $id,
+            'username' => $targetUser['username'],
+            'email' => $targetUser['email'] ?? '',
+        ]);
 
         set_flash('success', 'User berhasil dihapus.');
         redirect_users_index();
@@ -1026,6 +1109,7 @@ if (isset($_GET['export'])) {
 
 $alertError = get_flash('error');
 $alertSuccess = get_flash('success');
+$userCredentialsFlash = get_flash('user_credentials_batch');
 
 $bulkOldRows = pull_bulk_form_old();
 $bulkErrors = pull_bulk_form_errors();
@@ -1053,7 +1137,9 @@ $summaryQuery = mysqli_query(
     "SELECT
         COUNT(*) AS total_users,
         SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END) AS total_admin,
-        SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS total_user
+        SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS total_user,
+        SUM(CASE WHEN COALESCE(employment_status, 'active') = 'active' THEN 1 ELSE 0 END) AS total_active,
+        SUM(CASE WHEN COALESCE(employment_status, 'active') = 'inactive' THEN 1 ELSE 0 END) AS total_inactive
      FROM users"
 );
 
@@ -1062,23 +1148,41 @@ $summaryData = $summaryQuery ? (mysqli_fetch_assoc($summaryQuery) ?: []) : [];
 $totalUsers = (int) ($summaryData['total_users'] ?? 0);
 $adminTotal = (int) ($summaryData['total_admin'] ?? 0);
 $userTotal = (int) ($summaryData['total_user'] ?? 0);
+$activeTotal = (int) ($summaryData['total_active'] ?? 0);
+$inactiveTotal = (int) ($summaryData['total_inactive'] ?? 0);
 
-$totalPages = max(1, (int) ceil($totalUsers / $limit));
+$employmentFilter = $_GET['employment'] ?? 'all';
+if (!in_array($employmentFilter, ['all', 'active', 'inactive'], true)) {
+    $employmentFilter = 'all';
+}
+
+$employmentWhere = '';
+if ($employmentFilter === 'active') {
+    $employmentWhere = "WHERE COALESCE(users.employment_status, 'active') = 'active'";
+} elseif ($employmentFilter === 'inactive') {
+    $employmentWhere = "WHERE COALESCE(users.employment_status, 'active') = 'inactive'";
+}
+
+$countUsersResult = mysqli_query($koneksi, "SELECT COUNT(*) AS total FROM users $employmentWhere");
+$filteredTotalUsers = $countUsersResult ? (int) (mysqli_fetch_assoc($countUsersResult)['total'] ?? 0) : $totalUsers;
+
+$totalPages = max(1, (int) ceil($filteredTotalUsers / $limit));
 if ($page > $totalPages) {
     $page = $totalPages;
 }
 
 $offset = ($page - 1) * $limit;
-$displayFrom = $totalUsers > 0 ? $offset + 1 : 0;
-$displayTo = min($offset + $limit, $totalUsers);
+$displayFrom = $filteredTotalUsers > 0 ? $offset + 1 : 0;
+$displayTo = min($offset + $limit, $filteredTotalUsers);
 
 $users = [];
 $usersResult = mysqli_query(
     $koneksi,
-    "SELECT users.id, users.username, users.email, users.role, users.id_branch, users.created_at, users.password_changed_at, tb_branch.nama_branch
+    "SELECT users.id, users.username, users.email, users.role, users.id_branch, users.created_at, users.password_changed_at, users.employment_status, tb_branch.nama_branch
      FROM users
      LEFT JOIN tb_branch ON tb_branch.id_branch = users.id_branch
-     ORDER BY FIELD(role, 'admin', 'user'), username ASC
+     $employmentWhere
+     ORDER BY FIELD(COALESCE(users.employment_status, 'active'), 'active', 'inactive'), FIELD(role, 'admin', 'user'), username ASC
      LIMIT $offset, $limit"
 );
 
@@ -1102,6 +1206,7 @@ $resetRequestsResult = mysqli_query(
     "SELECT 
         prr.id,
         prr.user_id,
+        prr.alasan,
         prr.status,
         prr.requested_at,
         prr.processed_by,
@@ -1137,6 +1242,11 @@ function role_icon(string $role): string
 {
     return $role === 'admin' ? 'bi-shield-check' : 'bi-person';
 }
+
+function employment_badge_class(?string $status): string
+{
+    return is_employment_active($status) ? 'employment-badge active' : 'employment-badge inactive';
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -1149,6 +1259,7 @@ function role_icon(string $role): string
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="<?= e(base_url('assets/css/password-fields.css')) ?>">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1315,6 +1426,15 @@ function role_icon(string $role): string
         .role-badge.admin { background: rgba(230, 67, 18, 0.1); color: var(--orange-1); border: 1px solid rgba(230, 67, 18, 0.2); }
         .role-badge.user { background: rgba(59, 130, 246, 0.1); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.2); }
 
+        .employment-badge {
+            display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 6px;
+            padding: 0.2rem 0.6rem; font-size: 0.75rem; font-weight: 600;
+        }
+        .employment-badge.active { background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2); }
+        .employment-badge.inactive { background: rgba(107, 114, 128, 0.12); color: #4b5563; border: 1px solid rgba(107, 114, 128, 0.2); }
+
+        .user-card.inactive-user { opacity: 0.88; background: #fafafa; }
+
         .user-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
         .btn-pill { border-radius: 6px; font-weight: 600; padding: 0.5rem 1rem; font-size: 0.85rem; border: 1px solid var(--border-soft); background: #fff; transition: 0.2s;}
@@ -1351,13 +1471,6 @@ function role_icon(string $role): string
         .select2-container--default.select2-container--focus .select2-selection--single { border-color: var(--orange-1) !important; box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.1) !important; }
         .form-select.is-invalid+.select2 .select2-selection { border-color: #dc3545 !important; }
 
-        .password-group { position: relative; }
-        .password-group .form-control { padding-right: 48px; }
-        .password-toggle {
-            position: absolute; top: 50%; right: 10px; transform: translateY(-50%); border: none; background: transparent; color: #6b7280; width: 30px; height: 30px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all .2s ease;
-        }
-        .password-toggle:hover { background: var(--surface-bg); color: var(--dark-1); }
-        .password-toggle:focus { outline: none; box-shadow: 0 0 0 .2rem rgba(230, 67, 18, 0.1); }
     </style>
 </head>
 
@@ -1407,7 +1520,7 @@ function role_icon(string $role): string
                     <?php endif; ?>
 
                     <div class="row g-3 mb-4">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
@@ -1420,26 +1533,39 @@ function role_icon(string $role): string
                             </div>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
-                                        <div class="summary-label">Administrator</div>
-                                        <div class="summary-value"><?= $adminTotal ?></div>
-                                        <div class="summary-note">Akses penuh sistem</div>
+                                        <div class="summary-label">Masih Bekerja</div>
+                                        <div class="summary-value text-success"><?= $activeTotal ?></div>
+                                        <div class="summary-note">Akun aktif bisa login</div>
                                     </div>
-                                    <div class="summary-icon"><i class="bi bi-shield-lock"></i></div>
+                                    <div class="summary-icon"><i class="bi bi-person-check"></i></div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <div class="summary-card" style="border-left-color:#6b7280;">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="summary-label">Tidak Bekerja Lagi</div>
+                                        <div class="summary-value text-muted"><?= $inactiveTotal ?></div>
+                                        <div class="summary-note">Akun ada, akses diblokir</div>
+                                    </div>
+                                    <div class="summary-icon" style="color:#6b7280;background:rgba(107,114,128,.12);"><i class="bi bi-person-x"></i></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
                             <div class="summary-card">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="summary-label">User Cabang</div>
                                         <div class="summary-value"><?= $userTotal ?></div>
-                                        <div class="summary-note">Akun operasional aktif</div>
+                                        <div class="summary-note">Admin HO: <?= $adminTotal ?></div>
                                     </div>
                                     <div class="summary-icon"><i class="bi bi-person-gear"></i></div>
                                 </div>
@@ -1493,7 +1619,7 @@ function role_icon(string $role): string
                                                 </div>
 
                                                 <div>
-                                                    <button type="button" class="btn btn-pill btn-edit btnOpenResetForm" data-request-id="<?= (int) $req['id'] ?>" data-username="<?= h($req['username']) ?>" data-form-id="<?= $formId ?>">
+                                                    <button type="button" class="btn btn-pill btn-edit btnOpenResetForm" data-request-id="<?= (int) $req['id'] ?>" data-username="<?= h($req['username']) ?>" data-email="<?= h($req['email']) ?>" data-form-id="<?= $formId ?>">
                                                         <i class="bi bi-key me-1"></i> Proses Reset
                                                     </button>
                                                 </div>
@@ -1531,12 +1657,9 @@ function role_icon(string $role): string
                                             <label class="form-label">Email</label>
                                             <input type="email" name="email" class="form-control" required>
                                         </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Password</label>
-                                            <div class="password-group">
-                                                <input type="password" name="password" class="form-control password-field" placeholder="Kosongkan = password default">
-                                                <button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button>
-                                            </div>
+                                        <div class="alert alert-light border mb-3 py-2 px-3" style="font-size:0.85rem;">
+                                            <i class="bi bi-magic me-1 text-muted"></i>
+                                            Password dibuat <strong>otomatis</strong> oleh sistem setelah simpan. Email & password bisa disalin untuk diberitahukan ke user.
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label">Role Akses</label>
@@ -1585,7 +1708,7 @@ function role_icon(string $role): string
                                     <div class="tab-content">
                                         <div class="tab-pane fade show active" id="tabBulkCard">
                                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                                                <div class="helper-note flex-grow-1"><i class="bi bi-info-circle text-muted me-1"></i> Cocok untuk layar kecil / input bertahap.</div>
+                                                <div class="helper-note flex-grow-1"><i class="bi bi-info-circle text-muted me-1"></i> Cocok untuk layar kecil / input bertahap. Password dibuat otomatis per user.</div>
                                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                                     <span class="row-badge"><span id="bulkRowCounter"><?= count($bulkOldRows) ?></span> / 10 baris</span>
                                                     <button type="button" id="btnAddBulkRow" class="btn btn-soft"><i class="bi bi-plus-lg me-1"></i> Tambah Baris</button>
@@ -1614,15 +1737,6 @@ function role_icon(string $role): string
                                                                     <label class="form-label">Email</label>
                                                                     <input type="email" class="form-control <?= bulk_field_error($bulkErrors, $index, 'email') ? 'is-invalid' : '' ?>" value="<?= h($bulkRow['email']) ?>" data-field="email" data-name-template="bulk_users[__INDEX__][email]" name="bulk_users[<?= $index ?>][email]">
                                                                     <div class="invalid-feedback"><?= h(bulk_field_error($bulkErrors, $index, 'email')) ?></div>
-                                                                </div>
-
-                                                                <div class="col-lg-6">
-                                                                    <label class="form-label">Password</label>
-                                                                    <div class="password-group">
-                                                                        <input type="password" class="form-control password-field <?= bulk_field_error($bulkErrors, $index, 'password') ? 'is-invalid' : '' ?>" value="" data-field="password" data-name-template="bulk_users[__INDEX__][password]" name="bulk_users[<?= $index ?>][password]" placeholder="Kosong = password default">
-                                                                        <button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button>
-                                                                    </div>
-                                                                    <div class="invalid-feedback"><?= h(bulk_field_error($bulkErrors, $index, 'password')) ?></div>
                                                                 </div>
 
                                                                 <div class="col-lg-6">
@@ -1664,7 +1778,6 @@ function role_icon(string $role): string
                                                     <div class="row g-3">
                                                         <div class="col-lg-6"><label class="form-label">Username</label><input type="text" class="form-control" value="" data-field="username" data-name-template="bulk_users[__INDEX__][username]" name=""><div class="invalid-feedback"></div></div>
                                                         <div class="col-lg-6"><label class="form-label">Email</label><input type="email" class="form-control" value="" data-field="email" data-name-template="bulk_users[__INDEX__][email]" name=""><div class="invalid-feedback"></div></div>
-                                                        <div class="col-lg-6"><label class="form-label">Password</label><div class="password-group"><input type="password" class="form-control password-field" value="" data-field="password" data-name-template="bulk_users[__INDEX__][password]" name="" placeholder="Kosong = password default"><button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button></div><div class="invalid-feedback"></div></div>
                                                         <div class="col-lg-6"><label class="form-label">Role</label><select class="form-select" data-field="role" data-name-template="bulk_users[__INDEX__][role]" name=""><option value="user" selected>User</option><option value="admin">Admin</option></select><div class="invalid-feedback"></div></div>
                                                         <div class="col-lg-12"><label class="form-label">Cabang</label><select class="form-select branch-select" data-field="id_branch" data-name-template="bulk_users[__INDEX__][id_branch]" name=""><option value=""></option><?php foreach ($branches as $branch): ?><option value="<?= (int) $branch['id_branch'] ?>"><?= h($branch['nama_branch']) ?></option><?php endforeach; ?></select><div class="invalid-feedback"></div></div>
                                                     </div>
@@ -1674,7 +1787,7 @@ function role_icon(string $role): string
 
                                         <div class="tab-pane fade" id="tabBulkTable">
                                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                                                <div class="helper-note flex-grow-1"><i class="bi bi-info-circle text-muted me-1"></i> Cocok untuk input sangat cepat dari Excel.</div>
+                                                <div class="helper-note flex-grow-1"><i class="bi bi-info-circle text-muted me-1"></i> Cocok untuk input sangat cepat dari Excel. Password dibuat otomatis per user.</div>
                                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                                     <span class="row-badge"><span id="userRowCounter"><?= count($createUserRowsOld) ?></span> / 10 baris</span>
                                                     <button type="button" id="btnAddUserRow" class="btn btn-soft"><i class="bi bi-plus-lg me-1"></i> Tambah Baris</button>
@@ -1695,7 +1808,6 @@ function role_icon(string $role): string
                                                                 <th class="ps-3 pt-3" style="width:70px;">Baris</th>
                                                                 <th class="pt-3">Username</th>
                                                                 <th class="pt-3">Email</th>
-                                                                <th class="pt-3">Password</th>
                                                                 <th class="pt-3" style="width:160px;">Role</th>
                                                                 <th class="pt-3" style="width:200px;">Cabang</th>
                                                                 <th class="pt-3 pe-3 text-center" style="width:100px;">Aksi</th>
@@ -1712,13 +1824,6 @@ function role_icon(string $role): string
                                                                     <td>
                                                                         <input type="email" class="form-control <?= create_user_field_error($createUserRowsErrors, $index, 'email') ? 'is-invalid' : '' ?>" value="<?= h($row['email']) ?>" data-field="email" data-name-template="users[__INDEX__][email]" name="users[<?= $index ?>][email]">
                                                                         <div class="invalid-feedback"><?= h(create_user_field_error($createUserRowsErrors, $index, 'email')) ?></div>
-                                                                    </td>
-                                                                    <td>
-                                                                        <div class="password-group">
-                                                                            <input type="password" class="form-control password-field <?= create_user_field_error($createUserRowsErrors, $index, 'password') ? 'is-invalid' : '' ?>" value="" data-field="password" data-name-template="users[__INDEX__][password]" name="users[<?= $index ?>][password]" placeholder="Default">
-                                                                            <button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button>
-                                                                        </div>
-                                                                        <div class="invalid-feedback"><?= h(create_user_field_error($createUserRowsErrors, $index, 'password')) ?></div>
                                                                     </td>
                                                                     <td>
                                                                         <select class="form-select" data-field="role" data-name-template="users[__INDEX__][role]" name="users[<?= $index ?>][role]">
@@ -1755,7 +1860,6 @@ function role_icon(string $role): string
                                                     <td class="ps-3"><span class="row-badge user-row-number bg-light border-0 text-muted">1</span></td>
                                                     <td><input type="text" class="form-control" value="" data-field="username" data-name-template="users[__INDEX__][username]" name=""><div class="invalid-feedback"></div></td>
                                                     <td><input type="email" class="form-control" value="" data-field="email" data-name-template="users[__INDEX__][email]" name=""><div class="invalid-feedback"></div></td>
-                                                    <td><div class="password-group"><input type="password" class="form-control password-field" value="" data-field="password" data-name-template="users[__INDEX__][password]" name="" placeholder="Default"><button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button></div><div class="invalid-feedback"></div></td>
                                                     <td><select class="form-select" data-field="role" data-name-template="users[__INDEX__][role]" name=""><option value="user" selected>User</option><option value="admin">Admin</option></select><div class="invalid-feedback"></div></td>
                                                     <td><select class="form-select branch-select" data-field="id_branch" data-name-template="users[__INDEX__][id_branch]" name=""><option value=""></option><?php foreach ($branches as $branch): ?><option value="<?= (int) $branch['id_branch'] ?>"><?= h($branch['nama_branch']) ?></option><?php endforeach; ?></select><div class="invalid-feedback"></div></td>
                                                     <td class="pe-3 text-center"><button type="button" class="btn btn-light border text-danger btn-sm btnRemoveUserRow"><i class="bi bi-trash3"></i></button></td>
@@ -1773,10 +1877,25 @@ function role_icon(string $role): string
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                                 <div>
                                     <div class="shell-title"><i class="bi bi-list-ul me-2" style="color: var(--orange-1);"></i>Daftar User Sistem</div>
-                                    <div class="shell-subtitle">Menampilkan <?= $displayFrom ?> - <?= $displayTo ?> dari <?= $totalUsers ?> user</div>
+                                    <div class="shell-subtitle">Menampilkan <?= $displayFrom ?> - <?= $displayTo ?> dari <?= $filteredTotalUsers ?> user</div>
                                 </div>
 
+                                <form method="GET" class="mb-0 d-flex flex-wrap gap-2 align-items-center">
+                                    <input type="hidden" name="limit" value="<?= $limit ?>">
+                                    <div class="limit-box">
+                                        <span class="section-label">Status User:</span>
+                                        <select name="employment" onchange="this.form.submit()" class="form-select form-select-sm">
+                                            <option value="all" <?= $employmentFilter === 'all' ? 'selected' : '' ?>>Semua</option>
+                                            <option value="active" <?= $employmentFilter === 'active' ? 'selected' : '' ?>>Masih Bekerja</option>
+                                            <option value="inactive" <?= $employmentFilter === 'inactive' ? 'selected' : '' ?>>Tidak Bekerja Lagi</option>
+                                        </select>
+                                    </div>
+                                </form>
+
                                 <form method="GET" class="mb-0">
+                                    <?php if ($employmentFilter !== 'all'): ?>
+                                        <input type="hidden" name="employment" value="<?= h($employmentFilter) ?>">
+                                    <?php endif; ?>
                                     <div class="limit-box">
                                         <span class="section-label">Baris:</span>
                                         <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm">
@@ -1793,8 +1912,11 @@ function role_icon(string $role): string
                         <div class="shell-body p-4">
                             <?php if (!empty($users)): ?>
                                 <?php foreach ($users as $user): ?>
-                                    <?php $collapseId = 'editUserCollapse' . (int) $user['id']; ?>
-                                    <div class="user-card">
+                                    <?php
+                                    $collapseId = 'editUserCollapse' . (int) $user['id'];
+                                    $userEmployment = normalize_employment_status($user['employment_status'] ?? 'active');
+                                    ?>
+                                    <div class="user-card <?= $userEmployment === 'inactive' ? 'inactive-user' : '' ?>">
                                         <div class="user-top">
                                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                                                 <div class="d-flex align-items-center gap-3">
@@ -1807,6 +1929,10 @@ function role_icon(string $role): string
                                                         <div class="user-email"><i class="bi bi-envelope me-1 text-muted"></i><?= h($user['email']) ?> &nbsp;|&nbsp; <i class="bi bi-geo-alt me-1 text-muted"></i><?= h($user['nama_branch'] ?? 'Belum ditentukan') ?></div>
                                                         <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
                                                             <span class="<?= role_badge_class($user['role']) ?>"><i class="bi <?= role_icon($user['role']) ?>"></i> <?= role_label($user['role']) ?></span>
+                                                            <span class="<?= employment_badge_class($userEmployment) ?>">
+                                                                <i class="bi <?= $userEmployment === 'active' ? 'bi-briefcase-fill' : 'bi-briefcase' ?>"></i>
+                                                                <?= employment_status_label($userEmployment) ?>
+                                                            </span>
                                                             <span class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock"></i> Dibuat: <?= format_datetime($user['created_at'] ?? null) ?></span>
                                                         </div>
                                                     </div>
@@ -1854,7 +1980,16 @@ function role_icon(string $role): string
                                                             </select>
                                                         </div>
 
-                                                        <div class="col-lg-6">
+                                                        <div class="col-lg-4">
+                                                            <label class="form-label">Status User</label>
+                                                            <select name="employment_status" class="form-select">
+                                                                <option value="active" <?= $userEmployment === 'active' ? 'selected' : '' ?>>Masih Bekerja (bisa login)</option>
+                                                                <option value="inactive" <?= $userEmployment === 'inactive' ? 'selected' : '' ?>>Tidak Bekerja Lagi (akses diblokir)</option>
+                                                            </select>
+                                                            <div class="form-text">User tidak bekerja lagi tetap tersimpan, tapi tidak bisa masuk sistem.</div>
+                                                        </div>
+
+                                                        <div class="col-lg-4">
                                                             <label class="form-label">Lokasi Cabang</label>
                                                             <select name="id_branch" class="form-select branch-select" required>
                                                                 <option value=""></option>
@@ -1866,12 +2001,25 @@ function role_icon(string $role): string
                                                             </select>
                                                         </div>
 
-                                                        <div class="col-lg-6">
+                                                        <div class="col-lg-4">
                                                             <label class="form-label">Password Baru</label>
-                                                            <div class="password-group">
-                                                                <input type="password" name="new_password" class="form-control password-field" placeholder="Kosongkan jika tidak diganti">
-                                                                <button type="button" class="password-toggle toggle-password" aria-label="Lihat password"><i class="bi bi-eye"></i></button>
+                                                            <div class="d-flex gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    name="new_password"
+                                                                    id="editNewPass_<?= (int) $user['id'] ?>"
+                                                                    class="form-control pw-plain"
+                                                                    data-pw-plain="1"
+                                                                    readonly
+                                                                    placeholder="Kosongkan jika tidak diganti">
+                                                                <button type="button" class="btn btn-soft btn-generate-password" data-target="editNewPass_<?= (int) $user['id'] ?>" title="Generate otomatis">
+                                                                    <i class="bi bi-magic"></i>
+                                                                </button>
+                                                                <button type="button" class="btn btn-light border btn-clear-generated-password" data-target="editNewPass_<?= (int) $user['id'] ?>" title="Kosongkan">
+                                                                    <i class="bi bi-x-lg"></i>
+                                                                </button>
                                                             </div>
+                                                            <div class="form-text">Klik magic untuk buat password otomatis, lalu salin untuk user.</div>
                                                         </div>
 
                                                         <div class="col-12 mt-4 pt-3 border-top text-end">
@@ -1898,7 +2046,7 @@ function role_icon(string $role): string
                                         <ul class="pagination mb-0 flex-wrap">
                                             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
                                                 <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
-                                                    <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>"><?= $i ?></a>
+                                                    <a class="page-link" href="?page=<?= $i ?>&limit=<?= $limit ?>&employment=<?= h($employmentFilter) ?>"><?= $i ?></a>
                                                 </li>
                                             <?php endfor; ?>
                                         </ul>
@@ -1916,6 +2064,7 @@ function role_icon(string $role): string
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="<?= e(base_url('assets/js/password-fields.js')) ?>"></script>
 
     <!-- SCRIPT TIDAK ADA YANG DIUBAH SAMA SEKALI KECUALI WARNA HEXINDO DI SWEETALERT -->
     <script>
@@ -1927,22 +2076,6 @@ function role_icon(string $role): string
                     $(select).select2({ width: '100%', placeholder: 'Pilih cabang...', allowClear: true });
                 });
             }
-
-            document.addEventListener('click', function(e) {
-                const toggleButton = e.target.closest('.toggle-password');
-                if (!toggleButton) return;
-                const wrapper = toggleButton.closest('.password-group');
-                if (!wrapper) return;
-                const input = wrapper.querySelector('input');
-                const icon = toggleButton.querySelector('i');
-                if (!input) return;
-                const isPassword = input.type === 'password';
-                input.type = isPassword ? 'text' : 'password';
-                if (icon) {
-                    icon.classList.toggle('bi-eye', !isPassword);
-                    icon.classList.toggle('bi-eye-slash', isPassword);
-                }
-            });
 
             initBranchSelect();
 
@@ -2025,7 +2158,6 @@ function role_icon(string $role): string
                 return {
                     username: row.querySelector('[data-field="username"]').value.trim(),
                     email: row.querySelector('[data-field="email"]').value.trim(),
-                    password: row.querySelector('[data-field="password"]').value,
                     role: row.querySelector('[data-field="role"]').value,
                     id_branch: row.querySelector('[data-field="id_branch"]').value
                 };
@@ -2039,7 +2171,6 @@ function role_icon(string $role): string
                 const row = fragment.querySelector('.bulk-user-row');
                 row.querySelector('[data-field="username"]').value = data.username || '';
                 row.querySelector('[data-field="email"]').value = data.email || '';
-                row.querySelector('[data-field="password"]').value = '';
                 row.querySelector('[data-field="role"]').value = data.role || 'user';
                 row.querySelector('[data-field="id_branch"]').value = data.id_branch || '';
                 bulkContainer.appendChild(row);
@@ -2058,7 +2189,7 @@ function role_icon(string $role): string
                 rows.forEach(function(row) {
                     clearBulkRowErrors(row);
                     const data = getBulkRowData(row);
-                    const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
+                    const hasValue = data.username !== '' || data.email !== '';
                     if (!hasValue) return;
                     filledCount++;
 
@@ -2216,7 +2347,6 @@ function role_icon(string $role): string
                 return {
                     username: row.querySelector('[data-field="username"]').value.trim(),
                     email: row.querySelector('[data-field="email"]').value.trim(),
-                    password: row.querySelector('[data-field="password"]').value,
                     role: row.querySelector('[data-field="role"]').value,
                     id_branch: row.querySelector('[data-field="id_branch"]').value
                 };
@@ -2230,7 +2360,6 @@ function role_icon(string $role): string
                 const row = fragment.querySelector('.user-create-row');
                 row.querySelector('[data-field="username"]').value = data.username || '';
                 row.querySelector('[data-field="email"]').value = data.email || '';
-                row.querySelector('[data-field="password"]').value = '';
                 row.querySelector('[data-field="role"]').value = data.role || 'user';
                 row.querySelector('[data-field="id_branch"]').value = data.id_branch || '';
                 rowContainer.appendChild(row);
@@ -2250,7 +2379,7 @@ function role_icon(string $role): string
                 rows.forEach(function(row) {
                     clearRowErrors(row);
                     const data = getRowData(row);
-                    const hasValue = data.username !== '' || data.email !== '' || data.password !== '';
+                    const hasValue = data.username !== '' || data.email !== '';
                     if (!hasValue) return;
                     filledCount++;
 
@@ -2360,53 +2489,20 @@ function role_icon(string $role): string
             button.addEventListener('click', function() {
                 const requestId = this.dataset.requestId;
                 const username = this.dataset.username;
+                const email = this.dataset.email || '';
                 const formId = this.dataset.formId;
                 const form = document.getElementById(formId);
 
-                Swal.fire({
-                    title: 'Reset Password User',
-                    html: `
-                <p style="margin-bottom:12px; color:#555; font-size: 0.9rem;">
-                    Buat password baru untuk <strong>${username}</strong>.<br>
-                    User <strong>wajib ganti password</strong> saat login.
-                </p>
-                <input type="password" id="swalNewPassword" class="swal2-input" placeholder="Password baru (min 8 char)" style="border-radius:6px; font-size: 0.95rem;">
-                <input type="password" id="swalConfirmPassword" class="swal2-input" placeholder="Konfirmasi password" style="border-radius:6px; margin-top:10px; font-size: 0.95rem;">
-            `,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: '<i class="bi bi-check2-circle"></i> Eksekusi Reset',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#E64312',
-                    cancelButtonColor: '#6c757d',
-                    focusConfirm: false,
-                    preConfirm: () => {
-                        const newPass = document.getElementById('swalNewPassword').value;
-                        const confirmPass = document.getElementById('swalConfirmPassword').value;
-                        if (!newPass || newPass.length < 8) { Swal.showValidationMessage('Password minimal 8 karakter.'); return false; }
-                        if (newPass !== confirmPass) { Swal.showValidationMessage('Konfirmasi password tidak cocok.'); return false; }
-                        return newPass;
-                    }
-                }).then((result) => {
-                    if (!result.isConfirmed) return;
-                    Swal.fire({
-                        title: 'Konfirmasi Final',
-                        text: `Password untuk "${username}" akan diganti. Lanjutkan?`,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonText: 'Ya, Selesai!',
-                        cancelButtonText: 'Batal',
-                        confirmButtonColor: '#059669',
-                        cancelButtonColor: '#6c757d',
-                    }).then((finalResult) => {
-                        if (!finalResult.isConfirmed) return;
-                        document.getElementById('newPassInput_' + requestId).value = result.value;
-                        form.submit();
-                    });
+                PasswordFields.showResetCredentialModal(username, email, PasswordFields.generateStrongPassword(), function(newPassword) {
+                    document.getElementById('newPassInput_' + requestId).value = newPassword;
+                    form.submit();
                 });
             });
-
         });
+
+        <?php if ($userCredentialsFlash): ?>
+        PasswordFields.showCredentialsModal(<?= $userCredentialsFlash ?>);
+        <?php endif; ?>
         // Batasi input username hanya huruf
             document.addEventListener('input', function(e) {
                 if (e.target.name === 'username' || e.target.dataset.field === 'username') {

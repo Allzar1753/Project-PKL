@@ -2,6 +2,7 @@
 include '../config/koneksi.php';
 /** @var mysqli $koneksi */ //
 require_once '../config/auth.php';
+require_once '../config/warranty_helper.php';
 
 // Proteksi Halaman
 require_permission($koneksi, 'barang.view');
@@ -88,9 +89,9 @@ $searchSql_barang_pengiriman = "";
 
 if ($searchInput !== '') {
     $s = mysqli_real_escape_string($koneksi, $searchInput);
-    $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%') ";
-    $searchSql_pengiriman_ho = " AND (tb_barang.nama_barang LIKE '%$s%' OR p.serial_number LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR p.pemilik_barang LIKE '%$s%') ";
-    $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%' OR p.nama_penerima LIKE '%$s%' OR b.user LIKE '%$s%') ";
+    $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.kode_aset LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%') ";
+    $searchSql_pengiriman_ho = " AND (tb_barang.nama_barang LIKE '%$s%' OR p.serial_number LIKE '%$s%' OR b.kode_aset LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR p.pemilik_barang LIKE '%$s%') ";
+    $searchSql_barang_pengiriman = " AND (tb_barang.nama_barang LIKE '%$s%' OR b.kode_aset LIKE '%$s%' OR b.no_asset LIKE '%$s%' OR b.serial_number LIKE '%$s%' OR p.nama_penerima LIKE '%$s%' OR b.user LIKE '%$s%') ";
 }
 
 // =========================================================================
@@ -132,7 +133,7 @@ if ($isAdmin) {
 if ($filter === 'keluar') {
     if ($isAdmin) {
         $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima,
-                            b.id AS id_barang, b.bermasalah, b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
+                            b.id AS id_barang, b.bermasalah, b.kode_aset, b.no_asset, b.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, p.nama_penerima as pemilik_barang
                      FROM barang_pengiriman p
                      JOIN barang b ON p.id_barang = b.id
                      JOIN tb_barang ON b.id_barang = tb_barang.id_barang
@@ -140,7 +141,7 @@ if ($filter === 'keluar') {
                      WHERE 1=1 $searchSql_barang_pengiriman ORDER BY p.id_pengiriman DESC";
     } else {
         $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima_ho AS foto_barang_diterima,
-                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, 'Pusat HO' AS info_branch, b.no_asset
+                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, 'Pusat HO' AS info_branch, b.kode_aset, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
                      LEFT JOIN barang b ON p.serial_number = b.serial_number
@@ -149,37 +150,48 @@ if ($filter === 'keluar') {
 } elseif ($filter === 'masuk') {
     if ($isAdmin) {
         $querySql = "SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima_ho AS foto_barang_diterima,
-                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, br.nama_branch AS info_branch, b.no_asset
+                            p.serial_number, p.pemilik_barang, tb_barang.nama_barang, br.nama_branch AS info_branch, b.kode_aset, b.no_asset
                      FROM pengiriman_cabang_ho p
                      JOIN tb_barang ON p.id_barang = tb_barang.id_barang
                      LEFT JOIN barang b ON p.serial_number = b.serial_number
                      LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
                      WHERE 1=1 $searchSql_pengiriman_ho ORDER BY p.id_pengiriman_ho DESC";
     } else {
-        $querySql = "SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima,
-                        b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch,
+        $querySql = "
+            SELECT * FROM (
+                SELECT p.id_pengiriman AS id_transaksi, p.tanggal_keluar AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar, p.foto_barang_diterima,
+                        b.kode_aset, b.no_asset, b.serial_number, tb_barang.nama_barang, 'Pusat HO' AS info_branch, 'ho' AS sumber_transaksi,
                         CASE
-                            WHEN b.`user` IS NOT NULL AND b.`user` != '' AND b.`user` != '0' 
-                                THEN b.`user`
+                            WHEN b.`user` IS NOT NULL AND b.`user` != '' AND b.`user` != '0' THEN b.`user`
                             ELSE (
-                                SELECT pch.pemilik_barang 
-                                FROM pengiriman_cabang_ho pch 
-                                WHERE pch.serial_number = b.serial_number
-                                  AND pch.pemilik_barang IS NOT NULL
-                                  AND pch.pemilik_barang != ''
-                                  AND pch.pemilik_barang != '0'
-                                ORDER BY pch.id_pengiriman_ho DESC 
-                                LIMIT 1
+                                SELECT pch.pemilik_barang FROM pengiriman_cabang_ho pch
+                                WHERE pch.serial_number = b.serial_number AND pch.pemilik_barang IS NOT NULL AND pch.pemilik_barang != '' AND pch.pemilik_barang != '0'
+                                ORDER BY pch.id_pengiriman_ho DESC LIMIT 1
                             )
                         END AS pemilik_barang
-                 FROM barang_pengiriman p
-                 JOIN barang b ON p.id_barang = b.id
-                 JOIN tb_barang ON b.id_barang = tb_barang.id_barang
-                 WHERE p.branch_tujuan = $myBranchId $searchSql_barang_pengiriman 
-                 ORDER BY p.id_pengiriman DESC";
+                FROM barang_pengiriman p
+                JOIN barang b ON p.id_barang = b.id
+                JOIN tb_barang ON b.id_barang = tb_barang.id_barang
+                WHERE p.branch_tujuan = $myBranchId
+
+                UNION ALL
+
+                SELECT p.id_pengiriman_ho AS id_transaksi, p.tanggal_pengajuan AS tanggal, p.status_pengiriman, p.nomor_resi_keluar, p.foto_resi_keluar,
+                        p.foto_barang_diterima_ho AS foto_barang_diterima,
+                        b.kode_aset, b.no_asset, p.serial_number, tb_barang.nama_barang, br.nama_branch AS info_branch, 'antar_cabang' AS sumber_transaksi,
+                        p.pemilik_barang
+                FROM pengiriman_cabang_ho p
+                JOIN tb_barang ON p.id_barang = tb_barang.id_barang
+                LEFT JOIN barang b ON p.serial_number = b.serial_number
+                LEFT JOIN tb_branch br ON p.branch_asal = br.id_branch
+                WHERE p.branch_tujuan = $myBranchId
+                  AND COALESCE(p.jenis_pengiriman, 'ke_ho') = 'ke_cabang'
+            ) AS masuk_cabang
+            WHERE 1=1
+            ORDER BY id_transaksi DESC";
     }
 } else {
-// ... (Bagian else yang bawah ini biarkan saja, jangan diubah)
+    // ... (Bagian else yang bawah ini biarkan saja, jangan diubah)
     if ($isAdmin) {
         $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
@@ -188,10 +200,11 @@ if ($filter === 'keluar') {
 
     if ($searchInput !== '') {
         $s = mysqli_real_escape_string($koneksi, $searchInput);
-        $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%' OR barang.user LIKE '%$s%' OR $subqueryLastUser LIKE '%$s%') ";
+        $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.kode_aset LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%' OR barang.user LIKE '%$s%' OR $subqueryLastUser LIKE '%$s%') ";
     }
 
-    $querySql = "SELECT barang.id, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto, 
+    $querySql = "SELECT barang.id, barang.kode_aset, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto,
+                        barang.tanggal_garansi_berakhir, barang.masa_garansi_bulan, 
                         barang.user AS master_user, 
                         $subqueryLastUser AS last_logistic_user,
                         barang.keterangan_masalah, barang.status,
@@ -245,7 +258,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     <style>
         :root {
             /* TEMA HEXINDO / HITACHI */
-            --orange-1: #E64312; 
+            --orange-1: #E64312;
             --orange-2: #F25C05;
             --dark-1: #231F20;
             --text-main: #333333;
@@ -253,7 +266,8 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             --surface-bg: #F4F6F9;
             --border-soft: #E0E4E8;
             --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.04);
-            --radius-xl: 8px; /* Lebih kotak / industrial */
+            --radius-xl: 8px;
+            /* Lebih kotak / industrial */
         }
 
         body {
@@ -368,7 +382,8 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         .summary-icon {
             width: 45px;
             height: 45px;
-            background: rgba(230, 67, 18, 0.1); /* Transparan orange hexindo */
+            background: rgba(230, 67, 18, 0.1);
+            /* Transparan orange hexindo */
             color: var(--orange-1);
             border-radius: var(--radius-xl);
             display: flex;
@@ -414,7 +429,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             font-size: 0.9rem;
         }
 
-        .search-btn:hover { background: var(--orange-2); color: #fff;}
+        .search-btn:hover {
+            background: var(--orange-2);
+            color: #fff;
+        }
 
         .reset-btn {
             background: #f3f4f6;
@@ -425,7 +443,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             align-items: center;
             font-size: 0.9rem;
         }
-        .reset-btn:hover { background: #e5e7eb; }
+
+        .reset-btn:hover {
+            background: #e5e7eb;
+        }
 
         .mode-switch {
             display: flex;
@@ -445,7 +466,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             transition: .2s;
         }
 
-        .btn-mode:hover { border-color: var(--orange-1); color: var(--orange-1); }
+        .btn-mode:hover {
+            border-color: var(--orange-1);
+            color: var(--orange-1);
+        }
 
         .btn-mode.is-active {
             background: var(--dark-1);
@@ -462,11 +486,11 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             border-radius: var(--radius-xl) var(--radius-xl) 0 0;
         }
 
-        .table > :not(caption) > * > * {
+        .table> :not(caption)>*>* {
             padding: 1rem 1.5rem;
             border-bottom-color: var(--border-soft);
         }
-        
+
         .table-light {
             background-color: #f9fafb !important;
             color: var(--text-soft);
@@ -482,11 +506,31 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             font-size: 0.75rem;
             letter-spacing: 0.3px;
         }
-        .badge-soft-success { background-color: rgba(16, 185, 129, 0.15); color: #059669; }
-        .badge-soft-warning { background-color: rgba(245, 158, 11, 0.15); color: #d97706; }
-        .badge-soft-danger { background-color: rgba(239, 68, 68, 0.15); color: #b91c1c; }
-        .badge-soft-primary { background-color: rgba(59, 130, 246, 0.15); color: #1d4ed8; }
-        .badge-soft-secondary { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; }
+
+        .badge-soft-success {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #059669;
+        }
+
+        .badge-soft-warning {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #d97706;
+        }
+
+        .badge-soft-danger {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #b91c1c;
+        }
+
+        .badge-soft-primary {
+            background-color: rgba(59, 130, 246, 0.15);
+            color: #1d4ed8;
+        }
+
+        .badge-soft-secondary {
+            background-color: rgba(107, 114, 128, 0.15);
+            color: #4b5563;
+        }
 
         .limit-box {
             background: #f3f4f6;
@@ -535,6 +579,19 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             font-size: 0.9rem;
         }
 
+        .kode-aset-badge {
+            display: inline-block;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 0.82rem;
+            letter-spacing: 0.03em;
+            color: #fff;
+            background: linear-gradient(135deg, var(--orange-1), #F25C05);
+            padding: 0.2rem 0.55rem;
+            border-radius: 6px;
+            margin-bottom: 0.25rem;
+        }
+
         .meta-line {
             display: block;
             font-size: 0.85rem;
@@ -579,6 +636,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         .modal-header .btn-close {
             filter: invert(1);
         }
+
+        .select2-container--open {
+            z-index: 999999 !important;
+        }
     </style>
 </head>
 
@@ -590,6 +651,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
             <?php include '../layout/sidebar.php'; ?>
 
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+                <?php include '../layout/notification_bell.php'; ?>
 
                 <div class="page-shell">
 
@@ -677,7 +739,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     <input type="hidden" name="limit" value="<?= $limit ?>">
                                     <label class="toolbar-label">Pencarian Cepat</label>
                                     <div class="input-group">
-                                        <input type="text" name="cari" class="form-control" placeholder="Nama, No Asset, atau Serial Number..." value="<?= $searchValue ?>">
+                                        <input type="text" name="cari" class="form-control" placeholder="Kode Asset (HXI-...), nama, no asset, serial number..." value="<?= $searchValue ?>">
                                         <button class="btn search-btn" type="submit"><i class="bi bi-search me-1"></i></button>
                                         <a href="index.php?filter=<?= $filterValue  ?>&limit=<?= $limit ?>" class="btn reset-btn" title="Reset"><i class="bi bi-x-lg"></i></a>
                                     </div>
@@ -735,6 +797,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                         <?php else: ?>
                                             <th>Spesifikasi</th>
                                             <th>Lokasi / User</th>
+                                            <th>Garansi</th>
                                             <th>Kondisi</th>
                                             <th>Foto</th>
                                         <?php endif; ?>
@@ -748,7 +811,12 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                 <td class="ps-4 text-muted"><?= $no++ ?></td>
                                                 <td>
                                                     <div class="fw-bold text-dark mb-1"><?= h($data['nama_barang']) ?></div>
-                                                    <div class="asset-code"><?= h($data['no_asset'] ?? '-') ?></div>
+                                                    <?php if (!empty($data['kode_aset'])): ?>
+                                                        <div class="kode-aset-badge"><?= h($data['kode_aset']) ?></div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($data['no_asset'])): ?>
+                                                        <div class="asset-code">No Asset: <?= h($data['no_asset']) ?></div>
+                                                    <?php endif; ?>
                                                     <div class="meta-muted mt-1">SN: <?= h($data['serial_number'] ?? '-') ?></div>
                                                 </td>
 
@@ -768,8 +836,15 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                         <?php else: ?><div class="thumb-placeholder"><i class="bi bi-image text-muted"></i></div><?php endif; ?>
                                                     </td>
                                                     <td class="text-center pe-4">
-                                                        <?php if (in_array(strtolower($data['status_pengiriman']), ['sedang perjalanan', 'menunggu persetujuan admin'])): ?>
-                                                            <button class="btn btn-primary btn-sm btnKonfirmasiTerima" data-id="<?= $data['id_transaksi'] ?>" data-role="<?= $isAdmin ? 'admin' : 'user' ?>" title="Konfirmasi Terima"><i class="bi bi-check2-all"></i></button>
+                                                        <?php
+                                                        $sumberTransaksi = $data['sumber_transaksi'] ?? 'ho';
+                                                        $canTerima = in_array(strtolower(trim($data['status_pengiriman'] ?? '')), ['sedang perjalanan', 'menunggu persetujuan admin'], true);
+                                                        if ($sumberTransaksi === 'antar_cabang') {
+                                                            $canTerima = strtolower(trim($data['status_pengiriman'] ?? '')) === 'sedang perjalanan';
+                                                        }
+                                                        ?>
+                                                        <?php if ($canTerima): ?>
+                                                            <button class="btn btn-primary btn-sm btnKonfirmasiTerima" data-id="<?= $data['id_transaksi'] ?>" data-sumber="<?= h($sumberTransaksi) ?>" data-role="<?= $isAdmin ? 'admin' : 'user' ?>" title="Konfirmasi Terima"><i class="bi bi-check2-all"></i></button>
                                                         <?php else: ?>
                                                             <!-- MENAMPILKAN THUMBNAIL FOTO BUKTI TERIMA -->
                                                             <?php if (!empty($data['foto_barang_diterima'])): ?>
@@ -843,6 +918,12 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                         <div class="meta-line"><i class="bi bi-person me-2 text-muted"></i><?= h($namaTampil) ?></div>
                                                     </td>
                                                     <td>
+                                                        <?= warranty_badge_html($data['tanggal_garansi_berakhir'] ?? null) ?>
+                                                        <?php if (!empty($data['tanggal_garansi_berakhir'])): ?>
+                                                            <div class="meta-muted mt-1"><i class="bi bi-calendar-event me-1"></i><?= date('d M Y', strtotime($data['tanggal_garansi_berakhir'])) ?></div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
                                                         <?= barangBadge($data['bermasalah']) ?>
                                                         <?php if ($data['bermasalah'] === 'Iya'): ?>
                                                             <div class="small text-danger mt-2 fw-semibold" style="max-width:180px; font-size: 0.8rem;"><i class="bi bi-info-circle me-1"></i><?= h($data['keterangan_masalah']) ?></div>
@@ -909,7 +990,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
      ========================================================================= -->
 
     <!-- Modal Create -->
-    <div class="modal fade" id="modalCreate" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="modalCreate" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content border-0 rounded-4 overflow-hidden">
                 <div class="modal-header bg-warning-custom">
@@ -927,7 +1008,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     </div>
 
     <!-- Modal Update (Master & Logistik) -->
-    <div class="modal fade" id="modalUpdate" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="modalUpdate" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content border-0 rounded-4 overflow-hidden">
                 <div class="modal-header bg-warning-custom">
@@ -944,7 +1025,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     </div>
 
     <!-- Modal Pengiriman Cabang ke HO (User Only) -->
-    <div class="modal fade" id="modalPengirimanUser" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="modalPengirimanUser" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content border-0 rounded-4 overflow-hidden">
                 <div class="modal-header bg-dark text-white">
@@ -985,7 +1066,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
     </div>
 
     <!-- Modal Create Aset (Khusus User Cabang) -->
-    <div class="modal fade" id="modalCreateCabang" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="modalCreateCabang" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content border-0 rounded-4 overflow-hidden">
                 <div class="modal-header bg-warning-custom">
@@ -1015,10 +1096,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
         function initSelect2(container, modal) {
             $(container).find('select.select2').each(function() {
                 $(this).select2({
-                    dropdownParent: $(modal),
                     width: '100%',
                     placeholder: 'Pilih...',
-                    allowClear: true
+                    allowClear: true,
+                    dropdownParent: $(this).parent() // <--- UBAH JADI INI
                 });
             });
         }
@@ -1121,10 +1202,10 @@ $emptyColspan = ($filter === '' ? 7 : 6);
          */
         $(document).on('click', '.btnKonfirmasiTerima', function() {
             const id = $(this).data('id');
-            // Entah Admin atau User, sekarang keduanya memanggil modal form yang sama
-            // Modal secara otomatis mendeteksi is_admin() di form.php
+            const sumber = $(this).data('sumber') || 'ho';
+            const sumberParam = sumber === 'antar_cabang' ? '&sumber=antar_cabang' : '';
             $('#contentTerimaCabang').html('<div class="text-center p-4"><div class="spinner-border text-warning"></div></div>');
-            $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id);
+            $('#contentTerimaCabang').load('terima_barang_form.php?id=' + id + sumberParam);
             bootstrap.Modal.getOrCreateInstance('#modalTerimaCabang').show();
         });
 

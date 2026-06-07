@@ -4,25 +4,37 @@ include '../config/koneksi.php';
 require_once '../config/auth.php';
 
 $id_pengiriman = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$sumber = trim((string) ($_GET['sumber'] ?? 'ho'));
 $resi_keluar = '';
 
 $currentUser = current_user();
 $nama_user_login = $currentUser['username'] ?? $currentUser['email'] ?? 'Nama User Tidak Terbaca';
 
 $isAdmin = is_admin();
+$isAntarCabang = ($sumber === 'antar_cabang');
 
 // Ambil nomor resi keluar dari database secara Dinamis
 if ($id_pengiriman > 0) {
-    if ($isAdmin) {
-        // Jika Admin: Ambil dari pengiriman cabang ke HO
+    $stmt = null;
+    if ($isAntarCabang) {
+        $stmt = mysqli_prepare($koneksi, "SELECT nomor_resi_keluar FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ? AND branch_tujuan = ? LIMIT 1");
+        if ($stmt) {
+            $myBranch = (int) current_user_branch_id();
+            mysqli_stmt_bind_param($stmt, 'ii', $id_pengiriman, $myBranch);
+        }
+    } elseif ($isAdmin) {
         $stmt = mysqli_prepare($koneksi, "SELECT nomor_resi_keluar FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ?");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $id_pengiriman);
+        }
     } else {
-        // Jika User: Ambil dari pengiriman HO ke cabang
         $stmt = mysqli_prepare($koneksi, "SELECT nomor_resi_keluar FROM barang_pengiriman WHERE id_pengiriman = ?");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $id_pengiriman);
+        }
     }
-    
+
     if ($stmt) {
-        mysqli_stmt_bind_param($stmt, 'i', $id_pengiriman);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         if ($row = mysqli_fetch_assoc($res)) {
@@ -48,12 +60,11 @@ if ($id_pengiriman > 0) {
 
 <form id="formTerimaCabang" enctype="multipart/form-data">
     <input type="hidden" name="id_pengiriman" value="<?= $id_pengiriman ?>">
-    <!-- Flag penanda Admin atau Cabang -->
-    <input type="hidden" name="tipe_penerima" value="<?= $isAdmin ? 'HO' : 'CABANG' ?>">
+    <input type="hidden" name="tipe_penerima" value="<?= $isAntarCabang ? 'CABANG_TUJUAN' : ($isAdmin ? 'HO' : 'CABANG') ?>">
 
     <div class="alert-custom">
         <i class="bi bi-info-circle-fill"></i>
-        <div>Silakan lengkapi form di bawah ini. Setelah disimpan, status pengiriman barang akan otomatis ditandai sebagai <b>Selesai / Diterima <?= $isAdmin ? 'HO' : '' ?></b>.</div>
+        <div>Silakan lengkapi form di bawah ini. Setelah disimpan, status pengiriman barang akan otomatis ditandai sebagai <b>Selesai / Diterima<?= $isAdmin ? ' HO' : ($isAntarCabang ? ' (Antar Cabang)' : '') ?></b>.</div>
     </div>
 
     <div class="row g-3 mb-3">

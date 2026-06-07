@@ -99,7 +99,7 @@ if ($filter === 'keluar' && !$isAdmin) $partA_where[] = "1=0";
 if ($filter === 'keluar' &&  $isAdmin) $partA_where[] = "1=1"; 
 
 if ($search_input !== '') {
-    $partA_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%'
+    $partA_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%'
                     OR b.user LIKE '%$search%' OR bp.nama_penerima LIKE '%$search%'
                     OR bp.nomor_resi_keluar LIKE '%$search%' OR bp.status_pengiriman LIKE '%$search%'
                     OR br_asal.nama_branch LIKE '%$search%' OR br_tujuan.nama_branch LIKE '%$search%')";
@@ -119,6 +119,7 @@ $partA = "
         'A'                          AS sumber,
         '$partA_jenis'               AS jenis,
         b.id                         AS id_barang,
+        b.kode_aset,
         b.no_asset,
         b.serial_number,
         tb.nama_barang,
@@ -166,7 +167,7 @@ if ($filter === 'keluar' &&  $isAdmin) $partB_where[] = "1=0";
 if ($filter === 'keluar' && !$isAdmin) $partB_where[] = "1=1"; 
 
 if ($search_input !== '') {
-    $partB_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%'
+    $partB_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%'
                     OR pch.pemilik_barang LIKE '%$search%' OR pch.nomor_resi_keluar LIKE '%$search%'
                     OR pch.status_pengiriman LIKE '%$search%' OR br_asal.nama_branch LIKE '%$search%')";
 }
@@ -186,6 +187,7 @@ $partB = "
         'B'                              AS sumber,
         '$partB_jenis'                   AS jenis,
         b.id                             AS id_barang,
+        b.kode_aset,
         b.no_asset,
         b.serial_number,
         tb.nama_barang,
@@ -231,7 +233,7 @@ $partB_masuk_where = array_filter($partB_where, fn($w) => $w !== '1=0' && $w !==
 
 $am_where = ["1=1"];
 if (!$isAdmin) $am_where[] = "bp.branch_tujuan = $myBranchId";
-if ($search_input !== '') $am_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR bp.nomor_resi_keluar LIKE '%$search%' OR bp.status_pengiriman LIKE '%$search%')";
+if ($search_input !== '') $am_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR bp.nomor_resi_keluar LIKE '%$search%' OR bp.status_pengiriman LIKE '%$search%')";
 if ($tanggalAwal !== '' && $tanggalAkhir !== '') $am_where[] = "DATE(bp.tanggal_keluar) BETWEEN '$safeAwal' AND '$safeAkhir'";
 elseif ($tanggalAwal !== '') $am_where[] = "DATE(bp.tanggal_keluar) >= '$safeAwal'";
 elseif ($tanggalAkhir !== '') $am_where[] = "DATE(bp.tanggal_keluar) <= '$safeAkhir'";
@@ -241,7 +243,7 @@ $bm_where = ["1=1"];
 if (!$isAdmin) $bm_where[] = "1=0"; 
 if (!$isAdmin || true) { 
     if ($isAdmin) {
-        if ($search_input !== '') $bm_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR pch.nomor_resi_keluar LIKE '%$search%' OR pch.status_pengiriman LIKE '%$search%')";
+        if ($search_input !== '') $bm_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR pch.nomor_resi_keluar LIKE '%$search%' OR pch.status_pengiriman LIKE '%$search%')";
         if ($tanggalAwal !== '' && $tanggalAkhir !== '') $bm_where[] = "DATE(pch.tanggal_pengajuan) BETWEEN '$safeAwal' AND '$safeAkhir'";
         elseif ($tanggalAwal !== '') $bm_where[] = "DATE(pch.tanggal_pengajuan) >= '$safeAwal'";
         elseif ($tanggalAkhir !== '') $bm_where[] = "DATE(pch.tanggal_pengajuan) <= '$safeAkhir'";
@@ -262,7 +264,7 @@ if (!$isAdmin) $ak_where[] = "1=0";
 $bk_where = ["1=1"];
 if (!$isAdmin) { 
     $bk_where[] = "pch.branch_asal = $myBranchId";
-    if ($search_input !== '') $bk_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR pch.nomor_resi_keluar LIKE '%$search%' OR pch.status_pengiriman LIKE '%$search%')";
+    if ($search_input !== '') $bk_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR pch.nomor_resi_keluar LIKE '%$search%' OR pch.status_pengiriman LIKE '%$search%')";
     if ($tanggalAwal !== '' && $tanggalAkhir !== '') $bk_where[] = "DATE(pch.tanggal_pengajuan) BETWEEN '$safeAwal' AND '$safeAkhir'";
     elseif ($tanggalAwal !== '') $bk_where[] = "DATE(pch.tanggal_pengajuan) >= '$safeAwal'";
     elseif ($tanggalAkhir !== '') $bk_where[] = "DATE(pch.tanggal_pengajuan) <= '$safeAkhir'";
@@ -270,7 +272,7 @@ if (!$isAdmin) {
     $bk_where[] = "1=0"; 
 }
 
-if ($isAdmin && $search_input !== '') $ak_where[] = "(tb.nama_barang LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR bp.nomor_resi_keluar LIKE '%$search%' OR bp.status_pengiriman LIKE '%$search%')";
+if ($isAdmin && $search_input !== '') $ak_where[] = "(tb.nama_barang LIKE '%$search%' OR b.kode_aset LIKE '%$search%' OR b.no_asset LIKE '%$search%' OR b.serial_number LIKE '%$search%' OR bp.nomor_resi_keluar LIKE '%$search%' OR bp.status_pengiriman LIKE '%$search%')";
 if ($isAdmin && $tanggalAwal !== '' && $tanggalAkhir !== '') $ak_where[] = "DATE(bp.tanggal_keluar) BETWEEN '$safeAwal' AND '$safeAkhir'";
 elseif ($isAdmin && $tanggalAwal !== '') $ak_where[] = "DATE(bp.tanggal_keluar) >= '$safeAwal'";
 elseif ($isAdmin && $tanggalAkhir !== '') $ak_where[] = "DATE(bp.tanggal_keluar) <= '$safeAkhir'";
@@ -551,15 +553,27 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
                         <div class="row g-3 align-items-end">
                             <div class="col-lg-5">
                                 <label class="toolbar-label">Pencarian Kata Kunci</label>
-                                <input type="text" name="cari" class="form-control" placeholder="Cari nama barang, serial number, resi..." value="<?= h($search_input) ?>">
+                                <input type="text" name="cari" class="form-control" placeholder="Cari kode asset (HXI-...), nama, serial, resi..." value="<?= h($search_input) ?>">
                             </div>
                             <div class="col-lg-2">
                                 <label class="toolbar-label">Tanggal Awal</label>
-                                <input type="date" name="tanggal_awal" class="form-control" value="<?= h($tanggalAwal) ?>">
+                                <input
+                                    type="<?= $tanggalAwal !== '' ? 'date' : 'text' ?>"
+                                    name="tanggal_awal"
+                                    class="form-control js-date-filter"
+                                    placeholder="dd/mm/yyyy"
+                                    value="<?= h($tanggalAwal) ?>"
+                                    autocomplete="off">
                             </div>
                             <div class="col-lg-2">
                                 <label class="toolbar-label">Tanggal Akhir</label>
-                                <input type="date" name="tanggal_akhir" class="form-control" value="<?= h($tanggalAkhir) ?>">
+                                <input
+                                    type="<?= $tanggalAkhir !== '' ? 'date' : 'text' ?>"
+                                    name="tanggal_akhir"
+                                    class="form-control js-date-filter"
+                                    placeholder="dd/mm/yyyy"
+                                    value="<?= h($tanggalAkhir) ?>"
+                                    autocomplete="off">
                             </div>
                             <div class="col-lg-3">
                                 <div class="filter-actions">
@@ -672,7 +686,11 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
 
                                             <!-- Asset -->
                                             <td>
-                                                <div class="asset-code"><?= h($d['no_asset'] ?? '-') ?></div>
+                                                <?php if (!empty($d['kode_aset'])): ?>
+                                                    <div class="asset-code fw-bold text-primary"><?= h($d['kode_aset']) ?></div>
+                                                <?php else: ?>
+                                                    <div class="asset-code"><?= h($d['no_asset'] ?? '-') ?></div>
+                                                <?php endif; ?>
                                                 <span class="meta-muted mt-1">SN: <?= h($d['serial_number'] ?? '-') ?></span>
                                             </td>
 
@@ -757,5 +775,20 @@ $hasFilter = ($search_input !== '' || $tanggalAwal !== '' || $tanggalAkhir !== '
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.querySelectorAll('.js-date-filter').forEach(function (input) {
+        input.addEventListener('focus', function () {
+            this.type = 'date';
+            if (typeof this.showPicker === 'function') {
+                try { this.showPicker(); } catch (e) {}
+            }
+        });
+        input.addEventListener('blur', function () {
+            if (!this.value) {
+                this.type = 'text';
+            }
+        });
+    });
+</script>
 </body>
 </html>

@@ -2,6 +2,9 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
+require_once '../config/warranty_helper.php';
+require_once '../config/validation_helper.php';
 
 // Pastikan hanya user cabang yang bisa akses
 if (is_admin()) {
@@ -41,6 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    $nameError = validate_person_name(trim((string) ($_POST['user'] ?? '')));
+    if ($nameError !== null) {
+        echo json_encode(['status' => 'error', 'message' => $nameError]);
+        exit;
+    }
+
     // Cek Duplikat Serial Number (kecuali milik sendiri)
     $cekSerial = mysqli_query($koneksi, "SELECT id FROM barang WHERE serial_number = '$serial_number' AND id != $id LIMIT 1");
     if (mysqli_num_rows($cekSerial) > 0) {
@@ -58,6 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $masaGaransi = normalize_warranty_months($_POST['masa_garansi_bulan'] ?? ($data['masa_garansi_bulan'] ?? 12));
+    $tanggalPembelian = mysqli_real_escape_string($koneksi, $_POST['tanggal_pembelian'] ?? ($data['tanggal_pembelian'] ?? $data['tanggal_terima'] ?? date('Y-m-d')));
+    $tanggalGaransiBerakhir = compute_warranty_end_date($tanggalPembelian, $masaGaransi);
+    $garansiSql = ", tanggal_pembelian = '$tanggalPembelian', masa_garansi_bulan = '$masaGaransi', tanggal_garansi_berakhir = " . ($tanggalGaransiBerakhir ? "'$tanggalGaransiBerakhir'" : "NULL");
+
     $updateQuery = "UPDATE barang SET 
         no_asset = '$no_asset',
         serial_number = '$serial_number',
@@ -66,9 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         id_tipe = '$id_tipe',
         `user` = '$user'
         $fotoSql
+        $garansiSql
         WHERE id = $id AND id_branch = $myBranchId";
 
     if (mysqli_query($koneksi, $updateQuery)) {
+        log_activity($koneksi, 'update_barang', "User cabang edit barang - Serial: {$serial_number}, No Asset: {$no_asset}", [
+            'id' => $id,
+            'serial_number' => $serial_number,
+            'no_asset' => $no_asset,
+            'id_branch' => $myBranchId,
+        ]);
         echo json_encode(['status' => 'success', 'message' => 'Data aset berhasil diperbarui.']);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Gagal update: ' . mysqli_error($koneksi)]);
@@ -164,6 +185,11 @@ $tipes = mysqli_query($koneksi, "SELECT id_tipe, nama_tipe FROM tb_tipe WHERE id
     <input type="hidden" name="id" value="<?= $id ?>">
     
     <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Kode Asset</label>
+            <input type="text" class="form-control bg-light" value="<?= h($data['kode_aset'] ?? '-') ?>" readonly disabled>
+        </div>
+
         <div class="col-md-6">
             <label class="form-label">No Asset</label>
             <input type="text" name="no_asset" class="form-control text-uppercase" value="<?= h($data['no_asset']) ?>" placeholder="Opsional">

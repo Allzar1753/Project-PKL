@@ -18,6 +18,7 @@ $success = get_flash('success');
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="<?= e(base_url('assets/css/password-fields.css')) ?>">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,27 +247,6 @@ $success = get_flash('success');
             color: var(--orange-primary);
         }
 
-        .password-toggle {
-            position: absolute;
-            top: 50%;
-            right: 12px;
-            transform: translateY(-50%);
-            width: 32px;
-            height: 32px;
-            border: none;
-            background: transparent;
-            color: #9ca3af;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            z-index: 3;
-        }
-        .password-toggle:hover { background: var(--bg-body); color: var(--dark-main); }
-        .password-toggle:focus { outline: none; box-shadow: 0 0 0 2px rgba(230, 67, 18, 0.1); }
-
         /* Tombol Modern */
         .btn-login {
             background-color: var(--orange-primary);
@@ -378,19 +358,19 @@ $success = get_flash('success');
 
                     <form action="<?= h(base_url('auth/proses_login.php')) ?>" method="POST">
                         <div class="mb-3">
-                            <label class="form-label">Username atau Email</label>
+                            <label class="form-label">Email</label>
                             <div class="input-shell">
-                                <i class="bi bi-person-fill input-icon"></i>
-                                <input type="text" name="login" class="form-control" required autofocus placeholder="Masukkan username / email">
+                                <i class="bi bi-envelope-fill input-icon"></i>
+                                <input type="email" name="login" class="form-control" required autofocus placeholder="Masukkan email terdaftar">
                             </div>
                         </div>
 
                         <div class="mb-4">
                             <label class="form-label">Password</label>
-                            <div class="input-shell">
+                            <div class="input-shell password-shell">
                                 <i class="bi bi-lock-fill input-icon"></i>
-                                <input type="password" name="password" class="form-control" id="loginPassword" required placeholder="Masukkan password" style="padding-right: 3rem;">
-                                <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Lihat password" title="Tampilkan Password">
+                                <input type="password" name="password" class="form-control password-field" id="loginPassword" required placeholder="Masukkan password">
+                                <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Lihat password" title="Tampilkan Password">
                                     <i class="bi bi-eye"></i>
                                 </button>
                             </div>
@@ -417,27 +397,7 @@ $success = get_flash('success');
         </div>
     </div>
 
-    <!-- SCRIPT UNTUK FITUR MATA (SHOW/HIDE PASSWORD) -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggleButton = document.getElementById('toggleLoginPassword');
-            const passwordInput = document.getElementById('loginPassword');
-
-            if (!toggleButton || !passwordInput) return;
-
-            toggleButton.addEventListener('click', function() {
-                const icon = this.querySelector('i');
-                const isPassword = passwordInput.type === 'password';
-
-                passwordInput.type = isPassword ? 'text' : 'password';
-
-                if (icon) {
-                    icon.classList.toggle('bi-eye', !isPassword);
-                    icon.classList.toggle('bi-eye-slash', isPassword);
-                }
-            });
-        });
-    </script>
+    <script src="<?= e(base_url('assets/js/password-fields.js')) ?>"></script>
 </body>
 
 </html>

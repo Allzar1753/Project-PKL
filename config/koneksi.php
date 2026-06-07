@@ -81,6 +81,60 @@ if (!function_exists('ensure_system_schema')) {
             mysqli_query($koneksi, "ALTER TABLE users ADD INDEX idx_users_id_branch (id_branch)");
         }
 
+        if (!$columnExists('users', 'employment_status')) {
+            mysqli_query($koneksi, "ALTER TABLE users ADD COLUMN employment_status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER id_branch");
+        }
+
+        if (!$indexExists('users', 'idx_users_employment_status')) {
+            mysqli_query($koneksi, "ALTER TABLE users ADD INDEX idx_users_employment_status (employment_status)");
+        }
+
+        if (!$columnExists('barang', 'tanggal_pembelian')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD COLUMN tanggal_pembelian DATE NULL AFTER tanggal_terima");
+        }
+        if (!$columnExists('barang', 'masa_garansi_bulan')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD COLUMN masa_garansi_bulan INT NULL DEFAULT 12 AFTER tanggal_pembelian");
+        }
+        if (!$columnExists('barang', 'tanggal_garansi_berakhir')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD COLUMN tanggal_garansi_berakhir DATE NULL AFTER masa_garansi_bulan");
+        }
+        if (!$indexExists('barang', 'idx_barang_garansi_berakhir')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD INDEX idx_barang_garansi_berakhir (tanggal_garansi_berakhir)");
+        }
+
+        if (!$columnExists('barang', 'kode_aset')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD COLUMN kode_aset VARCHAR(25) NULL AFTER no_asset");
+        }
+        if (!$indexExists('barang', 'uq_barang_kode_aset')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD UNIQUE KEY uq_barang_kode_aset (kode_aset)");
+        }
+        if (!$indexExists('barang', 'idx_barang_kode_aset')) {
+            mysqli_query($koneksi, "ALTER TABLE barang ADD INDEX idx_barang_kode_aset (kode_aset)");
+        }
+
+        require_once __DIR__ . '/asset_code_helper.php';
+        backfill_kode_aset($koneksi);
+
+        mysqli_query($koneksi, "
+            UPDATE barang
+            SET tanggal_pembelian = tanggal_terima,
+                masa_garansi_bulan = COALESCE(masa_garansi_bulan, 12),
+                tanggal_garansi_berakhir = DATE_ADD(tanggal_terima, INTERVAL COALESCE(masa_garansi_bulan, 12) MONTH)
+            WHERE tanggal_pembelian IS NULL
+              AND tanggal_terima IS NOT NULL
+              AND tanggal_garansi_berakhir IS NULL
+        ");
+
+        if (!$columnExists('system_notifications', 'notification_type')) {
+            mysqli_query($koneksi, "ALTER TABLE system_notifications ADD COLUMN notification_type VARCHAR(32) NULL DEFAULT 'general' AFTER link");
+        }
+        if (!$columnExists('system_notifications', 'reference_key')) {
+            mysqli_query($koneksi, "ALTER TABLE system_notifications ADD COLUMN reference_key VARCHAR(150) NULL AFTER notification_type");
+        }
+        if (!$indexExists('system_notifications', 'uq_system_notifications_reference_key')) {
+            mysqli_query($koneksi, "ALTER TABLE system_notifications ADD UNIQUE KEY uq_system_notifications_reference_key (reference_key)");
+        }
+
         // =========================
         // Activity log + online presence
         // =========================
@@ -200,6 +254,25 @@ if (!function_exists('ensure_system_schema')) {
             INDEX idx_password_resets_user_id (user_id),
             UNIQUE KEY uq_password_resets_reset_token (reset_token)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        mysqli_query($koneksi, "CREATE TABLE IF NOT EXISTS password_reset_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            alasan TEXT NULL,
+            status ENUM('pending','selesai') NOT NULL DEFAULT 'pending',
+            requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            processed_by INT NULL,
+            processed_at DATETIME NULL,
+            INDEX idx_password_reset_requests_user_id (user_id),
+            INDEX idx_password_reset_requests_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        if (!$columnExists('pengiriman_cabang_ho', 'jenis_pengiriman')) {
+            mysqli_query($koneksi, "ALTER TABLE pengiriman_cabang_ho ADD COLUMN jenis_pengiriman VARCHAR(20) NOT NULL DEFAULT 'ke_ho' AFTER branch_tujuan");
+        }
+        if (!$columnExists('pengiriman_cabang_ho', 'foto_barang_diterima_ho')) {
+            mysqli_query($koneksi, "ALTER TABLE pengiriman_cabang_ho ADD COLUMN foto_barang_diterima_ho VARCHAR(255) NULL AFTER foto_resi_keluar");
+        }
     }
 }
 

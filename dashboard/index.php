@@ -3,9 +3,12 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/warranty_helper.php';
 
 // Cek Permission
 require_permission($koneksi, 'dashboard.view');
+
+sync_warranty_notifications($koneksi);
 
 $isAdmin    = is_admin();
 $myBranchId = (int) current_user_branch_id();
@@ -118,6 +121,11 @@ if ($isAdmin) {
 
 $totalBermasalah = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE $whereLokasi AND bermasalah = 'Iya'");
 
+$warrantyBranchFilter = $isAdmin ? '' : " AND barang.id_branch = $myBranchId ";
+$warrantyCritical = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE tanggal_garansi_berakhir IS NOT NULL AND DATEDIFF(tanggal_garansi_berakhir, CURDATE()) BETWEEN 0 AND 7 $warrantyBranchFilter");
+$warrantyWarning = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE tanggal_garansi_berakhir IS NOT NULL AND DATEDIFF(tanggal_garansi_berakhir, CURDATE()) BETWEEN 8 AND 30 $warrantyBranchFilter");
+$warrantyExpired = fetchSingleValue($koneksi, "SELECT COUNT(barang.id) AS total FROM barang WHERE tanggal_garansi_berakhir IS NOT NULL AND DATEDIFF(tanggal_garansi_berakhir, CURDATE()) < 0 $warrantyBranchFilter");
+
 // PANEL DETAIL QUERIES
 $previewLimit = 3;
 
@@ -155,9 +163,10 @@ $branchFilter = '';
 if ($role === 'user') {
     $branchFilter = " AND (target_branch_id IS NULL OR target_branch_id = {$myBranchId})";
 }
-$sqlNotifs      = "SELECT * FROM system_notifications WHERE target_role = '" . $role . "' AND is_read = 0 " . $branchFilter . " ORDER BY created_at DESC LIMIT 3";
+$sqlNotifs      = "SELECT * FROM system_notifications WHERE target_role = '" . $role . "' AND is_read = 0 " . $branchFilter . " ORDER BY created_at DESC LIMIT 5";
 $qNotifications = mysqli_query($koneksi, $sqlNotifs);
 $notifications  = fetchAllAssoc($qNotifications);
+$unreadNotifCount = count_unread_notifications($koneksi, $role, $role === 'user' ? $myBranchId : null);
 ?>
 
 <!DOCTYPE html>
@@ -350,6 +359,15 @@ $notifications  = fetchAllAssoc($qNotifications);
         .badge-soft-danger { background-color: rgba(239, 68, 68, 0.15); color: #b91c1c; }
         .badge-soft-primary { background-color: rgba(59, 130, 246, 0.15); color: #1d4ed8; }
         .badge-soft-secondary { background-color: rgba(107, 114, 128, 0.15); color: #4b5563; }
+
+        .notif-panel { background:#fff; border:1px solid var(--border-soft); border-radius:14px; box-shadow:var(--shadow-soft); margin-bottom:1.25rem; overflow:hidden; }
+        .notif-panel-head { padding:.9rem 1.1rem; border-bottom:1px solid var(--border-soft); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(90deg,#fffdfb,#fff); }
+        .notif-panel-item { display:flex; gap:.85rem; padding:.9rem 1.1rem; border-bottom:1px solid #f3f4f6; text-decoration:none; color:inherit; transition:.15s; }
+        .notif-panel-item:hover { background:#fff8f5; }
+        .notif-panel-item:last-child { border-bottom:none; }
+        .notif-panel-icon { width:42px; height:42px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .warranty-alert-card { border-left:4px solid #f59e0b; }
+        .warranty-alert-card.critical { border-left-color:#ef4444; }
     </style>
 </head>
 
@@ -360,6 +378,7 @@ $notifications  = fetchAllAssoc($qNotifications);
             <?php require_once '../layout/sidebar.php'; ?>
 
             <div id="mainContent" class="flex-grow-1" style="transition: all 0.28s ease; min-width: 0;">
+                <?php include '../layout/notification_bell.php'; ?>
                 <div class="page-content">
 
                     <!-- Header Hero -->
@@ -374,21 +393,42 @@ $notifications  = fetchAllAssoc($qNotifications);
                         </div>
                     </div>
 
-                    <!-- Notifikasi -->
-                    <?php if (!empty($notifications)): ?>
-                        <div class="alert alert-warning border-0 shadow-sm mb-4" style="background-color: #fffbeb; color: #b45309; border-radius: 12px;">
-                            <div class="fw-bold mb-2"><i class="bi bi-bell-fill me-2"></i>Notifikasi Terbaru</div>
+                    <!-- Notifikasi Profesional -->
+                    <?php if (!empty($notifications) || $warrantyCritical > 0 || $warrantyWarning > 0): ?>
+                        <div class="notif-panel">
+                            <div class="notif-panel-head">
+                                <div>
+                                    <div class="fw-bold"><i class="bi bi-bell-fill me-2 text-warning"></i>Pusat Pemberitahuan</div>
+                                    <div class="small text-muted"><?= $unreadNotifCount ?> notifikasi belum dibaca</div>
+                                </div>
+                                <a href="<?= h(base_url('dashboard/notifications.php')) ?>" class="btn btn-sm btn-outline-dark fw-semibold">Lihat Semua</a>
+                            </div>
+
+                            <?php if ($warrantyCritical > 0 || $warrantyWarning > 0 || $warrantyExpired > 0): ?>
+                                <div class="px-3 py-2 bg-light border-bottom small d-flex flex-wrap gap-3">
+                                    <?php if ($warrantyCritical > 0): ?><span class="text-danger fw-semibold"><i class="bi bi-shield-exclamation me-1"></i><?= $warrantyCritical ?> garansi ≤ 7 hari</span><?php endif; ?>
+                                    <?php if ($warrantyWarning > 0): ?><span class="text-warning fw-semibold"><i class="bi bi-shield-fill-exclamation me-1"></i><?= $warrantyWarning ?> garansi ≤ 30 hari</span><?php endif; ?>
+                                    <?php if ($warrantyExpired > 0): ?><span class="text-muted fw-semibold"><i class="bi bi-shield-x me-1"></i><?= $warrantyExpired ?> garansi habis</span><?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+
                             <?php foreach ($notifications as $notif): ?>
                                 <?php
-                                $notifId      = (int) ($notif['id'] ?? 0);
-                                $notifLink    = trim((string) ($notif['link'] ?? ''));
+                                $notifId = (int) ($notif['id'] ?? 0);
+                                $notifLink = trim((string) ($notif['link'] ?? ''));
+                                $typeMeta = notification_type_meta($notif['notification_type'] ?? 'general');
                                 $notifReadUrl = '../dashboard/notification_read.php?id=' . $notifId . '&redirect=' . urlencode($notifLink !== '' ? $notifLink : '../dashboard/index.php');
                                 ?>
-                                <div class="mb-2 pb-2 border-bottom border-warning border-opacity-25 last:border-0 last:mb-0 last:pb-0">
-                                    <div class="fw-semibold" style="color: #92400e;"><?= dv($notif['title'] ?? null) ?></div>
-                                    <div class="small mb-1"><?= dv($notif['message'] ?? null) ?></div>
-                                    <a href="<?= h($notifReadUrl) ?>" class="small fw-bold text-decoration-none" style="color: #d97706;">Lihat detail &rarr;</a>
-                                </div>
+                                <a href="<?= h($notifReadUrl) ?>" class="notif-panel-item">
+                                    <div class="notif-panel-icon" style="background:<?= h($typeMeta['bg']) ?>;color:<?= h($typeMeta['color']) ?>;">
+                                        <i class="bi <?= h($typeMeta['icon']) ?>"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold mb-1"><?= dv($notif['title'] ?? null) ?></div>
+                                        <div class="small text-muted mb-1"><?= dv($notif['message'] ?? null) ?></div>
+                                        <div class="small text-secondary"><i class="bi bi-clock me-1"></i><?= h(time_ago_id($notif['created_at'] ?? null)) ?></div>
+                                    </div>
+                                </a>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>

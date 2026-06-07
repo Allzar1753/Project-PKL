@@ -9,6 +9,18 @@ if (is_logged_in()) {
 $error   = get_flash('error');
 $success = get_flash('success');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? 'submit') === 'check_status') {
+    $email = trim((string) ($_POST['email'] ?? ''));
+
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        set_flash('error', 'Masukkan email valid untuk cek status pengajuan.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    $_SESSION['forgot_password_track_email'] = $email;
+    redirect_to(base_url('auth/forgot_password.php'));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // HANYA MENGGUNAKAN EMAIL DAN ALASAN
     $email    = trim((string) ($_POST['email']    ?? ''));
@@ -28,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Cek apakah user dengan email tersebut ada
     $stmt = mysqli_prepare(
         $koneksi,
-        "SELECT id FROM users WHERE BINARY email = ? LIMIT 1"
+        "SELECT id, employment_status FROM users WHERE BINARY email = ? LIMIT 1"
     );
 
     if (!$stmt) {
@@ -45,6 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$user) {
         set_flash('error', 'Email tidak terdaftar. Pastikan email yang dimasukkan benar.');
+        redirect_to(base_url('auth/forgot_password.php'));
+    }
+
+    if (!is_employment_active($user['employment_status'] ?? 'active')) {
+        set_flash('error', 'Akun ini sudah dinonaktifkan karena status tidak bekerja lagi. Hubungi administrator HO.');
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
@@ -66,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_close($stmtCek);
 
         if ($existing) {
+            $_SESSION['forgot_password_track_email'] = $email;
             set_flash('error', 'Pengajuan reset password Anda masih dalam antrian. Silakan tunggu konfirmasi dari admin.');
             redirect_to(base_url('auth/forgot_password.php'));
         }
@@ -92,8 +110,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/forgot_password.php'));
     }
 
+    $_SESSION['forgot_password_track_email'] = $email;
     set_flash('success', 'Pengajuan reset password berhasil dikirim. Silakan tunggu konfirmasi dari administrator.');
     redirect_to(base_url('auth/forgot_password.php'));
+}
+
+$trackEmail = trim((string) ($_SESSION['forgot_password_track_email'] ?? ''));
+$trackerState = null;
+$currentStep = 1;
+$formLocked = false;
+$statusTitle = '';
+$statusMessage = '';
+$statusType = 'info';
+
+if ($trackEmail !== '') {
+    $stmtTrack = mysqli_prepare(
+        $koneksi,
+        "SELECT prr.id, prr.status, prr.alasan, prr.requested_at, prr.processed_at,
+                u.username, u.must_change_password
+         FROM users u
+         INNER JOIN password_reset_requests prr ON prr.user_id = u.id
+         WHERE BINARY u.email = ?
+         ORDER BY prr.requested_at DESC
+         LIMIT 1"
+    );
+
+    if ($stmtTrack) {
+        mysqli_stmt_bind_param($stmtTrack, 's', $trackEmail);
+        mysqli_stmt_execute($stmtTrack);
+        $trackerState = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtTrack)) ?: null;
+        mysqli_stmt_close($stmtTrack);
+    }
+}
+
+if ($trackEmail !== '' && !$trackerState) {
+    $statusType = 'info';
+    $statusTitle = 'Belum Ada Pengajuan';
+    $statusMessage = 'Tidak ditemukan pengajuan reset password untuk email <b>' . e($trackEmail) . '</b>. Silakan kirim pengajuan baru jika Anda membutuhkan reset password.';
+} elseif ($trackerState) {
+    $requestStatus = (string) ($trackerState['status'] ?? '');
+    $mustChange = (int) ($trackerState['must_change_password'] ?? 0);
+    $requestedAt = $trackerState['requested_at'] ?? null;
+    $processedAt = $trackerState['processed_at'] ?? null;
+    $requestedLabel = $requestedAt ? date('d M Y H:i', strtotime($requestedAt)) : '-';
+    $processedLabel = $processedAt ? date('d M Y H:i', strtotime($processedAt)) : '-';
+
+    if ($requestStatus === 'pending') {
+        $currentStep = 2;
+        $formLocked = true;
+        $statusType = 'warning';
+        $statusTitle = 'Menunggu Proses Admin';
+        $statusMessage = 'Pengajuan untuk <b>' . e($trackEmail) . '</b> sudah dikirim pada <b>' . e($requestedLabel) . '</b>. Administrator sedang memverifikasi permintaan Anda.';
+    } elseif ($requestStatus === 'selesai' && $mustChange === 1) {
+        $currentStep = 3;
+        $formLocked = true;
+        $statusType = 'success';
+        $statusTitle = 'Password Baru Sudah Dibuat';
+        $statusMessage = 'Admin memproses pengajuan pada <b>' . e($processedLabel) . '</b>. Silakan login dengan password yang diberikan admin, lalu ganti password saat diminta sistem.';
+    } elseif ($requestStatus === 'selesai') {
+        $currentStep = 4;
+        $formLocked = true;
+        $statusType = 'success';
+        $statusTitle = 'Akun Siap Digunakan';
+        $statusMessage = 'Password akun Anda sudah aktif. Anda dapat login ke sistem seperti biasa.';
+        unset($_SESSION['forgot_password_track_email']);
+    }
+}
+
+if (!function_exists('forgot_password_step_class')) {
+    function forgot_password_step_class(int $step, int $currentStep): string
+    {
+        if ($step < $currentStep) {
+            return 'completed';
+        }
+        if ($step === $currentStep) {
+            return 'active';
+        }
+
+        return 'pending';
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -283,9 +378,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* Tracker Lupa Password */
         .status-tracker {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 0;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
         }
         .status-step {
             display: flex;
@@ -302,16 +397,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 90%;
             height: 2px;
             background: var(--border-color);
-            transition: all 0.2s;
+            transition: all 0.25s ease;
         }
-        
-        /* Tambahan: Agar garis ikut oranye jika step setelahnya aktif */
+        .status-step.completed:not(:last-child)::after,
         .status-step.active:not(:last-child)::after {
-            background: rgba(230, 67, 18, 0.3);
+            background: var(--orange-primary);
+            opacity: 0.45;
         }
 
         .status-dot {
-            width: 32px; height: 32px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: inline-flex;
             align-items: center;
@@ -323,22 +419,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 8px;
             position: relative;
             z-index: 1;
-            transition: all 0.2s;
+            transition: all 0.25s ease;
         }
         .status-label {
-            font-size: .75rem;
+            font-size: .72rem;
             font-weight: 700;
             color: var(--text-muted);
             text-align: center;
             line-height: 1.2;
         }
+        .status-step.pending .status-dot {
+            background: #f9fafb;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+        .status-step.pending .status-label {
+            color: #9ca3af;
+            font-weight: 600;
+        }
         .status-step.active .status-dot {
-            background: rgba(230, 67, 18, 0.1);
-            color: var(--orange-primary);
-            border-color: rgba(230, 67, 18, 0.3);
+            background: var(--orange-primary);
+            color: #ffffff;
+            border-color: var(--orange-primary);
+            box-shadow: 0 0 0 4px rgba(230, 67, 18, 0.15);
         }
         .status-step.active .status-label {
             color: var(--orange-primary);
+        }
+        .status-step.completed .status-dot {
+            background: rgba(230, 67, 18, 0.12);
+            color: var(--orange-primary);
+            border-color: rgba(230, 67, 18, 0.35);
+        }
+        .status-step.completed .status-label {
+            color: var(--orange-primary);
+            opacity: 0.85;
+        }
+
+        .status-info-box {
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            font-size: 0.9rem;
+            line-height: 1.55;
+            border-left: 4px solid var(--border-color);
+        }
+        .status-info-box.info {
+            background: #f8fafc;
+            color: var(--text-dark);
+            border-left-color: #94a3b8;
+        }
+        .status-info-box.warning {
+            background: #fff7ed;
+            color: #9a3412;
+            border-left-color: var(--orange-primary);
+        }
+        .status-info-box.success {
+            background: #f0fdf4;
+            color: #166534;
+            border-left-color: #22c55e;
+        }
+        .status-info-title {
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: inherit;
         }
 
         /* Notifikasi Alert */
@@ -510,25 +654,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         Isi form berikut. Administrator akan memproses pengajuan Anda.
                     </div>
 
-                    <!-- Status Tracker (Semua dijadikan 'active' sesuai permintaan) -->
+                    <!-- Status Tracker (dinamis sesuai progres pengajuan) -->
                     <div class="status-tracker">
-                        <div class="status-step active">
-                            <div class="status-dot"><i class="bi bi-send"></i></div>
+                        <div class="status-step <?= forgot_password_step_class(1, $currentStep) ?>">
+                            <div class="status-dot">
+                                <i class="bi <?= $currentStep > 1 ? 'bi-check-lg' : 'bi-send' ?>"></i>
+                            </div>
                             <div class="status-label">Kirim<br>Pengajuan</div>
                         </div>
-                        <div class="status-step active">
-                            <div class="status-dot"><i class="bi bi-hourglass-split"></i></div>
+                        <div class="status-step <?= forgot_password_step_class(2, $currentStep) ?>">
+                            <div class="status-dot">
+                                <i class="bi <?= $currentStep > 2 ? 'bi-check-lg' : 'bi-hourglass-split' ?>"></i>
+                            </div>
                             <div class="status-label">Tunggu<br>Admin</div>
                         </div>
-                        <div class="status-step active">
-                            <div class="status-dot"><i class="bi bi-envelope-paper"></i></div>
+                        <div class="status-step <?= forgot_password_step_class(3, $currentStep) ?>">
+                            <div class="status-dot">
+                                <i class="bi <?= $currentStep > 3 ? 'bi-check-lg' : 'bi-envelope-paper' ?>"></i>
+                            </div>
                             <div class="status-label">Dapat<br>Password</div>
                         </div>
-                        <div class="status-step active">
-                            <div class="status-dot"><i class="bi bi-check2"></i></div>
+                        <div class="status-step <?= forgot_password_step_class(4, $currentStep) ?>">
+                            <div class="status-dot">
+                                <i class="bi bi-check2"></i>
+                            </div>
                             <div class="status-label">Siap<br>Digunakan</div>
                         </div>
                     </div>
+
+                    <?php if ($statusTitle !== ''): ?>
+                        <div class="status-info-box <?= e($statusType) ?>">
+                            <div class="status-info-title"><?= e($statusTitle) ?></div>
+                            <div><?= $statusMessage ?></div>
+                            <?php if (!empty($trackerState['alasan'])): ?>
+                                <div class="mt-2 pt-2" style="border-top: 1px dashed rgba(0,0,0,0.08); font-size: 0.85rem;">
+                                    <i class="bi bi-chat-left-text me-1"></i>
+                                    <em><?= e($trackerState['alasan']) ?></em>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if ($error): ?>
                         <div class="alert alert-danger">
@@ -542,9 +707,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     <?php endif; ?>
 
+                    <?php if ($formLocked): ?>
+                        <div class="mb-3">
+                            <label class="form-label">Email Terdaftar</label>
+                            <div class="input-shell">
+                                <i class="bi bi-envelope-fill input-icon"></i>
+                                <input
+                                    type="email"
+                                    class="form-control"
+                                    value="<?= e($trackEmail) ?>"
+                                    readonly
+                                    style="background: #f9fafb;">
+                            </div>
+                        </div>
+
+                        <?php if ($currentStep === 3): ?>
+                            <a href="<?= e(base_url('auth/login.php')) ?>" class="btn btn-login w-100">
+                                Login Sekarang <i class="bi bi-box-arrow-in-right ms-2"></i>
+                            </a>
+                        <?php elseif ($currentStep === 4): ?>
+                            <a href="<?= e(base_url('auth/login.php')) ?>" class="btn btn-login w-100">
+                                Ke Halaman Login <i class="bi bi-box-arrow-in-right ms-2"></i>
+                            </a>
+                        <?php else: ?>
+                            <button type="button" class="btn btn-login w-100" disabled style="opacity: 0.65; cursor: not-allowed;">
+                                Menunggu Proses Admin <i class="bi bi-hourglass-split ms-2"></i>
+                            </button>
+                        <?php endif; ?>
+                    <?php else: ?>
                     <form method="POST" action="" id="formPengajuan">
-                        
-                        <!-- Form Username dihapus, hanya menyisakan Email -->
                         <div class="mb-3">
                             <label class="form-label">Email Terdaftar <span class="text-danger">*</span></label>
                             <div class="input-shell">
@@ -554,6 +745,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     name="email"
                                     class="form-control"
                                     required
+                                    value="<?= e($trackEmail) ?>"
                                     placeholder="Masukkan email akun Anda"
                                     autocomplete="email">
                             </div>
@@ -572,8 +764,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             Kirim Pengajuan <i class="bi bi-send-fill ms-2"></i>
                         </button>
                     </form>
+                    <?php endif; ?>
 
-                    <div class="text-center mt-3">
+                    <div class="text-center mt-3 d-flex flex-column gap-2">
+                        <?php if (!$formLocked): ?>
+                            <form method="POST" class="d-inline" id="formCekStatus">
+                                <input type="hidden" name="action" value="check_status">
+                                <input type="hidden" name="email" id="cekStatusEmail" value="<?= e($trackEmail) ?>">
+                                <button type="submit" class="btn btn-link back-link p-0 border-0">
+                                    <i class="bi bi-search me-1"></i> Cek Status Pengajuan
+                                </button>
+                            </form>
+                        <?php endif; ?>
                         <a href="<?= e(base_url('auth/login.php')) ?>" class="back-link">
                             <i class="bi bi-arrow-left me-1"></i> Kembali ke Login
                         </a>
@@ -597,6 +799,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Konfirmasi sebelum kirim pengajuan
             const form   = document.getElementById('formPengajuan');
             const btnKirim = document.getElementById('btnKirim');
+
+            const formCekStatus = document.getElementById('formCekStatus');
+            const cekStatusEmail = document.getElementById('cekStatusEmail');
+            const emailInput = document.querySelector('#formPengajuan [name="email"]');
+
+            if (formCekStatus && cekStatusEmail && emailInput) {
+                formCekStatus.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    const email = emailInput.value.trim();
+                    if (!email) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Email Belum Diisi',
+                            text: 'Isi email terdaftar terlebih dahulu untuk cek status.',
+                            confirmButtonColor: '#E64312'
+                        });
+                        return;
+                    }
+                    cekStatusEmail.value = email;
+                    formCekStatus.submit();
+                });
+            }
 
             if (form && btnKirim) {
                 form.addEventListener('submit', function (e) {

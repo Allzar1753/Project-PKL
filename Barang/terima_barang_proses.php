@@ -2,6 +2,7 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
 
 header('Content-Type: application/json');
 
@@ -110,7 +111,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // ==========================================================
-        // LOGIKA JIKA YANG MENERIMA ADALAH USER CABANG (DARI INDEX)
+        // LOGIKA CABANG TUJUAN MENERIMA PENGIRIMAN ANTAR CABANG
+        // ==========================================================
+        elseif ($tipe_penerima === 'CABANG_TUJUAN') {
+            $myBranchId = (int) current_user_branch_id();
+
+            $stmt = mysqli_prepare($koneksi, "
+                UPDATE pengiriman_cabang_ho
+                SET status_pengiriman = 'Sudah diterima cabang',
+                    foto_barang_diterima_ho = ?,
+                    catatan_admin = CONCAT(COALESCE(catatan_admin, ''), ' | Diterima cabang tujuan: ', ?)
+                WHERE id_pengiriman_ho = ?
+                  AND branch_tujuan = ?
+                  AND COALESCE(jenis_pengiriman, 'ke_ho') = 'ke_cabang'
+                  AND status_pengiriman = 'Sedang perjalanan'
+            ");
+            mysqli_stmt_bind_param($stmt, 'ssii', $foto_barang_diterima, $nama_penerima, $id_pengiriman, $myBranchId);
+            mysqli_stmt_execute($stmt);
+
+            if (mysqli_stmt_affected_rows($stmt) <= 0) {
+                throw new Exception('Data pengiriman antar cabang tidak valid atau sudah diproses.');
+            }
+
+            $stmtGet = mysqli_prepare($koneksi, "SELECT serial_number, branch_asal, pemilik_barang, nomor_resi_keluar FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ? LIMIT 1");
+            mysqli_stmt_bind_param($stmtGet, 'i', $id_pengiriman);
+            mysqli_stmt_execute($stmtGet);
+            $dataInfo = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtGet)) ?: [];
+            mysqli_stmt_close($stmtGet);
+
+            if (!empty($dataInfo['serial_number'])) {
+                $sn = $dataInfo['serial_number'];
+                $pemilik = trim((string) ($dataInfo['pemilik_barang'] ?? ''));
+
+                $stmtUpdateBarang = mysqli_prepare($koneksi, "
+                    UPDATE barang SET
+                        id_branch = ?,
+                        status = 'Tersedia',
+                        bermasalah = 'Tidak',
+                        keterangan_masalah = NULL,
+                        tanggal_terima = ?,
+                        id_status = 4,
+                        `user` = CASE WHEN ? != '' AND ? != '0' THEN ? ELSE `user` END
+                    WHERE serial_number = ?
+                ");
+                mysqli_stmt_bind_param($stmtUpdateBarang, 'isssss', $myBranchId, $tanggal_diterima, $pemilik, $pemilik, $pemilik, $sn);
+                mysqli_stmt_execute($stmtUpdateBarang);
+
+                mysqli_query($koneksi, "UPDATE pengiriman_cabang_ho SET status_pengiriman = 'Selesai' WHERE id_pengiriman_ho = $id_pengiriman");
+
+                $branchAsal = (int) ($dataInfo['branch_asal'] ?? 0);
+                if ($branchAsal > 0) {
+                    $msg = 'Pengiriman antar cabang resi ' . ($dataInfo['nomor_resi_keluar'] ?? '-') . ' sudah diterima cabang tujuan.';
+                    $stmtNotif = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, 'Pengiriman antar cabang selesai', ?, '../Barang/index.php?filter=keluar', 0)");
+                    mysqli_stmt_bind_param($stmtNotif, 'is', $branchAsal, $msg);
+                    mysqli_stmt_execute($stmtNotif);
+                }
+            }
+        }
+
+        // ==========================================================
+        // LOGIKA JIKA YANG MENERIMA ADALAH USER CABANG (DARI INDEX - HO KIRIM)
         // ==========================================================
         else {
             $myBranchId = current_user_branch_id();
@@ -146,6 +206,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         mysqli_commit($koneksi);
+
+        if ($tipe_penerima === 'HO') {
+            log_activity($koneksi, 'receive_barang_ho', "Admin HO terima barang fisik - Resi masuk: {$nomor_resi_masuk}, ID Pengiriman: {$id_pengiriman}", [
+                'id_pengiriman_ho' => $id_pengiriman,
+                'nomor_resi_masuk' => $nomor_resi_masuk,
+                'penerima' => $nama_penerima,
+            ]);
+        } elseif ($tipe_penerima === 'CABANG_TUJUAN') {
+            log_activity($koneksi, 'receive_barang_antar_cabang', "Cabang tujuan terima pengiriman antar cabang - Resi: {$nomor_resi_masuk}, ID: {$id_pengiriman}", [
+                'id_pengiriman_ho' => $id_pengiriman,
+                'nomor_resi_masuk' => $nomor_resi_masuk,
+                'id_branch' => current_user_branch_id(),
+            ]);
+        } else {
+            log_activity($koneksi, 'receive_barang', "User cabang terima barang dari HO - Resi masuk: {$nomor_resi_masuk}, ID Pengiriman: {$id_pengiriman}", [
+                'id_pengiriman' => $id_pengiriman,
+                'nomor_resi_masuk' => $nomor_resi_masuk,
+                'penerima' => $nama_penerima,
+                'id_branch' => current_user_branch_id(),
+            ]);
+        }
+
         echo json_encode(['status' => 'success', 'message' => 'Barang berhasil diterima oleh ' . $nama_penerima]);
     } catch (Exception $e) {
         mysqli_rollback($koneksi);

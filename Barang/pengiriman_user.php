@@ -7,6 +7,7 @@ error_reporting(0);
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
 
 require_permission($koneksi, 'barang.kirim');
 if (!is_user_role()) {
@@ -15,6 +16,9 @@ if (!is_user_role()) {
 }
 
 const STATUS_MENUNGGU_PERSETUJUAN = 'Menunggu persetujuan admin';
+const STATUS_SEDANG_PERJALANAN = 'Sedang perjalanan';
+const JENIS_KE_HO = 'ke_ho';
+const JENIS_KE_CABANG = 'ke_cabang';
 
 $myBranchId = (int) current_user_branch_id();
 
@@ -158,6 +162,28 @@ function getBarangBranchOptions(mysqli $koneksi, int $branchId): array {
     return $rows;
 }
 
+function getBranchOptionsExcept(mysqli $koneksi, int $excludeBranchId): array {
+    $rows = [];
+    $stmt = mysqli_prepare($koneksi, 'SELECT id_branch, nama_branch FROM tb_branch WHERE id_branch != ? ORDER BY nama_branch ASC');
+    if (!$stmt) return [];
+    mysqli_stmt_bind_param($stmt, 'i', $excludeBranchId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    while ($row = mysqli_fetch_assoc($res)) {
+        $rows[] = $row;
+    }
+    mysqli_stmt_close($stmt);
+    return $rows;
+}
+
+function createBranchNotification(mysqli $koneksi, int $branchId, string $title, string $message, ?string $link): void {
+    $stmt = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)");
+    if (!$stmt) return;
+    mysqli_stmt_bind_param($stmt, 'isss', $branchId, $title, $message, $link);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
 function createAdminNotification(mysqli $koneksi, string $title, string $message, ?string $link): void {
     $stmt = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, title, message, link, is_read) VALUES ('admin', ?, ?, ?, 0)");
     if (!$stmt) return;
@@ -167,13 +193,13 @@ function createAdminNotification(mysqli $koneksi, string $title, string $message
 }
 
 $jakartaBranch = getJakartaBranch($koneksi);
-if (!$jakartaBranch) jsonResponse('error', 'HO Jakarta tidak ditemukan');
 
 // ==========================================
 // HANDLE PROSES DATA POST - TIDAK DIUBAH
 // ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $idBarang = (int) ($_POST['id_barang'] ?? 0);
+    $branchTujuan = (int) ($_POST['branch_tujuan'] ?? 0);
     $tanggal = trim((string) ($_POST['tanggal_keluar'] ?? ''));
     $jasa = trim((string) ($_POST['jasa_pengiriman'] ?? ''));
     $resi = trim((string) ($_POST['nomor_resi_keluar'] ?? ''));
@@ -181,15 +207,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pemilik_barang = mysqli_real_escape_string($koneksi, trim((string) ($_POST['pemilik_barang'] ?? '')));
     $catatan_user = mysqli_real_escape_string($koneksi, trim((string) ($_POST['catatan_user'] ?? '')));
 
+    if ($branchTujuan <= 0) jsonResponse('error', 'Cabang tujuan wajib dipilih.');
+    if ($branchTujuan === $myBranchId) jsonResponse('error', 'Cabang tujuan tidak boleh sama dengan cabang asal.');
+
+    $hoBranchId = (int) ($jakartaBranch['id_branch'] ?? 0);
+    $jenisPengiriman = ($hoBranchId > 0 && $branchTujuan === $hoBranchId) ? JENIS_KE_HO : JENIS_KE_CABANG;
+
+    if ($jenisPengiriman === JENIS_KE_HO && !$jakartaBranch) {
+        jsonResponse('error', 'HO Jakarta tidak ditemukan di sistem.');
+    }
+
     $cekSN_pengiriman = mysqli_query($koneksi, "SELECT id_pengiriman_ho FROM pengiriman_cabang_ho WHERE serial_number = '$serial_number' AND status_pengiriman NOT IN ('Ditolak', 'Selesai')");
     if (mysqli_num_rows($cekSN_pengiriman) > 0) jsonResponse('error', 'Serial number ini sudah diajukan pengiriman dan belum selesai.');
+
+    $cekAset = mysqli_query($koneksi, "SELECT id FROM barang WHERE serial_number = '$serial_number' AND id_branch = $myBranchId LIMIT 1");
+    if (mysqli_num_rows($cekAset) === 0) jsonResponse('error', 'Aset tidak ditemukan di cabang Anda.');
 
     if ($idBarang <= 0) jsonResponse('error', 'Jenis barang wajib dipilih');
     if ($tanggal === '') jsonResponse('error', 'Tanggal wajib diisi');
     if ($resi === '') jsonResponse('error', 'Resi wajib diisi');
     if ($jasa === '') jsonResponse('error', 'Jasa pengiriman wajib dipilih');
     if ($serial_number === '') jsonResponse('error', 'Serial number wajib dipilih');
-    if ($catatan_user === '') jsonResponse('error', 'Keterangan kerusakan wajib diisi');
+    if ($catatan_user === '') jsonResponse('error', $jenisPengiriman === JENIS_KE_HO ? 'Keterangan kerusakan wajib diisi' : 'Alasan pengiriman antar cabang wajib diisi');
 
     $pdfGenerated = trim((string) ($_POST['pdf_generated'] ?? '0'));
     if ($pdfGenerated !== '1') jsonResponse('error', 'Silakan cetak/unduh PDF surat pengiriman terlebih dahulu.');
@@ -200,23 +239,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $stmt = mysqli_prepare($koneksi, "
         INSERT INTO pengiriman_cabang_ho
-        (id_barang, serial_number, pemilik_barang, branch_asal, branch_tujuan, tanggal_pengajuan, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, catatan_user, dibuat_oleh)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id_barang, serial_number, pemilik_barang, branch_asal, branch_tujuan, jenis_pengiriman, tanggal_pengajuan, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, catatan_user, dibuat_oleh)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $dibuatOleh = current_user_id() ? (int) current_user_id() : null;
-    $branchTujuan = (int) ($jakartaBranch['id_branch'] ?? 0);
     $statusPengiriman = STATUS_MENUNGGU_PERSETUJUAN;
     $fotoBind = $foto !== null ? $foto : '';
 
-    mysqli_stmt_bind_param($stmt, 'issiissssssi', $idBarang, $serial_number, $pemilik_barang, $myBranchId, $branchTujuan, $tanggal, $jasa, $resi, $fotoBind, $statusPengiriman, $catatan_user, $dibuatOleh);
+    mysqli_stmt_bind_param($stmt, 'issiisssssssi', $idBarang, $serial_number, $pemilik_barang, $myBranchId, $branchTujuan, $jenisPengiriman, $tanggal, $jasa, $resi, $fotoBind, $statusPengiriman, $catatan_user, $dibuatOleh);
     if (!mysqli_stmt_execute($stmt)) jsonResponse('error', 'Gagal menyimpan pengiriman');
     mysqli_stmt_close($stmt);
 
     mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE serial_number = '$serial_number'");
-    createAdminNotification($koneksi, 'Pengiriman cabang → HO (menunggu persetujuan)', "Cabang mengajukan pengiriman barang rusak ke HO Jakarta. Resi: $resi", '../Barang/pengiriman_approval.php');
 
-    jsonResponse('success', 'Pengiriman berhasil diajukan. Barang telah dikunci. Notifikasi masuk ke admin HO.');
+    $namaTujuan = getBranchName($koneksi, $branchTujuan);
+    if ($jenisPengiriman === JENIS_KE_HO) {
+        createAdminNotification($koneksi, 'Pengiriman cabang → HO (menunggu persetujuan)', "Cabang mengajukan pengiriman barang rusak ke HO. Resi: $resi", '../Barang/pengiriman_approval.php');
+        $successMsg = 'Pengiriman ke HO berhasil diajukan. Menunggu persetujuan Admin HO.';
+    } else {
+        createAdminNotification($koneksi, 'Pengiriman antar cabang (menunggu persetujuan)', "Cabang mengajukan kirim aset ke {$namaTujuan}. Resi: $resi", '../Barang/pengiriman_approval.php');
+        $successMsg = "Pengiriman ke cabang {$namaTujuan} berhasil diajukan. Menunggu persetujuan Admin HO.";
+    }
+
+    log_activity($koneksi, 'send_pengiriman_cabang', "Ajukan pengiriman {$jenisPengiriman} - Resi: {$resi}, SN: {$serial_number}, Tujuan: {$namaTujuan}", [
+        'serial_number' => $serial_number,
+        'nomor_resi' => $resi,
+        'id_barang' => $idBarang,
+        'branch_asal' => $myBranchId,
+        'branch_tujuan' => $branchTujuan,
+        'jenis_pengiriman' => $jenisPengiriman,
+    ]);
+
+    jsonResponse('success', $successMsg);
 }
 
 if (ob_get_length()) ob_clean();
@@ -233,6 +288,8 @@ function getBranchName(mysqli $koneksi, int $branchId): string {
 $branchName = getBranchName($koneksi, $myBranchId);
 $currentUserName = (string) ((current_user()['username'] ?? current_user()['name']) ?? '');
 $barangList = getBarangBranchOptions($koneksi, $myBranchId);
+$branchTujuanList = getBranchOptionsExcept($koneksi, $myBranchId);
+$hoBranchId = (int) ($jakartaBranch['id_branch'] ?? 0);
 
 // Ambil daftar Pemilik Barang murni yang saat ini asetnya ada di cabang
 $qUserCabang = mysqli_query($koneksi, "
@@ -468,18 +525,18 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
         
         <div class="row g-3">
             <div class="col-md-6">
-                <label class="form-label">Kategori Barang Rusak <span class="text-danger">*</span></label>
-                <select name="id_barang" id="id_barang_select" class="form-control select2" required>
-                    <option value="">Pilih Kategori...</option>
-                    <?php foreach ($barangList as $b): ?>
-                        <option value="<?= (int) $b['id_barang'] ?>"><?= h($b['nama_barang']) ?></option>
+                <label class="form-label">Cabang Tujuan <span class="text-danger">*</span></label>
+                <select name="branch_tujuan" id="branch_tujuan_select" class="form-control select2" required>
+                    <option value="">Pilih Cabang Tujuan...</option>
+                    <?php if ($hoBranchId > 0): ?>
+                        <option value="<?= $hoBranchId ?>" data-jenis="ke_ho">Head Office (HO) Jakarta — Barang Rusak</option>
+                    <?php endif; ?>
+                    <?php foreach ($branchTujuanList as $br): ?>
+                        <?php if ((int) $br['id_branch'] === $hoBranchId) continue; ?>
+                        <option value="<?= (int) $br['id_branch'] ?>" data-jenis="ke_cabang"><?= h($br['nama_branch']) ?> — Transfer Antar Cabang</option>
                     <?php endforeach; ?>
                 </select>
-            </div>
-
-            <div class="col-md-6">
-                <label class="form-label">Tujuan Pengiriman</label>
-                <input type="text" class="form-control" value="Head Office (HO) Jakarta" readonly>
+                <small class="text-muted">Pilih HO untuk barang rusak, atau cabang lain untuk transfer aset.</small>
             </div>
 
             <div class="col-md-6">
@@ -494,9 +551,19 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
                 <input type="text" name="pemilik_barang" id="pemilik_barang_input" class="form-control text-uppercase" required readonly placeholder="Otomatis terisi...">
             </div>
 
+            <div class="col-md-6">
+                <label class="form-label" id="label_kategori_barang">Kategori Barang <span class="text-danger">*</span></label>
+                <select name="id_barang" id="id_barang_select" class="form-control select2" required>
+                    <option value="">Pilih Kategori...</option>
+                    <?php foreach ($barangList as $b): ?>
+                        <option value="<?= (int) $b['id_barang'] ?>"><?= h($b['nama_barang']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
             <div class="col-md-12">
-                <label class="form-label">Detail Keterangan Kerusakan <span class="text-danger">*</span></label>
-                <textarea name="catatan_user" class="form-control" rows="2" placeholder="Jelaskan kendala kerusakan pada barang ini..." required></textarea>
+                <label class="form-label" id="label_catatan_pengiriman">Detail Keterangan / Alasan Pengiriman <span class="text-danger">*</span></label>
+                <textarea name="catatan_user" id="catatan_user_input" class="form-control" rows="2" placeholder="Jelaskan alasan pengiriman..." required></textarea>
             </div>
 
             <div class="col-md-4">
@@ -521,7 +588,7 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
             </div>
 
             <div class="col-md-6">
-                <label class="form-label">Status Sistem</label>
+                <label class="form-label">Status Pengiriman</label>
                 <input type="text" class="form-control text-warning" value="<?= h(STATUS_MENUNGGU_PERSETUJUAN) ?>" readonly>
             </div>
             
@@ -647,6 +714,19 @@ while ($row = mysqli_fetch_assoc($qUserCabang)) {
 
         $(document).on('change', '#serial_number_select', function() {
             $('#pemilik_barang_input').val($(this).find(':selected').data('user').toUpperCase() || '');
+        });
+
+        $('#branch_tujuan_select').on('change', function() {
+            const jenis = $(this).find(':selected').data('jenis');
+            if (jenis === 'ke_ho') {
+                $('#label_kategori_barang').html('Kategori Barang Rusak <span class="text-danger">*</span>');
+                $('#label_catatan_pengiriman').html('Detail Keterangan Kerusakan <span class="text-danger">*</span>');
+                $('#catatan_user_input').attr('placeholder', 'Jelaskan kendala kerusakan pada barang ini...');
+            } else {
+                $('#label_kategori_barang').html('Kategori Barang <span class="text-danger">*</span>');
+                $('#label_catatan_pengiriman').html('Alasan Pengiriman Antar Cabang <span class="text-danger">*</span>');
+                $('#catatan_user_input').attr('placeholder', 'Jelaskan alasan transfer aset ke cabang tujuan...');
+            }
         });
     });
 </script>

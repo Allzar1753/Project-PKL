@@ -122,12 +122,70 @@ if (!function_exists('is_user_role')) {
     }
 }
 
+if (!function_exists('normalize_employment_status')) {
+    function normalize_employment_status(?string $status): string
+    {
+        $status = strtolower(trim((string) $status));
+
+        return in_array($status, ['active', 'inactive'], true) ? $status : 'active';
+    }
+}
+
+if (!function_exists('employment_status_label')) {
+    function employment_status_label(?string $status): string
+    {
+        return normalize_employment_status($status) === 'active' ? 'Masih Bekerja' : 'Tidak Bekerja Lagi';
+    }
+}
+
+if (!function_exists('is_employment_active')) {
+    function is_employment_active(?string $status): bool
+    {
+        return normalize_employment_status($status) === 'active';
+    }
+}
+
+if (!function_exists('ensure_user_employment_active')) {
+    function ensure_user_employment_active(mysqli $koneksi): void
+    {
+        if (!is_logged_in()) {
+            return;
+        }
+
+        $userId = current_user_id();
+        if (!$userId) {
+            return;
+        }
+
+        $stmt = mysqli_prepare($koneksi, "SELECT employment_status FROM users WHERE id = ? LIMIT 1");
+        if (!$stmt) {
+            return;
+        }
+
+        mysqli_stmt_bind_param($stmt, 'i', $userId);
+        mysqli_stmt_execute($stmt);
+        $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt)) ?: null;
+        mysqli_stmt_close($stmt);
+
+        if (!$row || !is_employment_active($row['employment_status'] ?? 'active')) {
+            logout_user();
+            set_flash('error', 'Akun Anda sudah dinonaktifkan karena status tidak bekerja lagi. Hubungi administrator HO.');
+            redirect_to(base_url('auth/login.php'));
+        }
+    }
+}
+
 if (!function_exists('require_login')) {
     function require_login(): void
     {
         if (!is_logged_in()) {
             set_flash('error', 'Silakan login terlebih dahulu.');
             redirect_to(base_url('auth/login.php'));
+        }
+
+        global $koneksi;
+        if ($koneksi instanceof mysqli) {
+            ensure_user_employment_active($koneksi);
         }
     }
 }
@@ -180,7 +238,7 @@ if (!function_exists('find_user_by_login')) {
     function find_user_by_login(mysqli $koneksi, string $login): ?array
     {
         $sql = "
-            SELECT id, username, email, password, role, id_branch, must_change_password
+            SELECT id, username, email, password, role, id_branch, must_change_password, employment_status
             FROM users
             WHERE BINARY username = ? OR BINARY email = ?
             LIMIT 1

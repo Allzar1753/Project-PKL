@@ -3,6 +3,9 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
+require_once '../config/warranty_helper.php';
+require_once '../config/validation_helper.php';
 
 require_login();
 
@@ -470,6 +473,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <div class="form-section-title"><i class="bi bi-tag text-muted"></i> Identitas & Spesifikasi</div>
                     <div class="row g-4 mb-4">
                         <div class="col-md-6">
+                            <label class="modern-label">Kode Asset</label>
+                            <input type="text" class="form-control modern-input bg-light" value="<?= h($barang['kode_aset'] ?? '-') ?>" readonly disabled>
+                            <small class="text-muted">Nomor unik sistem — tidak dapat diubah</small>
+                        </div>
+                        <div class="col-md-6">
                             <label class="modern-label">No Asset</label>
                             <input type="text" name="no_asset" class="form-control modern-input text-uppercase" value="<?= h($barang['no_asset'] ?? '') ?>" placeholder="Opsional / Boleh dikosongkan">
                         </div>
@@ -542,8 +550,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         </div>
                         <div class="col-md-6">
                             <label class="modern-label">Tanggal Terima / Pembelian</label>
-                            <input type="date" name="tanggal_terima" class="form-control modern-input" value="<?= h($barang['tanggal_terima'] ?? '') ?>">
+                            <input type="date" name="tanggal_terima" class="form-control modern-input" value="<?= h($barang['tanggal_terima'] ?? '') ?>" min="<?= date_min_back_tolerance(3) ?>">
                         </div>
+                    </div>
+
+                    <div class="form-section-title"><i class="bi bi-shield-check text-muted"></i> Garansi Produk</div>
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-4">
+                            <label class="modern-label">Tanggal Pembelian</label>
+                            <input type="date" name="tanggal_pembelian" id="update_tanggal_pembelian" class="form-control modern-input" value="<?= h($barang['tanggal_pembelian'] ?? ($barang['tanggal_terima'] ?? '')) ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="modern-label">Masa Garansi</label>
+                            <?php $garansiBulan = (int) ($barang['masa_garansi_bulan'] ?? 12); ?>
+                            <select name="masa_garansi_bulan" id="update_masa_garansi_bulan" class="form-control modern-input">
+                                <?php foreach ([6, 12, 24, 36, 48, 60] as $bln): ?>
+                                    <option value="<?= $bln ?>" <?= $garansiBulan === $bln ? 'selected' : '' ?>><?= $bln ?> Bulan</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="modern-label">Garansi Berakhir</label>
+                            <input type="text" class="form-control modern-input bg-light" readonly value="<?= !empty($barang['tanggal_garansi_berakhir']) ? date('d M Y', strtotime($barang['tanggal_garansi_berakhir'])) : '—' ?>">
+                            <?php if (!empty($barang['tanggal_garansi_berakhir'])): ?>
+                                <div class="mt-2"><?= warranty_badge_html($barang['tanggal_garansi_berakhir']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
                         <div class="col-md-12" id="updateKeteranganMasalahDiv" style="<?= ($barang['bermasalah'] === 'Iya') ? '' : 'display:none;' ?>">
                             <label class="modern-label">Keterangan Masalah / Kendala</label>
                             <textarea name="keterangan_masalah" class="form-control modern-input" rows="3" placeholder="Jelaskan detail masalah pada perangkat ini..."><?= h($barang['keterangan_masalah'] ?? '') ?></textarea>
@@ -1015,6 +1050,17 @@ if ($formType === 'penerimaan') {
         $branchTujuan = (int) $pengirimanTerakhir['branch_tujuan'];
         mysqli_query($koneksi, "UPDATE barang SET id_status = 4, id_branch = $branchTujuan, status = 'Tersedia' WHERE id = $id");
         mysqli_commit($koneksi);
+
+        // Log activity for receiving
+        log_activity($koneksi, 'receive_barang', "Terima barang - Resi: {$pengirimanTerakhir['nomor_resi_keluar']}, Dari: {$pengirimanTerakhir['branch_asal']}, Tanggal: {$tanggalDiterima}, Penerima: {$namaPenerima}", [
+            'id_pengiriman' => $idPeng,
+            'id_barang' => $id,
+            'nomor_resi' => $pengirimanTerakhir['nomor_resi_keluar'],
+            'branch_asal' => $pengirimanTerakhir['branch_asal'],
+            'branch_tujuan' => $branchTujuan,
+            'nama_penerima' => $namaPenerima
+        ]);
+
         jsonSuccess("Penerimaan barang berhasil dikonfirmasi.");
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
@@ -1022,6 +1068,16 @@ if ($formType === 'penerimaan') {
     }
 } elseif ($formType === 'master') {
     $tanggalTerima = $_POST['tanggal_terima'] ?? '';
+    if ($tanggalTerima !== '' && !is_date_within_back_tolerance($tanggalTerima, 3)) {
+        jsonError('Tanggal terima hanya boleh diisi mulai 3 hari sebelum hari ini.');
+    }
+
+    $userName = trim((string) ($_POST['user'] ?? ''));
+    $nameError = validate_person_name($userName);
+    if ($nameError !== null) {
+        jsonError($nameError);
+    }
+
     $noAsset       = trim((string) $_POST['no_asset']);
     $serialNumber  = trim((string) $_POST['serial_number']);
     $duplicate     = validateDuplicateBarang($koneksi, $id, $noAsset, $serialNumber, (int) $_POST['id_barang']);
@@ -1032,32 +1088,50 @@ if ($formType === 'penerimaan') {
 
     $keteranganMasalah = ($_POST['bermasalah'] === 'Iya') ? ($_POST['keterangan_masalah'] ?? null) : null;
     $user_id_sistem    = (int) current_user_id();
+    $tanggalPembelian = trim((string) ($_POST['tanggal_pembelian'] ?? ''));
+    if ($tanggalPembelian === '') {
+        $tanggalPembelian = $tanggalTerima;
+    }
+    $masaGaransiBulan = normalize_warranty_months($_POST['masa_garansi_bulan'] ?? 12);
+    $tanggalGaransiBerakhir = compute_warranty_end_date($tanggalPembelian, $masaGaransiBulan);
 
     mysqli_begin_transaction($koneksi);
     try {
-        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, foto=COALESCE(?, foto) WHERE id=?");
+        $stmt = mysqli_prepare($koneksi, "UPDATE barang SET no_asset=?, serial_number=?, id_barang=?, id_merk=?, id_tipe=?, id_jenis=?, id_branch=?, user=?, user_id=?, bermasalah=?, keterangan_masalah=?, tanggal_terima=?, tanggal_pembelian=?, masa_garansi_bulan=?, tanggal_garansi_berakhir=?, foto=COALESCE(?, foto) WHERE id=?");
         
-        // UBAH STRING PARAMETER DI BAWAH INI:
         mysqli_stmt_bind_param(
             $stmt,
-            'ssiiiiisissssi', // s, s, i, i, i, i, i, s (untuk user), i (untuk user_id), s, s, s, s, i
-            $noAsset,           // s
-            $serialNumber,      // s
-            $_POST['id_barang'],// i
-            $_POST['id_merk'],  // i
-            $_POST['id_tipe'],  // i
-            $_POST['id_jenis'], // i
-            $_POST['id_branch'],// i
-            $_POST['user'],     // s (String - sekarang teks akan masuk dengan benar)
-            $user_id_sistem,    // i (Integer)
-            $_POST['bermasalah'], // s
-            $keteranganMasalah, // s
-            $tanggalTerima,     // s
-            $fotoBaru,          // s
-            $id                 // i
+            'ssiiiiisisssisssi',
+            $noAsset,
+            $serialNumber,
+            $_POST['id_barang'],
+            $_POST['id_merk'],
+            $_POST['id_tipe'],
+            $_POST['id_jenis'],
+            $_POST['id_branch'],
+            $_POST['user'],
+            $user_id_sistem,
+            $_POST['bermasalah'],
+            $keteranganMasalah,
+            $tanggalTerima,
+            $tanggalPembelian,
+            $masaGaransiBulan,
+            $tanggalGaransiBerakhir,
+            $fotoBaru,
+            $id
         );
         mysqli_stmt_execute($stmt);
         mysqli_commit($koneksi);
+
+        // Log activity
+        log_activity($koneksi, 'update_barang', "Edit barang - Serial: {$serialNumber}, No Asset: {$noAsset}, Cabang: {$_POST['id_branch']}", [
+            'id_barang' => $id,
+            'serial_number' => $serialNumber,
+            'no_asset' => $noAsset,
+            'id_branch' => $_POST['id_branch'],
+            'bermasalah' => $_POST['bermasalah']
+        ]);
+
         jsonSuccess("Data berhasil diupdate.");
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
@@ -1114,6 +1188,16 @@ if ($formType === 'penerimaan') {
         }
 
         mysqli_commit($koneksi);
+
+        // Log activity for shipping
+        log_activity($koneksi, 'send_barang', "Kirim barang - Resi: {$_POST['nomor_resi']}, Dari: {$asal}, Tujuan: {$_POST['tujuan']}, Jasa: {$_POST['jasa_pengiriman']}", [
+            'id_barang' => $id,
+            'nomor_resi' => $_POST['nomor_resi'],
+            'branch_asal' => $asal,
+            'branch_tujuan' => $_POST['tujuan'],
+            'jasa_pengiriman' => $_POST['jasa_pengiriman']
+        ]);
+
         jsonSuccess("Pengiriman berhasil dibuat.");
     } catch (Exception $e) {
         mysqli_rollback($koneksi);

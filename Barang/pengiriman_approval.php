@@ -3,6 +3,7 @@
 /** @var mysqli $koneksi */ //
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
 
 require_permission($koneksi, 'barang.kirim');
 if (!is_admin()) {
@@ -12,6 +13,8 @@ if (!is_admin()) {
 
 const STATUS_MENUNGGU_PERSETUJUAN = 'Menunggu persetujuan admin';
 const STATUS_SUDAH_DITERIMA = 'Sudah diterima HO';
+const STATUS_SEDANG_PERJALANAN = 'Sedang perjalanan';
+const JENIS_KE_CABANG = 'ke_cabang';
 
 function h($value): string
 {
@@ -48,6 +51,76 @@ if (!$jakartaBranchId) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $postAction = trim((string) ($_POST['action'] ?? 'approve_ho'));
+
+    if ($postAction === 'approve_antar_cabang') {
+        $idPengiriman = (int) ($_POST['id_pengiriman'] ?? 0);
+        if ($idPengiriman <= 0) jsonOut(['status' => 'error', 'message' => 'ID pengiriman tidak valid.']);
+
+        mysqli_begin_transaction($koneksi);
+        try {
+            $adminId = current_user_id() ? (int) current_user_id() : null;
+            $now = date('Y-m-d H:i:s');
+            $statusBaru = STATUS_SEDANG_PERJALANAN;
+            $statusLama = STATUS_MENUNGGU_PERSETUJUAN;
+
+            $stmt = mysqli_prepare(
+                $koneksi,
+                "UPDATE pengiriman_cabang_ho
+                 SET status_pengiriman = ?, disetujui_oleh = ?, disetujui_pada = ?, catatan_admin = ?
+                 WHERE id_pengiriman_ho = ? AND COALESCE(jenis_pengiriman, 'ke_ho') = ? AND COALESCE(status_pengiriman, '') = ?"
+            );
+            if (!$stmt) throw new Exception('Gagal menyiapkan approval antar cabang.');
+
+            $catatanAdmin = 'Disetujui Admin HO untuk pengiriman antar cabang';
+            mysqli_stmt_bind_param($stmt, 'sississ', $statusBaru, $adminId, $now, $catatanAdmin, $idPengiriman, JENIS_KE_CABANG, $statusLama);
+            mysqli_stmt_execute($stmt);
+            if (mysqli_stmt_affected_rows($stmt) <= 0) throw new Exception('Data tidak ditemukan atau sudah diproses.');
+            mysqli_stmt_close($stmt);
+
+            $stmtInfo = mysqli_prepare($koneksi, "SELECT branch_tujuan, branch_asal, nomor_resi_keluar, serial_number FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ? LIMIT 1");
+            mysqli_stmt_bind_param($stmtInfo, 'i', $idPengiriman);
+            mysqli_stmt_execute($stmtInfo);
+            $info = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtInfo)) ?: [];
+            mysqli_stmt_close($stmtInfo);
+
+            $branchTujuan = (int) ($info['branch_tujuan'] ?? 0);
+            $branchAsal = (int) ($info['branch_asal'] ?? 0);
+            $resi = (string) ($info['nomor_resi_keluar'] ?? '-');
+
+            if ($branchTujuan > 0) {
+                createUserBranchNotification(
+                    $koneksi,
+                    $branchTujuan,
+                    'Barang antar cabang dalam perjalanan',
+                    'Pengiriman dari cabang lain dengan resi ' . $resi . ' sedang menuju cabang Anda. Silakan konfirmasi saat barang tiba.',
+                    '../Barang/index.php?filter=masuk'
+                );
+            }
+            if ($branchAsal > 0) {
+                createUserBranchNotification(
+                    $koneksi,
+                    $branchAsal,
+                    'Pengiriman antar cabang disetujui',
+                    'Admin HO menyetujui pengiriman antar cabang dengan resi ' . $resi . '. Barang sedang dalam perjalanan.',
+                    '../Barang/index.php?filter=keluar'
+                );
+            }
+
+            mysqli_commit($koneksi);
+
+            log_activity($koneksi, 'approve_pengiriman_antar_cabang', "Admin setujui pengiriman antar cabang - Resi: {$resi}, SN: " . ($info['serial_number'] ?? '-'), [
+                'id_pengiriman_ho' => $idPengiriman,
+                'branch_tujuan' => $branchTujuan,
+            ]);
+
+            jsonOut(['status' => 'success', 'message' => 'Pengiriman antar cabang disetujui. Cabang tujuan akan menerima notifikasi.']);
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            jsonOut(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
     $idPengiriman = (int) ($_POST['id_pengiriman'] ?? 0);
     if ($idPengiriman <= 0) jsonOut(['status' => 'error', 'message' => 'ID pengiriman tidak valid.']);
 
@@ -153,6 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         mysqli_commit($koneksi);
+
+        $resiLog = $resi ?? '-';
+        $snLog = $sn ?? ($dataSN['serial_number'] ?? '-');
+        log_activity($koneksi, 'approve_pengiriman_ho', "Admin setujui pengiriman cabang → HO - Resi: {$resiLog}, SN: {$snLog}", [
+            'id_pengiriman_ho' => $idPengiriman,
+            'nomor_resi' => $resiLog,
+            'serial_number' => $snLog,
+        ]);
+
         jsonOut(['status' => 'success', 'message' => 'Barang dari cabang sudah dikonfirmasi diterima HO. Notifikasi dikirim ke user cabang.']);
     } catch (Throwable $e) {
         mysqli_rollback($koneksi);
@@ -170,6 +252,7 @@ $q = mysqli_query($koneksi, "
         p.serial_number,
         p.pemilik_barang,
         p.catatan_user,
+        COALESCE(p.jenis_pengiriman, 'ke_ho') AS jenis_pengiriman,
         asal.nama_branch AS nama_branch_asal,
         tujuan.nama_branch AS nama_branch_tujuan,
         tb_barang.nama_barang
@@ -177,8 +260,7 @@ $q = mysqli_query($koneksi, "
     LEFT JOIN tb_barang ON p.id_barang = tb_barang.id_barang
     LEFT JOIN tb_branch asal ON p.branch_asal = asal.id_branch
     LEFT JOIN tb_branch tujuan ON p.branch_tujuan = tujuan.id_branch
-    WHERE p.branch_tujuan = {$jakartaBranchId}
-      AND COALESCE(p.status_pengiriman, '') = '" . STATUS_MENUNGGU_PERSETUJUAN . "'
+    WHERE COALESCE(p.status_pengiriman, '') = '" . STATUS_MENUNGGU_PERSETUJUAN . "'
     ORDER BY p.id_pengiriman_ho DESC
 ");
 ?>
@@ -367,8 +449,8 @@ $q = mysqli_query($koneksi, "
                     <!-- Header Hero Hexindo Style -->
                     <div class="page-hero">
                         <div class="hero-content">
-                            <h1 class="page-title"><i class="bi bi-inboxes-fill me-2" style="color: var(--orange-1);"></i> Approval Pengiriman ke HO</h1>
-                            <p class="page-desc">Konfirmasi penerimaan barang rusak dari cabang yang sudah tiba secara fisik di Head Office Jakarta.</p>
+                            <h1 class="page-title"><i class="bi bi-inboxes-fill me-2" style="color: var(--orange-1);"></i> Approval Pengiriman Cabang</h1>
+                            <p class="page-desc">Konfirmasi pengajuan pengiriman barang rusak ke HO atau transfer antar cabang dari seluruh cabang.</p>
                         </div>
                     </div>
 
@@ -392,12 +474,15 @@ $q = mysqli_query($koneksi, "
                                         <?php while ($row = mysqli_fetch_assoc($q)): ?>
                                             <?php
                                             $status = (string) ($row['status_pengiriman'] ?? '');
+                                            $jenis = (string) ($row['jenis_pengiriman'] ?? 'ke_ho');
                                             $canApprove = $status === STATUS_MENUNGGU_PERSETUJUAN;
+                                            $isAntarCabang = $jenis === JENIS_KE_CABANG;
                                             ?>
                                             <tr>
                                                 <td class="text-muted fw-semibold"><?= $no++ ?></td>
                                                 <td>
                                                     <div class="fw-bold fs-6 text-dark mb-2"><?= h($row['nama_barang'] ?? '-') ?></div>
+                                                    <span class="badge bg-<?= $isAntarCabang ? 'info' : 'secondary' ?> mb-2"><?= $isAntarCabang ? 'Antar Cabang' : 'Ke HO (Rusak)' ?></span>
                                                     <span class="meta-line"><i class="bi bi-upc-scan me-2 text-muted"></i> SN: <span class="meta-strong"><?= h($row['serial_number'] ?? 'Belum ada SN') ?></span></span>
                                                     <span class="meta-line"><i class="bi bi-person me-2 text-muted"></i> User: <span class="meta-strong"><?= h($row['pemilik_barang'] ?? 'Belum ada User') ?></span></span>
                                                     <?php if (!empty($row['catatan_user'])): ?>
@@ -420,9 +505,13 @@ $q = mysqli_query($koneksi, "
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
-                                                    <?php if ($canApprove): ?>
-                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Konfirmasi Terima Barang">
-                                                            <i class="bi bi-check2-all me-1"></i> Terima Barang
+                                                    <?php if ($canApprove && !$isAntarCabang): ?>
+                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Konfirmasi Terima Barang HO">
+                                                            <i class="bi bi-check2-all me-1"></i> Terima di HO
+                                                        </button>
+                                                    <?php elseif ($canApprove && $isAntarCabang): ?>
+                                                        <button class="btn btn-modern btnApproveCabang" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Setujui Pengiriman Antar Cabang">
+                                                            <i class="bi bi-send-check me-1"></i> Setujui Antar Cabang
                                                         </button>
                                                     <?php else: ?>
                                                         <!-- Status Selesai (Meskipun query men-filter ini, dibiarkan sbg fallback) -->
@@ -439,7 +528,7 @@ $q = mysqli_query($koneksi, "
                                                 <div class="empty-state">
                                                     <i class="bi bi-inbox"></i>
                                                     <div class="empty-state-title">Tidak ada pengiriman tertunda</div>
-                                                    <div class="empty-state-desc">Saat ini tidak ada barang dari cabang yang menunggu persetujuan penerimaan di HO Jakarta.</div>
+                                                    <div class="empty-state-desc">Saat ini tidak ada pengajuan pengiriman cabang yang menunggu persetujuan admin.</div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -499,6 +588,40 @@ $q = mysqli_query($koneksi, "
                         contentDiv.innerHTML = '<div class="alert alert-danger">Gagal memuat form penerimaan.</div>';
                     });
             }
+        });
+
+        document.addEventListener('click', function(e) {
+            const cabangBtn = e.target.closest('.btnApproveCabang');
+            if (!cabangBtn) return;
+
+            const id = cabangBtn.getAttribute('data-id');
+            Swal.fire({
+                title: 'Setujui Pengiriman Antar Cabang?',
+                text: 'Barang akan ditandai sedang perjalanan menuju cabang tujuan.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Setujui',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#E64312',
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+
+                const fd = new FormData();
+                fd.append('action', 'approve_antar_cabang');
+                fd.append('id_pengiriman', id);
+
+                fetch(window.location.href, { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({ icon: 'success', title: 'Berhasil', text: data.message, confirmButtonColor: '#E64312' })
+                                .then(() => location.reload());
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: data.message || 'Terjadi kesalahan.' });
+                        }
+                    })
+                    .catch(() => Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghubungi server.' }));
+            });
         });
 
         // 2. KETIKA FORM DI DALAM MODAL DI-SUBMIT

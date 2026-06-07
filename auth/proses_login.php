@@ -8,26 +8,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = (string) ($_POST['password'] ?? '');
 
     if ($login === '' || $password === '') {
-        set_flash('error', 'Username/Email dan Password wajib diisi.');
+        set_flash('error', 'Email dan Password wajib diisi.');
         redirect_to(base_url('auth/login.php'));
     }
 
-    // Cek user berdasarkan username ATAU email
-    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE BINARY username = ? OR BINARY email = ? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, 'ss', $login, $login);
+    if (!filter_var($login, FILTER_VALIDATE_EMAIL)) {
+        set_flash('error', 'Format email tidak valid.');
+        redirect_to(base_url('auth/login.php'));
+    }
+
+    // Cek user berdasarkan email
+    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE BINARY email = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, 's', $login);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
     $user   = mysqli_fetch_assoc($result);
     mysqli_stmt_close($stmt);
 
     if (!$user) {
-        set_flash('error', 'Username atau email tidak ditemukan.');
+        set_flash('error', 'Email tidak terdaftar.');
         redirect_to(base_url('auth/login.php'));
     }
 
     // Verifikasi hash password
     if (!password_verify($password, $user['password'])) {
         set_flash('error', 'Password salah.');
+        redirect_to(base_url('auth/login.php'));
+    }
+
+    if (!is_employment_active($user['employment_status'] ?? 'active')) {
+        set_flash('error', 'Akun Anda sudah dinonaktifkan karena status tidak bekerja lagi. Hubungi administrator HO.');
         redirect_to(base_url('auth/login.php'));
     }
 
@@ -38,7 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email'                => $user['email'],
         'role'                 => $user['role'],
         'id_branch'            => $user['id_branch'],
-        'must_change_password' => (int) $user['must_change_password']
+        'must_change_password' => (int) $user['must_change_password'],
+        'employment_status'    => normalize_employment_status($user['employment_status'] ?? 'active'),
     ];
 
     // ============================================================

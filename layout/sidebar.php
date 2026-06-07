@@ -1,6 +1,7 @@
 <?php
 /** @var mysqli $koneksi */ 
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/warranty_helper.php';
 
 if (!function_exists('h')) {
     function h($value) {
@@ -41,10 +42,20 @@ $isMonitoringPage = isMenuActive('/monitoring/');
 $monitoringMenuActive = $isMonitoringPage;
 $isUsersPage = strpos($currentPath, '/users/index.php') !== false || strpos($currentPath, '/users/create.php') !== false || strpos($currentPath, '/users/edit.php') !== false;
 $isAccessPage = strpos($currentPath, '/users/role_permissions.php') !== false || strpos($currentPath, '/users/user_permissions.php') !== false;
-$adminMenuActive = $isUsersPage || $isAccessPage;
+$isActivityLogPage = isMenuActive('/users/activity_log.php');
+$adminMenuActive = $isUsersPage || $isAccessPage || $isActivityLogPage;
 
 $pendingResetCount = 0;
 $pendingHoShippingCount = 0;
+$sidebarNotifUnread = 0;
+
+if (isset($_SESSION['user']) && isset($koneksi)) {
+    $sidebarNotifUnread = count_unread_notifications(
+        $koneksi,
+        (string) ($_SESSION['user']['role'] ?? 'user'),
+        !empty($_SESSION['user']['id_branch']) ? (int) $_SESSION['user']['id_branch'] : null
+    );
+}
 
 if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin') {
     $stmtBadge = mysqli_prepare($koneksi, "SELECT COUNT(id) as total FROM password_reset_requests WHERE status = 'pending'");
@@ -298,6 +309,10 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                         <li><a href="<?= h(base_url('dashboard/index.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/') ? 'active' : '' ?>">
                             <span class="sidebar-icon"><i class="bi bi-house-door"></i></span><span>Dashboard</span></a>
                         </li>
+                        <li><a href="<?= h(base_url('dashboard/notifications.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/notifications.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-bell"></i></span><span>Notifikasi</span>
+                            <?php if ($sidebarNotifUnread > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $sidebarNotifUnread > 99 ? '99+' : $sidebarNotifUnread ?></span><?php endif; ?>
+                        </a></li>
                         <?php endif; ?>
                         <?php if (can('barang.view')): ?>
                         <li><a href="<?= h(base_url('Barang/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/') ? 'active' : '' ?>">
@@ -373,8 +388,8 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                         </a></li>
                         <?php endif; ?>
                         <?php if (can('users.view')): ?>
-                        <li><a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= isMenuActive('/users/activity_log.php') ? 'active' : '' ?>">
-                            <span class="sidebar-icon"><i class="bi bi-activity"></i></span><span>Activity Log</span></a>
+                        <li><a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= $isActivityLogPage ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-activity"></i></span><span>Monitoring & Aktivitas</span></a>
                         </li>
                         <?php endif; ?>
                         <?php if (can('role_permissions.manage')): ?>

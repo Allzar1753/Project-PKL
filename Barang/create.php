@@ -1,9 +1,11 @@
 <?php
-
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
-// require_once '../config/mail.php'; <-- SUDAH DIHAPUS/DIMATIKAN
+require_once '../config/activity_logger.php';
+require_once '../config/warranty_helper.php';
+require_once '../config/asset_code_helper.php';
+require_once '../config/validation_helper.php';
 
 require_admin();
 
@@ -72,16 +74,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_tipe       = (int) $_POST['id_tipe'];
     $id_jenis      = (int) $_POST['id_jenis'];
     $tanggal_terima = esc($koneksi, $_POST['tanggal_terima']);
-    $today = date('Y-m-d');
-    
-    if ($tanggal_terima < $today) {
-        echo json_encode(['status' => 'error', 'message' => 'Tanggal terima tidak boleh tanggal yang lampau']);
+
+    if (!is_date_within_back_tolerance($tanggal_terima, 3)) {
+        echo json_encode(['status' => 'error', 'message' => 'Tanggal terima hanya boleh diisi mulai 3 hari sebelum hari ini']);
         exit;
     }
     
     $bermasalah    = esc($koneksi, $_POST['bermasalah']);
     $id_branch     = (int) $_POST['id_branch'];
     $user          = esc($koneksi, $_POST['user']);
+
+    $nameError = validate_person_name($user);
+    if ($nameError !== null) {
+        echo json_encode(['status' => 'error', 'message' => $nameError]);
+        exit;
+    }
 
     $user_id_sistem = (int) current_user_id();
 
@@ -147,15 +154,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_status = ($bermasalah === 'Iya') ? 5 : 4;
     $statusField = 'Tersedia';
 
-    $queryBarang = "INSERT INTO barang (no_asset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id, status) 
-                    VALUES ('$no_asset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem', '$statusField')";
+    $tanggal_pembelian = esc($koneksi, $_POST['tanggal_pembelian'] ?? '');
+    if ($tanggal_pembelian === '') {
+        $tanggal_pembelian = $tanggal_terima;
+    }
+    $masa_garansi_bulan = normalize_warranty_months($_POST['masa_garansi_bulan'] ?? 12);
+    $tanggal_garansi_berakhir = compute_warranty_end_date($tanggal_pembelian, $masa_garansi_bulan);
+    $kode_aset = esc($koneksi, generate_kode_aset($koneksi, $id_barang, $tanggal_terima));
+
+    $queryBarang = "INSERT INTO barang (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id, status) 
+                    VALUES ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem', '$statusField')";
 
     mysqli_begin_transaction($koneksi);
     try {
         if (!mysqli_query($koneksi, $queryBarang)) throw new Exception(mysqli_error($koneksi));
         mysqli_commit($koneksi);
 
-        echo json_encode(['status' => 'success', 'message' => 'Data barang berhasil ditambahkan!']);
+        log_activity($koneksi, 'create_barang', "Tambah barang baru - Kode: {$kode_aset}, Serial: {$serial_number}, Cabang: {$id_branch}", [
+            'kode_aset' => $kode_aset,
+            'serial_number' => $serial_number,
+            'no_asset' => $no_asset,
+            'id_barang' => $id_barang,
+            'id_branch' => $id_branch,
+            'bermasalah' => $bermasalah
+        ]);
+
+        echo json_encode(['status' => 'success', 'message' => "Data barang berhasil ditambahkan! Kode Asset: {$kode_aset}"]);
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
         echo json_encode(['status' => 'error', 'message' => 'Gagal simpan: ' . $e->getMessage()]);
@@ -164,21 +188,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 
-<!-- STYLE KHUSUS UNTUK FORM INI AGAR SINKRON DENGAN TEMA HEXINDO -->
 <style>
-    /* 1. Mengatur jarak vertikal antar form input */
+    /* FIX: Mencegah dropdown Select2 yang ada di bagian bawah terpotong oleh batas modal */
+    .modal-content {
+        overflow: visible !important; 
+    }
+
+    /* Mengatur jarak vertikal antar form input */
     #formCreate .col-md-6, 
     #formCreate .col-md-12 {
         margin-bottom: 1.2rem;
     }
 
-    /* 2. Menyamakan tinggi Input Teks biasa */
     .form-control {
         border: 1px solid #E0E4E8;
         border-radius: 6px;
         padding: 0.5rem 0.75rem;
         font-size: 0.95rem;
-        min-height: 42px; /* Tinggi standar agar sama dengan dropdown */
+        min-height: 42px; 
         box-shadow: none !important;
     }
     .form-control:focus {
@@ -186,30 +213,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         box-shadow: 0 0 0 0.25rem rgba(230, 67, 18, 0.1) !important;
     }
 
-    /* 3. Menyamakan tinggi Select2 (Dropdown) agar sejajar dengan Input Teks */
+    /* Menyamakan tinggi Select2 (Dropdown) agar sejajar dengan Input Teks */
     .select2-container .select2-selection--single {
         border: 1px solid #E0E4E8 !important;
         border-radius: 6px !important;
-        height: 42px !important; /* Samakan tingginya */
+        height: 42px !important; 
         display: flex !important;
         align-items: center !important;
         padding: 0.2rem 0.5rem;
         box-shadow: none !important;
     }
     
-    /* Memperbaiki posisi panah dropdown Select2 */
     .select2-container--default .select2-selection--single .select2-selection__arrow {
         height: 40px !important;
         right: 8px !important;
     }
     
-    /* Memperbaiki posisi tombol "X" (clear) pada Select2 */
     .select2-selection__clear {
         margin-right: 15px;
         font-size: 1.2rem;
     }
 
-    /* 4. Merapikan Label */
     .form-label {
         font-weight: 600;
         color: #333333;
@@ -218,12 +242,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         display: block;
     }
     
-    /* Bintang merah wajib isi */
     .text-danger {
         font-weight: bold;
     }
 
-    /* 5. Catatan Info */
     .alert-info-custom {
         background-color: #F0F7FF;
         border-left: 4px solid #0066CC;
@@ -234,7 +256,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         margin-bottom: 0.5rem;
     }
 
-    /* 6. Tombol Hexindo */
     .btn-hexindo {
         background-color: #E64312;
         color: white;
@@ -247,6 +268,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .btn-hexindo:hover {
         background-color: #F25C05;
         color: white;
+    }
+     .select2-container--open {
+        z-index: 9999999 !important;
     }
 </style>
 
@@ -261,6 +285,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="col-md-6">
+            <label class="form-label">Kode Asset (Otomatis)</label>
+            <input type="text" class="form-control bg-light" value="HXI-KATEGORI-TAHUN-00001" readonly disabled>
+            <small class="text-muted">Dibuat otomatis saat simpan.</small>
+        </div>
+
+        <div class="col-md-6">
             <label class="form-label">No Asset</label>
             <input type="text" name="no_asset" class="form-control" placeholder="Boleh dikosongkan (Otomatis untuk CPU/Monitor)">
         </div>
@@ -272,7 +302,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label class="form-label">Kategori Barang <span class="text-danger">*</span></label>
-            <select name="id_barang" id="id_barang" class="form-control select2" required>
+            <!-- FIX: Atribut 'required' pada Select2 dihapus agar tidak menyebabkan silent form block. Validasi akan dicover oleh backend (SweetAlert) -->
+            <select name="id_barang" id="id_barang" class="form-control select2">
                 <option value="">Pilih Kategori...</option>
                 <?php mysqli_data_seek($barang, 0);
                 while ($row = mysqli_fetch_assoc($barang)): ?>
@@ -283,21 +314,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label class="form-label">Merk Barang <span class="text-danger">*</span></label>
-            <select name="id_merk" id="id_merk" class="form-control select2" required>
+            <select name="id_merk" id="id_merk" class="form-control select2">
                 <option value="">Pilih Kategori Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
             <label class="form-label">Tipe / Spesifikasi <span class="text-danger">*</span></label>
-            <select name="id_tipe" id="id_tipe" class="form-control select2" required>
+            <select name="id_tipe" id="id_tipe" class="form-control select2">
                 <option value="">Pilih Merk Dulu...</option>
             </select>
         </div>
 
         <div class="col-md-6">
             <label class="form-label">Jenis Kepemilikan <span class="text-danger">*</span></label>
-            <select name="id_jenis" class="form-control select2" required>
+            <select name="id_jenis" id="id_jenis" class="form-control select2">
                 <option value="">Pilih Jenis...</option>
                 <?php mysqli_data_seek($jenis, 0);
                 while ($row = mysqli_fetch_assoc($jenis)): ?>
@@ -308,12 +339,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label class="form-label">Tanggal Terima <span class="text-danger">*</span></label>
-            <input type="date" name="tanggal_terima" class="form-control" required min="<?= date('Y-m-d') ?>">
+            <input type="date" name="tanggal_terima" class="form-control" required min="<?= date_min_back_tolerance(3) ?>">
+            <small class="text-muted">Boleh diisi hingga 3 hari sebelum hari ini.</small>
+        </div>
+
+        <div class="col-12"><hr class="my-1"><div class="fw-semibold text-muted small mb-2"><i class="bi bi-shield-check me-1"></i> Informasi Garansi Produk</div></div>
+
+        <div class="col-md-4">
+            <label class="form-label">Tanggal Pembelian</label>
+            <input type="date" name="tanggal_pembelian" id="tanggal_pembelian" class="form-control">
+            <small class="text-muted">Kosongkan = sama dengan tanggal terima</small>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Masa Garansi</label>
+            <select name="masa_garansi_bulan" id="masa_garansi_bulan" class="form-control">
+                <option value="6">6 Bulan</option>
+                <option value="12" selected>12 Bulan (1 Tahun)</option>
+                <option value="24">24 Bulan (2 Tahun)</option>
+                <option value="36">36 Bulan (3 Tahun)</option>
+                <option value="48">48 Bulan (4 Tahun)</option>
+                <option value="60">60 Bulan (5 Tahun)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Garansi Berakhir</label>
+            <input type="text" id="preview_garansi_berakhir" class="form-control bg-light" readonly placeholder="Otomatis dihitung">
         </div>
 
         <div class="col-md-6">
             <label class="form-label">Lokasi Branch <span class="text-danger">*</span></label>
-            <select name="id_branch" class="form-control select2" required>
+            <!-- FIX: Menambahkan id="id_branch" dan menghapus atribut required -->
+            <select name="id_branch" id="id_branch" class="form-control select2">
                 <option value="">Pilih Branch...</option>
                 <?php mysqli_data_seek($branch, 0);
                 while ($row = mysqli_fetch_assoc($branch)): ?>
@@ -329,7 +385,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-6">
             <label class="form-label">Apakah Barang Bermasalah? <span class="text-danger">*</span></label>
-            <select name="bermasalah" class="form-control select2" id="bermasalahSelect" required>
+            <!-- FIX: Menghapus atribut required untuk menghindari silent form validation lock -->
+            <select name="bermasalah" class="form-control select2" id="bermasalahSelect">
                 <option value="">Pilih Kondisi...</option>
                 <option value="Tidak">Tidak (Kondisi Normal)</option>
                 <option value="Iya">Iya (Rusak/Kendala)</option>
@@ -343,32 +400,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="col-md-12 border-top pt-3 mt-3">
             <label class="form-label">Upload Foto Fisik Barang <span class="text-danger">*</span></label>
-            <input type="file" name="foto" class="form-control" id="fotoInput" accept=".jpg,.jpeg,.png,.gif,.webp">
+            <input type="file" name="foto" class="form-control" id="fotoInput" required accept=".jpg,.jpeg,.png,.gif,.webp">
             <div class="mt-2 text-muted small">Format: JPG, PNG, WEBP. Maksimal 2MB.</div>
             <img id="previewFoto" class="shadow-sm border mt-3" style="max-height: 150px; display: none; border-radius: 8px; object-fit: cover;">
         </div>
 
-        <!-- Bagian Tombol Simpan -->
         <div class="col-md-12 text-end mt-4 pt-3 border-top">
-            <!-- Tombol Batal untuk menutup modal -->
             <button type="button" class="btn btn-light border px-4 me-2 rounded-2" data-bs-dismiss="modal">Batal</button>
-            <!-- Tombol Simpan (Tema Hexindo) -->
             <button type="submit" class="btn btn-hexindo" id="btnSimpanBarang">
                 <span class="btn-text"><i class="bi bi-floppy me-1"></i> Simpan Data Aset</span>
-                <span class="btn-loading d-none">
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Menyimpan...
-                </span>
             </button>
         </div>
     </div>
 </form>
 
-<!-- INI ADALAH SCRIPT JAVASCRIPT YANG MEMBUAT FUNGSINYA BERJALAN -->
 <script>
     $(document).ready(function() {
 
-        // 1. SCRIPT UNTUK KETERANGAN MASALAH
-        $('#bermasalahSelect').on('change', function() {
+        // 1. SCRIPT UNTUK KETERANGAN MASALAH (DIPERBARUI)
+        // FIX: Menggunakan $(document).on() agar event tidak hilang saat modal diload ulang
+        $(document).off('change', '#bermasalahSelect').on('change', '#bermasalahSelect', function() {
             if ($(this).val() === 'Iya') {
                 $('#keteranganMasalahDiv').slideDown();
                 $('textarea[name="keterangan_masalah"]').attr('required', true);
@@ -426,6 +477,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $('#id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
             }
         });
+
+        function refreshWarrantyPreview() {
+            const purchase = $('#tanggal_pembelian').val() || $('input[name="tanggal_terima"]').val();
+            const months = parseInt($('#masa_garansi_bulan').val() || '12', 10);
+            if (!purchase || months <= 0) {
+                $('#preview_garansi_berakhir').val('');
+                return;
+            }
+            const d = new Date(purchase);
+            d.setMonth(d.getMonth() + months);
+            $('#preview_garansi_berakhir').val(d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }));
+        }
+        $('input[name="tanggal_terima"], #tanggal_pembelian, #masa_garansi_bulan').on('change input', refreshWarrantyPreview);
 
     }); 
 </script>

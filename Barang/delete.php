@@ -2,6 +2,7 @@
 /** @var mysqli $koneksi */
 include '../config/koneksi.php';
 require_once '../config/auth.php';
+require_once '../config/activity_logger.php';
 
 // Hapus require_admin(); ganti dengan login check
 require_login(); 
@@ -50,6 +51,12 @@ $stmt = mysqli_prepare($koneksi, "DELETE FROM barang WHERE id = ?");
 mysqli_stmt_bind_param($stmt, 'i', $id);
 
 if (mysqli_stmt_execute($stmt)) {
+    // Log activity for delete
+    log_activity($koneksi, 'delete_barang', "Hapus barang - ID: {$id}, Branch: {$dataBarang['id_branch']}", [
+        'id_barang' => $id,
+        'id_branch' => $dataBarang['id_branch']
+    ]);
+
     echo json_encode(['status' => 'success', 'message' => 'Data berhasil dihapus']);
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Gagal menghapus: ' . mysqli_error($koneksi)]);

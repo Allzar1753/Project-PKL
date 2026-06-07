@@ -32,15 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
-    // --- VALIDASI KOMBINASI PASSWORD DI BACKEND (PHP) ---
-    // Cek minimal 8 karakter, ada huruf besar, huruf kecil, angka, dan simbol
-    if (strlen($newPassword) < 8 || 
-        !preg_match('/[A-Z]/', $newPassword) || 
-        !preg_match('/[a-z]/', $newPassword) || 
-        !preg_match('/[0-9]/', $newPassword) || 
-        !preg_match('/[^A-Za-z0-9]/', $newPassword)) {
-        
-        set_flash('error', 'Password gagal disimpan. Pastikan password minimal 8 karakter dan mengandung huruf besar, huruf kecil, angka, serta simbol.');
+    // --- VALIDASI KOMBINASI PASSWORD ---
+    require_once __DIR__ . '/../config/validation_helper.php';
+    $passwordError = validate_password_strength($newPassword);
+    if ($passwordError !== null) {
+        set_flash('error', $passwordError);
         redirect_to(base_url('auth/force_change_password.php'));
     }
 
@@ -124,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="<?= e(base_url('assets/css/password-fields.css')) ?>">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -365,28 +362,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: var(--orange-primary);
         }
 
-        .password-shell .form-control { padding-right: 3.2rem; }
-        .password-toggle {
-            position: absolute;
-            top: 50%;
-            right: 12px;
-            transform: translateY(-50%);
-            width: 32px;
-            height: 32px;
-            border: none;
-            background: transparent;
-            color: #9ca3af;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            z-index: 3;
-        }
-        .password-toggle:hover { background: var(--bg-body); color: var(--dark-main); }
-        .password-toggle:focus { outline: none; box-shadow: 0 0 0 2px rgba(230, 67, 18, 0.1); }
-
         /* Saran Password Box */
         .suggestion-box {
             background: var(--bg-body);
@@ -591,14 +566,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="input-shell password-shell">
                                 <i class="bi bi-lock-fill input-icon"></i>
                                 <input
-                                    type="password"
+                                    type="text"
                                     name="new_password"
                                     id="newPassword"
-                                    class="form-control"
+                                    class="form-control password-field pw-masked"
                                     required
                                     minlength="8"
                                     placeholder="Masukkan password baru"
-                                    autocomplete="new-password">
+                                    autocomplete="new-password"
+                                    spellcheck="false">
                                 <button type="button" class="password-toggle" data-target="newPassword" aria-label="Lihat password baru">
                                     <i class="bi bi-eye"></i>
                                 </button>
@@ -635,14 +611,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="input-shell password-shell">
                                 <i class="bi bi-check-circle-fill input-icon"></i>
                                 <input
-                                    type="password"
+                                    type="text"
                                     name="confirm_password"
                                     id="confirmPassword"
-                                    class="form-control"
+                                    class="form-control password-field pw-masked"
                                     required
                                     minlength="8"
                                     placeholder="Ulangi password baru"
-                                    autocomplete="new-password">
+                                    autocomplete="new-password"
+                                    spellcheck="false">
                                 <button type="button" class="password-toggle" data-target="confirmPassword" aria-label="Lihat konfirmasi password">
                                     <i class="bi bi-eye"></i>
                                 </button>
@@ -665,32 +642,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <script src="<?= e(base_url('assets/js/password-fields.js')) ?>"></script>
     <!-- SCRIPT LOGIKA CHECKLIST DAN VALIDASI -->
     <script>
         document.addEventListener('DOMContentLoaded', function () {
 
             // --- 1. Fungsi Membuat Password Acak Kuat ---
-            function generateStrongPassword() {
-                const uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-                const lowers = "abcdefghijklmnopqrstuvwxyz";
-                const numbers = "0123456789";
-                const symbols = "!@#$%^&*";
-                
-                let pass = "";
-                pass += uppers[Math.floor(Math.random() * uppers.length)];
-                pass += lowers[Math.floor(Math.random() * lowers.length)];
-                pass += numbers[Math.floor(Math.random() * numbers.length)];
-                pass += symbols[Math.floor(Math.random() * symbols.length)];
-                
-                const all = uppers + lowers + numbers + symbols;
-                for(let i=0; i<8; i++) {
-                    pass += all[Math.floor(Math.random() * all.length)];
-                }
-                
-                return pass.split('').sort(() => 0.5 - Math.random()).join('');
-            }
-
-            const suggestedPass = generateStrongPassword();
+            const suggestedPass = PasswordFields.generateStrongPassword();
             document.getElementById('suggestedPasswordTxt').textContent = suggestedPass;
 
             // Tombol "Gunakan Password Ini"
@@ -700,6 +658,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 newPassInput.type = 'text';
                 confPassInput.type = 'text';
+                newPassInput.classList.remove('pw-masked');
+                confPassInput.classList.remove('pw-masked');
 
                 newPassInput.value = suggestedPass;
                 confPassInput.value = suggestedPass;
@@ -713,25 +673,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 confPassInput.dispatchEvent(new Event('input'));
             });
 
-            // --- 2. Toggle password visibility (Mata) ---
-            document.querySelectorAll('.password-toggle').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    const targetId = this.getAttribute('data-target');
-                    const input    = document.getElementById(targetId);
-                    const icon     = this.querySelector('i');
-                    if (!input) return;
+            PasswordFields.init(document);
 
-                    const isPassword = input.type === 'password';
-                    input.type = isPassword ? 'text' : 'password';
-
-                    if (icon) {
-                        icon.classList.toggle('bi-eye',       !isPassword);
-                        icon.classList.toggle('bi-eye-slash',  isPassword);
-                    }
-                });
-            });
-
-            // --- 3. LOGIKA CHECKLIST ATURAN PASSWORD & STRENGTH BAR ---
+            // --- 2. LOGIKA CHECKLIST ATURAN PASSWORD & STRENGTH BAR ---
             const newPasswordInput = document.getElementById('newPassword');
             const strengthFill     = document.getElementById('strengthFill');
             
@@ -783,7 +727,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 strengthFill.style.background = level.color;
             });
 
-            // --- 4. LOGIKA KECOCOKAN PASSWORD (CONFIRM) ---
+            // --- 3. LOGIKA KECOCOKAN PASSWORD (CONFIRM) ---
             const confirmPasswordInput = document.getElementById('confirmPassword');
             const matchMsg             = document.getElementById('matchMsg');
             let isPasswordMatched      = false;
@@ -808,7 +752,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             newPasswordInput.addEventListener('input', checkMatch);
             confirmPasswordInput.addEventListener('input', checkMatch);
 
-            // --- 5. CEGAT SUBMIT FORM JIKA SYARAT BELUM TERPENUHI ---
+            // --- 4. CEGAT SUBMIT FORM JIKA SYARAT BELUM TERPENUHI ---
             document.getElementById('passwordForm').addEventListener('submit', function(e) {
                 if (!isPasswordStrong) {
                     e.preventDefault(); // Hentikan proses simpan

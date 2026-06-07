@@ -115,6 +115,11 @@ $cariInput   = trim((string)($_GET['cari']         ?? ''));
 
 if (!in_array($periode, ['minggu','bulan','tahun','custom'], true)) $periode = 'bulan';
 
+$allowed_limits = [5, 25, 50, 100];
+$limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
+if (!in_array($limit, $allowed_limits, true)) $limit = 25;
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+
 $range        = resolve_period_range($periode, $tahun, $bulan, $minggu, $customAwal, $customAkhir);
 $periodeLabel = $range['label'];
 $safeStart    = mysqli_real_escape_string($koneksi, $range['start']);
@@ -268,7 +273,14 @@ foreach ($groupedAssets as &$entry) {
 }
 unset($entry);
 
-$totalAsset = count($groupedAssets);
+$totalAsset  = count($groupedAssets);
+$total_rows  = $totalAsset;
+$total_pages = max(1, (int) ceil($total_rows / $limit));
+if ($page > $total_pages) $page = $total_pages;
+$offset = ($page - 1) * $limit;
+$from_row = $total_rows > 0 ? $offset + 1 : 0;
+$to_row   = min($offset + $limit, $total_rows);
+$groupedAssetsPage = array_slice($groupedAssets, $offset, $limit, true);
 
 // ==============================================================================
 // SUMMARY CARDS
@@ -488,6 +500,23 @@ $bulanOptions = [
         .empty-state i { display: block; font-size: 2.5rem; margin-bottom: 0.5rem; color: #d1d5db; }
         .empty-state span { font-weight: 600; }
         
+        /* Pagination & limit selector */
+        .report-list-head {
+            background: #fff;
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-xl);
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 1.25rem;
+            box-shadow: var(--shadow-soft);
+        }
+        .report-list-title { font-size: 1.05rem; font-weight: 700; color: var(--dark-1); margin-bottom: 0.15rem; }
+        .report-list-subinfo { font-size: 0.85rem; color: var(--text-soft); }
+        .limit-box { display: flex; align-items: center; gap: 0.5rem; background: #F9FAFB; border: 1px solid var(--border-soft); border-radius: 6px; padding: 0.3rem 0.5rem 0.3rem 0.8rem; }
+        .limit-box .form-select { border: none; background: transparent; font-weight: 600; padding: 0.2rem 1.5rem 0.2rem 0.5rem; color: var(--dark-1); box-shadow: none; min-height: auto; }
+        .limit-box .section-label { color: var(--text-soft); font-size: 0.85rem; font-weight: 600; margin: 0; }
+        .pagination .page-link { border-radius: 6px; color: var(--text-main); border: 1px solid var(--border-soft); padding: 0.5rem 0.8rem; font-weight: 600; margin: 0 2px; }
+        .pagination .page-item.active .page-link { background: var(--dark-1); border-color: var(--dark-1); color: #fff; }
+
         /* Utility */
         .no-print { /* Tetap biarkan untuk fungsi print out */ }
     </style>
@@ -535,6 +564,7 @@ $bulanOptions = [
                     </div>
                     <div class="card-body-custom">
                         <form method="GET" class="row g-3 align-items-end">
+                            <input type="hidden" name="limit" value="<?= (int) $limit ?>">
                             <div class="col-lg-2">
                                 <label class="form-label">Jenis Periode</label>
                                 <select name="periode" id="periodeFilter" class="form-select">
@@ -644,6 +674,33 @@ $bulanOptions = [
 
                 <!-- Report Content (Cards Aset) -->
                 <div class="report-card">
+                    <div class="report-list-head no-print">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            <div>
+                                <div class="report-list-title"><i class="bi bi-journal-text me-2" style="color: var(--orange-1);"></i>Daftar Laporan Aset</div>
+                                <div class="report-list-subinfo">Menampilkan <?= $from_row ?> - <?= $to_row ?> dari <?= $total_rows ?> aset</div>
+                            </div>
+                            <form method="GET" class="mb-0">
+                                <input type="hidden" name="periode"      value="<?= h($range['periode']) ?>">
+                                <input type="hidden" name="tahun"        value="<?= h($tahun) ?>">
+                                <input type="hidden" name="bulan"        value="<?= h($bulan) ?>">
+                                <input type="hidden" name="minggu"       value="<?= h($minggu) ?>">
+                                <input type="hidden" name="custom_awal"  value="<?= h($customAwal) ?>">
+                                <input type="hidden" name="custom_akhir" value="<?= h($customAkhir) ?>">
+                                <input type="hidden" name="cari"         value="<?= h($cariInput) ?>">
+                                <div class="limit-box">
+                                    <span class="section-label">Baris:</span>
+                                    <select name="limit" onchange="this.form.submit()" class="form-select form-select-sm">
+                                        <option value="5"   <?= $limit === 5   ? 'selected' : '' ?>>5</option>
+                                        <option value="25"  <?= $limit === 25  ? 'selected' : '' ?>>25</option>
+                                        <option value="50"  <?= $limit === 50  ? 'selected' : '' ?>>50</option>
+                                        <option value="100" <?= $limit === 100 ? 'selected' : '' ?>>100</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                     <div>
                         <?php if (empty($groupedAssets)): ?>
                             <div class="empty-state">
@@ -651,7 +708,7 @@ $bulanOptions = [
                                 <span>Tidak ada data laporan logistik pada rentang tanggal ini.</span>
                             </div>
                         <?php else: ?>
-                            <?php foreach ($groupedAssets as $entry): ?>
+                            <?php foreach ($groupedAssetsPage as $entry): ?>
                                 <?php $asset = $entry['asset']; ?>
                                 <div class="asset-card">
 
@@ -803,6 +860,30 @@ $bulanOptions = [
                                     </div>
                                 </div>
                             <?php endforeach; ?>
+
+                            <?php if ($total_pages > 1): ?>
+                                <div class="p-3 bg-white border rounded-3 d-flex justify-content-end no-print" style="border-color: var(--border-soft) !important;">
+                                    <nav>
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                                    <a class="page-link" href="<?= h(build_url([
+                                                        'periode'      => $range['periode'],
+                                                        'tahun'        => $tahun,
+                                                        'bulan'        => $bulan,
+                                                        'minggu'       => $minggu,
+                                                        'custom_awal'  => $customAwal,
+                                                        'custom_akhir' => $customAkhir,
+                                                        'cari'         => $cariInput,
+                                                        'page'         => $i,
+                                                        'limit'        => $limit,
+                                                    ])) ?>"><?= $i ?></a>
+                                                </li>
+                                            <?php endfor; ?>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>

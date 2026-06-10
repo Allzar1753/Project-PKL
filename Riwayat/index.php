@@ -76,7 +76,7 @@ $page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 // ==============================================================================
 // QUERY BUILDER — UNION kedua tabel pengiriman
 // ==============================================================================
-$penerimaHO = 'Pak Deni';
+$penerimaHO = 'DENI PRATAMA';
 
 $search = mysqli_real_escape_string($koneksi, $search_input);
 $safeAwal  = mysqli_real_escape_string($koneksi, $tanggalAwal);

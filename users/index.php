@@ -364,7 +364,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'reset_password_request') {
         $requestId   = (int) ($_POST['request_id'] ?? 0);
-        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $newPassword = trim((string) ($_POST['new_password'] ?? '')); // Ditrim agar tidak ada spasi bocor
         $adminId     = (int) current_user_id();
 
         if ($requestId <= 0 || $newPassword === '') {
@@ -378,13 +378,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect_users_index();
         }
 
-        // Ambil data request
+        // Ambil data request + data user (username & email)
         $stmtReq = mysqli_prepare(
             $koneksi,
-            "SELECT prr.id, prr.user_id
-         FROM password_reset_requests prr
-         WHERE prr.id = ? AND prr.status = 'pending'
-         LIMIT 1"
+            "SELECT prr.id, prr.user_id, u.username, u.email
+             FROM password_reset_requests prr
+             JOIN users u ON prr.user_id = u.id
+             WHERE prr.id = ? AND prr.status = 'pending'
+             LIMIT 1"
         );
         mysqli_stmt_bind_param($stmtReq, 'i', $requestId);
         mysqli_stmt_execute($stmtReq);
@@ -405,43 +406,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_begin_transaction($koneksi);
 
         try {
-            // Update password user + set must_change_password = 1
+            // Update password user
             $stmtUpdateUser = mysqli_prepare(
                 $koneksi,
                 "UPDATE users
-             SET password = ?,
-                 must_change_password = ?,
-                 password_reset_at = ?,
-                 password_reset_by = ?
-             WHERE id = ?"
+                 SET password = ?,
+                     must_change_password = ?,
+                     password_reset_at = ?,
+                     password_reset_by = ?
+                 WHERE id = ?"
             );
-            mysqli_stmt_bind_param(
-                $stmtUpdateUser,
-                'sisii',
-                $hash,
-                $mustChange,
-                $now,
-                $adminId,
-                $targetUserId
-            );
+            mysqli_stmt_bind_param($stmtUpdateUser, 'sisii', $hash, $mustChange, $now, $adminId, $targetUserId);
             mysqli_stmt_execute($stmtUpdateUser);
             mysqli_stmt_close($stmtUpdateUser);
 
-            // Update status request → selesai
+            // Update status request menjadi selesai
             $stmtUpdateReq = mysqli_prepare(
                 $koneksi,
                 "UPDATE password_reset_requests
-             SET status = 'selesai',
-                 processed_by = ?,
-                 processed_at = ?
-             WHERE id = ?"
+                 SET status = 'selesai',
+                     processed_by = ?,
+                     processed_at = ?
+                 WHERE id = ?"
             );
             mysqli_stmt_bind_param($stmtUpdateReq, 'isi', $adminId, $now, $requestId);
             mysqli_stmt_execute($stmtUpdateReq);
             mysqli_stmt_close($stmtUpdateReq);
 
             mysqli_commit($koneksi);
-            set_flash('success', 'Password user berhasil direset. User wajib ganti password saat login.');
+
+            // =========================================================
+            // TRIGGER UNTUK MEMUNCULKAN POP-UP SUKSES
+            // =========================================================
+            stash_user_credentials_flash([[
+                'username' => $reqData['username'], 
+                'email'    => $reqData['email'],
+                'password' => $newPassword,
+            ]]);
+            
+            // Set tanda bahwa ini adalah popup dari proses RESET
+            $_SESSION['popup_type'] = 'reset';
+
+            set_flash('success', 'Password user berhasil direset.');
         } catch (Throwable $e) {
             mysqli_rollback($koneksi);
             set_flash('error', 'Gagal memproses reset password.');
@@ -2500,8 +2506,105 @@ function employment_badge_class(?string $status): string
             });
         });
 
+        <?php 
+        $popupType = $_SESSION['popup_type'] ?? 'create';
+        unset($_SESSION['popup_type']); 
+        ?>
+
         <?php if ($userCredentialsFlash): ?>
+        // 1. Munculkan modal bawaan sistem
         PasswordFields.showCredentialsModal(<?= $userCredentialsFlash ?>);
+        
+        <?php if ($popupType === 'reset'): ?>
+        // 2. Jika ini aksi RESET, perbaiki tampilan & tombol salin
+        setTimeout(function() {
+            const modal = document.querySelector('.swal2-popup');
+            if (!modal) return;
+
+            // -- UBAH JUDUL --
+            const title = modal.querySelector('.swal2-title, h2');
+            if (title) title.textContent = 'Password Berhasil Direset';
+
+            // -- UBAH DESKRIPSI (Tanpa merusak fungsi tombol) --
+            // Kita cari elemen teks spesifik tanpa menyentuh tombol di bawahnya
+            const allElements = modal.querySelectorAll('*');
+            allElements.forEach(el => {
+                if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) { // Hanya elemen berisi teks
+                    if (el.textContent.includes('Salin email dan password berikut')) {
+                        el.textContent = 'Salin email dan password baru berikut untuk diberikan ke user.';
+                    }
+                }
+            });
+
+            // -- SEMBUNYIKAN USERNAME & AMBIL NILAI INPUT --
+            let emailValue = '';
+            let passValue = '';
+
+            const labels = modal.querySelectorAll('label, div.mb-3, div.mb-2');
+            labels.forEach(function(label) {
+                const text = label.textContent.trim().toLowerCase();
+                
+                // Sembunyikan Username
+                if (text.includes('username')) {
+                    if (label.parentElement && label.tagName === 'LABEL') {
+                        label.parentElement.style.display = 'none'; 
+                    } else {
+                        label.style.display = 'none';
+                    }
+                }
+                
+                // Ambil nilai Email untuk dicopy
+                if (text.includes('email')) {
+                    const input = label.parentElement.querySelector('input') || label.querySelector('input');
+                    if (input) emailValue = input.value;
+                }
+                
+                // Ambil nilai Password untuk dicopy
+                if (text.includes('password')) {
+                    const input = label.parentElement.querySelector('input') || label.querySelector('input');
+                    if (input) passValue = input.value;
+                }
+            });
+
+            // -- PERBAIKI TOMBOL SALIN SEMUA --
+            // Cari tombol yang mengandung teks "Salin"
+            const buttons = modal.querySelectorAll('button');
+            let copyBtn = Array.from(buttons).find(btn => btn.textContent.toLowerCase().includes('salin'));
+
+            if (copyBtn) {
+                // Kloning tombol untuk membersihkan fungsi klik bawaan yang rusak/lama
+                const newCopyBtn = copyBtn.cloneNode(true);
+                copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+
+                // Buat fungsi salin yang baru dan bersih (Hanya Email & Password)
+                newCopyBtn.addEventListener('click', function() {
+                    // Fallback ambil value realtime jika telat terload
+                    const inputs = modal.querySelectorAll('input');
+                    const finalEmail = emailValue || (inputs[1] ? inputs[1].value : '');
+                    const finalPass = passValue || (inputs[2] ? inputs[2].value : '');
+
+                    const textToCopy = `Email: ${finalEmail}\nPassword: ${finalPass}`;
+
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        // Animasi sukses
+                        const originalHtml = newCopyBtn.innerHTML;
+                        newCopyBtn.innerHTML = '<i class="bi bi-check2-circle"></i> Tersalin!';
+                        newCopyBtn.style.backgroundColor = '#059669'; // Warna hijau sukses
+                        newCopyBtn.style.color = 'white';
+                        newCopyBtn.style.border = 'none';
+
+                        setTimeout(() => {
+                            newCopyBtn.innerHTML = originalHtml;
+                            newCopyBtn.style = ''; // Kembalikan style semula
+                        }, 2000);
+                    }).catch(err => {
+                        alert('Gagal menyalin. Silakan blok teks dan copy secara manual.');
+                    });
+                });
+            }
+
+        }, 50);
+        <?php endif; ?>
         <?php endif; ?>
         // Batasi input username hanya huruf
             document.addEventListener('input', function(e) {

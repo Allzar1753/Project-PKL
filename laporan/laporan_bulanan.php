@@ -126,7 +126,7 @@ $safeStart    = mysqli_real_escape_string($koneksi, $range['start']);
 $safeEnd      = mysqli_real_escape_string($koneksi, $range['end']);
 $safeCari     = mysqli_real_escape_string($koneksi, $cariInput);
 
-$penerimaHO = 'Pak Deni';
+$penerimaHO = 'DENI PRATAMA';
 
 // ==============================================================================
 // KONDISI WHERE PER ROLE

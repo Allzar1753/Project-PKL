@@ -273,7 +273,7 @@
 
             <div class="title">Tanda Terima Pengiriman Barang</div>
 
-            <!-- TABEL BARANG LEBIH LEGA -->
+<!-- TABEL BARANG LEBIH LEGA -->
             <table class="tbl-barang">
                 <thead>
                     <tr>
@@ -285,28 +285,31 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td class="td-center">1</td>
-                        <td><?php echo htmlspecialchars($_GET['description'][0] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($_GET['hostname'][0] ?? ''); ?></td>
-                        <td class="td-center"><?php echo htmlspecialchars($_GET['qty'] ?? '1'); ?></td>
-                        <td class="td-center"><?php echo htmlspecialchars($_GET['catatan'] ?? ''); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="td-center">2</td>
-                        <td></td><td></td><td></td><td></td>
-                    </tr>
-                    <tr>
-                        <td class="td-center">3</td>
-                        <td></td><td></td><td></td><td></td>
-                    </tr>
-                    <tr>
-                        <td class="td-center">4</td>
-                        <td></td><td></td><td></td><td></td>
-                    </tr>
+                    <?php 
+                    // Tangkap Data Array
+                    $descriptions = $_GET['description'] ?? [];
+                    $hostnames = $_GET['hostname'] ?? [];
+                    $qtys = $_GET['qty'] ?? [];
+                    $catatans = $_GET['catatan_array'] ?? [];
+                    
+                    // Kita looping minimal 4 kali agar tabel tetap tinggi dan rapi (SOP Hexindo)
+                    $totalItems = count($descriptions);
+                    $rowCount = max(4, $totalItems);
+                    
+                    for ($i = 0; $i < $rowCount; $i++): 
+                        // Jika baris ini ada isinya, kita tampilkan. Jika tidak, kosongkan.
+                        $adaIsi = ($i < $totalItems);
+                    ?>
+                        <tr>
+                            <td class="td-center"><?= $adaIsi ? ($i + 1) : '&nbsp;' ?></td>
+                            <td><?= $adaIsi ? htmlspecialchars($descriptions[$i] ?? '') : '' ?></td>
+                            <td><?= $adaIsi ? htmlspecialchars($hostnames[$i] ?? '') : '' ?></td>
+                            <td class="td-center"><?= $adaIsi ? htmlspecialchars($qtys[$i] ?? '1') : '' ?></td>
+                            <td class="td-center"><?= $adaIsi ? htmlspecialchars($catatans[$i] ?? '-') : '' ?></td>
+                        </tr>
+                    <?php endfor; ?>
                 </tbody>
             </table>
-
             <!-- INFO & TANGGAL SEJAJAR (Efisiensi ruang vertikal) -->
             <div class="bottom-wrap">
                 <table class="info-box">
@@ -339,6 +342,11 @@
                     <th>PENGIRIM</th>
                 </tr>
                 <tr>
+                    <?php 
+                    // Tangkap nama ekspedisi dari URL (Dikirim oleh JavaScript)
+                    $namaEkspedisi = strtoupper(htmlspecialchars($_GET['ekspedisi'] ?? 'NAMA JELAS KURIR')); 
+                    ?>
+                    
                     <?php if ($isAdmin): ?>
                         <!-- HO -> CABANG -->
                         <td>
@@ -348,7 +356,8 @@
                         </td>
                         <td>
                             <span class="sig-line"></span>
-                            ( NAMA JELAS KURIR )
+                            <!-- Menampilkan Nama Ekspedisi di sini -->
+                            <strong><?= $namaEkspedisi ?></strong>
                         </td>
                         <td>
                             <span class="sig-line"></span>
@@ -364,7 +373,8 @@
                         </td>
                         <td>
                             <span class="sig-line"></span>
-                            ( NAMA JELAS KURIR )
+                            <!-- Menampilkan Nama Ekspedisi di sini -->
+                            <strong><?= $namaEkspedisi ?></strong>
                         </td>
                         <td>
                             <span class="sig-line"></span>

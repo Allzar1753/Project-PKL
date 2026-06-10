@@ -657,12 +657,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                 </div>
                             </div>
 
-                            <!-- Tabel Daftar Barang (Desain Bersih) -->
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <label class="modern-label mb-0"><i class="bi bi-box"></i> Detail Barang yang Dikirim</label>
-                                <button type="button" id="btnAddRow" class="btn btn-sm btn-modern-outline"><i class="bi bi-plus"></i> Tambah Baris</button>
-                            </div>
+                            <!-- CONTAINER LIST CHECKBOX ASET & TABEL DINAMIS -->
+                            <?php
+                            $idLokasiLogin = (int) current_user_branch_id(); 
                             
+                            // Ambil nama pemilik dari aset utama dan bersihkan karakternya
+                            $pemilikSaatIni = mysqli_real_escape_string($koneksi, $pemilikBarang);
+                            
+                            $qAset = mysqli_query($koneksi, "
+                                SELECT b.id, b.serial_number, b.no_asset, m.nama_merk, t.nama_tipe 
+                                FROM barang b 
+                                LEFT JOIN tb_merk m ON b.id_merk = m.id_merk 
+                                LEFT JOIN tb_tipe t ON b.id_tipe = t.id_tipe 
+                                WHERE b.id_branch = $idLokasiLogin 
+                                  AND b.id_status = 4 
+                                  AND b.id != {$barang['id']}
+                                  AND b.user = '$pemilikSaatIni' 
+                            ");
+                            ?>
+                            <div class="col-12 mt-3 mb-3 border-top pt-3">
+                                <label class="modern-label mb-2"><i class="bi bi-ui-checks-grid me-1"></i> Pilih Aset Tambahan (Opsional)</label>
+                                <div class="row g-2" style="max-height: 250px; overflow-y: auto; overflow-x: hidden;">
+                                    
+                                    <!-- Aset Utama (Otomatis Tercentang & Terkunci) -->
+                                    <div class="col-md-6">
+                                        <label class="d-flex align-items-center p-2 border rounded" style="background-color: #fffaf8; border-color: #E64312 !important;">
+<input type="checkbox" class="check-aset-kirim aset-utama me-2" checked onclick="return false;"                                                value="<?= h($barang['id']) ?>" 
+                                                data-sn="<?= h($barang['serial_number']) ?>" 
+                                                data-desc="<?= h($deskripsiAuto) ?>">
+                                            <div class="w-100">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="fw-bold text-dark" style="font-size:0.85rem;"><?= h($deskripsiAuto) ?></div>
+                                                    <span class="badge bg-danger" style="font-size:0.65rem;">Aset Utama</span>
+                                                </div>
+                                                <div class="text-muted" style="font-size:0.75rem;">SN: <?= h($barang['serial_number']) ?></div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    <!-- Daftar Aset Tersedia Lainnya -->
+                                    <?php while($ast = mysqli_fetch_assoc($qAset)): 
+                                        $merkA = trim(strtoupper($ast['nama_merk'] ?? ''));
+                                        $tipeA = trim(strtoupper($ast['nama_tipe'] ?? ''));
+                                        $descA = (strpos($tipeA, $merkA) === 0) ? $tipeA : $merkA . ' ' . $tipeA;
+                                        $noAsstDisplay = $ast['no_asset'] ? $ast['no_asset'] : '-';
+                                    ?>
+                                    <div class="col-md-6">
+                                        <label class="d-flex align-items-center p-2 border rounded" style="cursor: pointer;">
+                                            <input type="checkbox" class="check-aset-kirim me-2" 
+                                                value="<?= h($ast['id']) ?>" 
+                                                data-sn="<?= h($ast['serial_number']) ?>" 
+                                                data-desc="<?= h($descA) ?>">
+                                            <div class="w-100">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="fw-bold text-dark" style="font-size:0.85rem;"><?= h($descA) ?></div>
+                                                    <span class="badge bg-secondary" style="font-size:0.65rem;">Asset: <?= h($noAsstDisplay) ?></span>
+                                                </div>
+                                                <div class="text-muted" style="font-size:0.75rem;">SN: <?= h($ast['serial_number']) ?></div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <?php endwhile; ?>
+                                </div>
+                            </div>
+
+                            <!-- Tabel Daftar Barang (Read-Only JS) -->
                             <div class="modern-table-wrapper mb-4">
                                 <table class="table modern-table" id="receipt_table">
                                     <thead>
@@ -672,18 +731,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                             <th style="width:25%;">Hostname (SN)</th>
                                             <th style="width:10%; text-align:center;">Qty</th>
                                             <th style="width:20%;">Catatan</th>
-                                            <th style="width:5%; text-align:center;"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td class="text-center align-middle row-no fw-bold text-muted">1</td>
-                                            <td><input type="text" class="table-input row-desc text-uppercase" placeholder="Deskripsi barang..." value="<?= h($deskripsiAuto) ?>"></td>
-                                            <td><input type="text" class="table-input row-host text-uppercase" placeholder="Hostname / SN..."></td>
-                                            <td><input type="number" id="receipt_qty" class="table-input text-center fw-bold" value="1" min="1" required></td>
-                                            <td><input type="text" id="receipt_catatan" class="table-input text-uppercase" placeholder="Catatan opsional..."></td>
-                                            <td class="text-center align-middle"><button type="button" class="btn-remove-row-modern btn-remove-row" title="Hapus baris"><i class="bi bi-trash"></i></button></td>
-                                        </tr>
+                                        <!-- Dirender Otomatis oleh JavaScript -->
                                     </tbody>
                                 </table>
                             </div>
@@ -724,6 +775,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             <i class="bi bi-send text-success"></i> Form Pengiriman Ekspedisi
                         </div>
                         <div class="modern-card-body">
+                            
+                            <!-- TAMBAHAN BARU: Wadah Card Identitas Aset -->
+                            <div class="mb-4 pb-4 border-bottom">
+                                <label class="modern-label mb-3"><i class="bi bi-box-seam"></i> Aset yang Akan Dikirim</label>
+                                <div class="row g-3" id="card_aset_container_ho">
+                                    <!-- Card Asset akan di-render via JavaScript disini -->
+                                </div>
+                            </div>
+
                             <div class="row g-4">
                                 <div class="col-md-6">
                                     <label class="modern-label">Tanggal Keluar Barang <span class="text-danger">*</span></label>
@@ -808,12 +868,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     </form>
 
     <script>
+    $(document).ready(function() {
+        // 1. Variabel Global & Data Sistem
+        const userCabangData = <?= json_encode($daftarUserCabang) ?>;
+        
+        // DEKLARASI DI ATAS AGAR BISA DIBACA SEMUA FUNGSI
+        let selectedAsetKirim = {}; 
+
+        // 2. Fungsi Validasi Step 1
         function validateReceiptStep() {
-            const qty = parseInt($('#receipt_qty').val(), 10);
+            const jumlahBaris = $('#receipt_table tbody tr.row-kirim-item').length;
             const ekspedisi = $('#receipt_ekspedisi').val().trim();
 
-            if (!qty || qty < 1) {
-                Swal.fire('Peringatan', 'Jumlah (Qty) pada baris pertama harus minimal 1.', 'warning');
+            if (jumlahBaris < 1) {
+                Swal.fire('Peringatan', 'Silakan pilih minimal 1 aset untuk dikirim.', 'warning');
                 return false;
             }
             if (!ekspedisi) {
@@ -823,202 +891,219 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             return true;
         }
 
-        $(document).ready(function() {
-
-            const userCabangData = <?= json_encode($daftarUserCabang) ?>;
-
-            // Auto-fill penerima DAN USER berdasarkan id branch (Charge)
-            function autoFillPenerima(idBranch) {
-                const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
-                if (found) {
-                    $('#receipt_penerima').val(found.username.toUpperCase());
-                    $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
-                    $('#receipt_penerima_hidden').val(found.username.toUpperCase());
-                } else {
-                    $('#receipt_penerima').val('');
-                    $('#receipt_penerima_branch').val('');
-                    $('#receipt_penerima_hidden').val('');
-                }
+        // 3. Fungsi Render Tabel Logistik (Step 1)
+        function renderTabelKirim() {
+            const tbody = $('#receipt_table tbody');
+            tbody.empty();
+            let no = 1;
+            for (let id_brg in selectedAsetKirim) {
+                let item = selectedAsetKirim[id_brg];
+                tbody.append(`
+                    <tr class="row-kirim-item">
+                        <td class="text-center align-middle fw-bold text-muted">${no}</td>
+                        <td><input type="text" class="table-input row-desc text-uppercase" value="${item.desc}" readonly></td>
+                        <td><input type="text" class="table-input row-host text-uppercase" placeholder="Hostname (Opsional)"></td>
+                        <td><input type="number" class="table-input text-center fw-bold row-qty" value="1" readonly></td>
+                        <td>
+                            <input type="text" class="table-input text-uppercase row-catatan" placeholder="Catatan opsional...">
+                            <input type="hidden" class="row-id-barang" value="${id_brg}">
+                        </td>
+                    </tr>
+                `);
+                no++;
             }
+        }
 
-            // Event Charge -> Sync ke Penerima & Tujuan & USER
-            $('#receipt_charge').on('select2:select', function(e) {
-                const idBranch = e.params.data.id;
-                autoFillPenerima(idBranch);
-                $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
-            });
+        // 4. Inisialisasi Saat Halaman Dimuat (Load)
+        // Memaksa aset utama tercentang dan masuk ke tabel
+        $('.aset-utama').prop('checked', true);
+        $('.check-aset-kirim:checked').each(function() {
+            selectedAsetKirim[$(this).val()] = { desc: $(this).data('desc'), sn: $(this).data('sn') };
+        });
+        renderTabelKirim();
 
-            $('#receipt_charge').on('select2:unselect', function() {
+        // 5. Event: Checkbox Aset Tambahan Diklik
+        $(document).on('change', '.check-aset-kirim', function() {
+            let id_brg = $(this).val();
+            if ($(this).is(':checked')) {
+                $(this).closest('label').css({'border-color': '#E64312', 'background-color': '#fffaf8'});
+                selectedAsetKirim[id_brg] = { desc: $(this).data('desc'), sn: $(this).data('sn') };
+            } else {
+                $(this).closest('label').css({'border-color': '#dee2e6', 'background-color': '#ffffff'});
+                delete selectedAsetKirim[id_brg];
+            }
+            renderTabelKirim();
+        });
+
+        // 6. Fungsi Auto-Fill Penerima
+        function autoFillPenerima(idBranch) {
+            const found = userCabangData.find(u => parseInt(u.id_branch, 10) === parseInt(idBranch, 10));
+            if (found) {
+                $('#receipt_penerima').val(found.username.toUpperCase());
+                $('#receipt_penerima_branch').val(found.nama_branch.toUpperCase());
+                $('#receipt_penerima_hidden').val(found.username.toUpperCase());
+            } else {
                 $('#receipt_penerima').val('');
                 $('#receipt_penerima_branch').val('');
                 $('#receipt_penerima_hidden').val('');
-            });
-
-            // Event Tujuan (Step 2) -> Sync ke Penerima jika diubah manual
-            $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
-                autoFillPenerima(e.params.data.id);
-            });
-
-            // Tombol Cetak PDF
-            $('#btnGeneratePdf').on('click', function() {
-                if (!validateReceiptStep()) return;
-
-                const descs = [];
-                const hosts = [];
-                $('#receipt_table tbody tr').each(function() {
-                    descs.push($(this).find('.row-desc').val().trim().toUpperCase());
-                    hosts.push($(this).find('.row-host').val().trim().toUpperCase());
-                });
-
-                // PARAMETER UNTUK ADMIN (HO -> CABANG)
-                const paramsObj = {
-                    'description[]': descs,
-                    'hostname[]': hosts,
-                    'qty': $('#receipt_qty').val().trim(),
-                    'catatan': $('#receipt_catatan').val().trim().toUpperCase(),
-                    'user': $('#receipt_user').val().trim().toUpperCase(),
-                    'asuransi': $('#receipt_asuransi').val().trim().toUpperCase(),
-                    'charge': $('#receipt_charge option:selected').text().trim().toUpperCase(),
-                    'ekspedisi': $('#receipt_ekspedisi').val().trim().toUpperCase(),
-
-                    'penerima': $('#receipt_penerima').val().trim().toUpperCase(),
-                    'penerima_branch': $('#receipt_penerima_branch').val().trim().toUpperCase(),
-
-                    'pengirim': 'DENI PRATAMA',
-                    'pengirim_branch': 'IT HEAD OFFICE',
-
-                    'is_admin': '1' // KODE INI YANG BIKIN HALAMAN 2 BERUBAH JADI HO KE CABANG
-                };
-
-                window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
-
-                // Simpan ke hidden fields
-                $('#receipt_description_hidden').val(descs.join('\n'));
-                $('#receipt_hostname_hidden').val(hosts.join('||'));
-                $('#receipt_qty_hidden').val($('#receipt_qty').val().trim());
-                $('#receipt_catatan_hidden').val($('#receipt_catatan').val().trim().toUpperCase());
-                $('#receipt_user_hidden').val($('#receipt_user').val().trim().toUpperCase());
-                $('#receipt_attn_hidden').val('');
-                $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim().toUpperCase());
-                $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim().toUpperCase());
-                $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim().toUpperCase());
-                $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim().toUpperCase());
-                $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
-                $('#receipt_pengirim_hidden').val('DENI PRATAMA');
-                $('#pdf_generated').val('1');
-                
-                // Auto-fill Jasa Pengiriman ke Step 2
-                const ekspedisiTerpilih = $('#receipt_ekspedisi').val();
-                $('input[name="jasa_pengiriman"]').val(ekspedisiTerpilih);
-
-                // UI Changes
-                $('#logistikStep1').hide();
-                $('#logistikStep2').show();
-                
-                $('#stepLabel1').removeClass('step-active').addClass('step-done');
-                $('#stepLabel2').removeClass('step-pending').addClass('step-active');
-            });
-
-            $('#btnBackToStep1').on('click', function() {
-                $('#logistikStep2').hide();
-                $('#logistikStep1').show();
-                
-                $('#stepLabel1').removeClass('step-done').addClass('step-active');
-                $('#stepLabel2').removeClass('step-active').addClass('step-pending');
-            });
-
-            function renumberRows() {
-                $('#receipt_table tbody tr').each(function(i) {
-                    $(this).find('.row-no').text(i + 1);
-                });
             }
+        }
 
-            function addRow(desc = '', host = '') {
-                const $tr = $('<tr>');
-                $tr.append('<td class="text-center align-middle row-no fw-bold text-muted"></td>');
-                $tr.append('<td><input type="text" class="table-input row-desc text-uppercase" placeholder="Deskripsi barang..." value="' + $('<div/>').text(desc).html() + '"></td>');
-                $tr.append('<td><input type="text" class="table-input row-host text-uppercase" placeholder="Hostname / SN..." value="' + $('<div/>').text(host).html() + '"></td>');
-                $tr.append('<td><input type="number" class="table-input text-center fw-bold" value="1" min="1"></td>');
-                $tr.append('<td><input type="text" class="table-input text-uppercase" placeholder="Catatan opsional..."></td>');
-                $tr.append('<td class="text-center align-middle"><button type="button" class="btn-remove-row-modern btn-remove-row" title="Hapus baris"><i class="bi bi-trash"></i></button></td>');
-                $('#receipt_table tbody').append($tr);
-                renumberRows();
-                $tr.find('.row-desc').focus();
-            }
-
-            $('#btnAddRow').on('click', function() {
-                addRow();
-            });
-
-            $(document).on('click', '.btn-remove-row', function() {
-                if ($('#receipt_table tbody tr').length <= 1) {
-                    $(this).closest('tr').find('input').val('');
-                } else {
-                    $(this).closest('tr').remove();
-                    renumberRows();
-                }
-            });
-
-            $(document).on('keydown', '.row-desc', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addRow();
-                }
-            });
-
-            $('#updateBermasalahSelect').on('change', function() {
-                if ($(this).val() === 'Iya') {
-                    $('#updateKeteranganMasalahDiv').slideDown();
-                    $('textarea[name="keterangan_masalah"]').attr('required', true);
-                } else {
-                    $('#updateKeteranganMasalahDiv').slideUp();
-                    $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
-                }
-            });
-
-            $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
-                var id_barang = $(this).val();
-                $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
-                $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-                if (id_barang) {
-                    $.ajax({
-                        url: 'ajax_dropdown.php',
-                        type: 'POST',
-                        data: {
-                            action: 'get_merk',
-                            id_barang: id_barang
-                        },
-                        success: function(response) {
-                            $('#update_id_merk').html(response).trigger('change');
-                        }
-                    });
-                } else {
-                    $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
-                }
-            });
-
-            $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
-                var id_barang = $('#update_id_barang').val();
-                var id_merk = $(this).val();
-                $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
-                if (id_merk && id_barang) {
-                    $.ajax({
-                        url: 'ajax_dropdown.php',
-                        type: 'POST',
-                        data: {
-                            action: 'get_tipe',
-                            id_barang: id_barang,
-                            id_merk: id_merk
-                        },
-                        success: function(response) {
-                            $('#update_id_tipe').html(response).trigger('change');
-                        }
-                    });
-                } else {
-                    $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
-                }
-            });
+        // 7. Event Select2 Charge & Tujuan
+        $('#receipt_charge').on('select2:select', function(e) {
+            const idBranch = e.params.data.id;
+            autoFillPenerima(idBranch);
+            $('select[name="tujuan"]').val(idBranch).trigger('change.select2');
         });
+
+        $('#receipt_charge').on('select2:unselect', function() {
+            $('#receipt_penerima').val('');
+            $('#receipt_penerima_branch').val('');
+            $('#receipt_penerima_hidden').val('');
+        });
+
+        $(document).on('select2:select', 'select[name="tujuan"]', function(e) {
+            autoFillPenerima(e.params.data.id);
+        });
+
+// 8. Event Cetak PDF & Lanjut ke Step 2
+        $('#btnGeneratePdf').on('click', function() {
+            if (!validateReceiptStep()) return;
+
+            const descs = [];
+            const hosts = [];
+            const qtys = []; // TAMBAHAN: Array untuk Qty
+            const catatans = []; // TAMBAHAN: Array untuk Catatan
+            const arrayIdBarang = [];
+
+            // Loop semua baris tabel untuk mengambil datanya satu per satu
+            $('#receipt_table tbody tr.row-kirim-item').each(function() {
+                descs.push($(this).find('.row-desc').val().trim().toUpperCase());
+                hosts.push($(this).find('.row-host').val().trim().toUpperCase());
+                qtys.push('1'); // Paksa Qty jadi 1 untuk setiap baris
+                catatans.push($(this).find('.row-catatan').val().trim().toUpperCase() || '-');
+                arrayIdBarang.push($(this).find('.row-id-barang').val());
+            });
+
+            // Simpan array ID untuk diproses PHP
+            $('#logistikStep2').find('input[name="id_barang_array"]').remove();
+            $('#logistikStep2').append(`<input type="hidden" name="id_barang_array" value="${arrayIdBarang.join(',')}">`);
+
+            const paramsObj = {
+                'description[]': descs,
+                'hostname[]': hosts,
+                'qty[]': qtys, // PERBAIKAN: Dikirim sebagai Array
+                'catatan_array[]': catatans, // PERBAIKAN: Dikirim sebagai Array
+                'user': $('#receipt_user').val().trim().toUpperCase(),
+                'asuransi': $('#receipt_asuransi').val().trim().toUpperCase(),
+                'charge': $('#receipt_charge option:selected').text().trim().toUpperCase(),
+                'ekspedisi': $('#receipt_ekspedisi').val().trim().toUpperCase(),
+                'penerima': $('#receipt_penerima').val().trim().toUpperCase(),
+                'penerima_branch': $('#receipt_penerima_branch').val().trim().toUpperCase(),
+                'pengirim': 'DENI PRATAMA',
+                'pengirim_branch': 'IT HEAD OFFICE',
+                'is_admin': '1'
+            };
+
+            window.open('print_pengiriman.php?' + $.param(paramsObj), '_blank');
+
+            // Set hidden fields form
+            $('#receipt_description_hidden').val(descs.join('\n'));
+            $('#receipt_hostname_hidden').val(hosts.join('||'));
+            $('#receipt_qty_hidden').val(qtys.join(','));
+            $('#receipt_catatan_hidden').val(catatans.join(' || '));
+            $('#receipt_user_hidden').val($('#receipt_user').val().trim().toUpperCase());
+            $('#receipt_attn_hidden').val('');
+            $('#receipt_asuransi_hidden').val($('#receipt_asuransi').val().trim().toUpperCase());
+            $('#receipt_charge_hidden').val($('#receipt_charge option:selected').text().trim().toUpperCase());
+            $('#receipt_penerima_hidden').val($('#receipt_penerima').val().trim().toUpperCase());
+            $('#receipt_penerima_branch').val($('#receipt_penerima_branch').val().trim().toUpperCase());
+            $('#receipt_ekspedisi_hidden').val($('#receipt_ekspedisi').val().trim().toUpperCase());
+            $('#receipt_pengirim_hidden').val('DENI PRATAMA');
+            $('#pdf_generated').val('1');
+
+            // Auto-fill Jasa Pengiriman
+            const ekspedisiTerpilih = $('#receipt_ekspedisi').val();
+            $('input[name="jasa_pengiriman"]').val(ekspedisiTerpilih);
+
+            // RENDER CARD ASET DI STEP 2
+            const containerCard = $('#card_aset_container_ho');
+            containerCard.empty();
+            for (let id_brg in selectedAsetKirim) {
+                let item = selectedAsetKirim[id_brg];
+                containerCard.append(`
+                    <div class="col-md-6">
+                        <div class="border rounded h-100" style="background-color: #f8fafc; border-color: #e2e8f0 !important;">
+                            <div class="d-flex justify-content-between align-items-center py-2 px-3 border-bottom" style="background-color: #f1f5f9; font-size:0.8rem; font-weight:700; color:#475569;">
+                                <span><i class="bi bi-upc-scan me-1"></i> SN: ${item.sn}</span>
+                            </div>
+                            <div class="p-3">
+                                <div class="text-muted mb-1" style="font-size:0.75rem; font-weight:600;">Merk dan Tipe Barang:</div>
+                                <div class="fw-bold" style="color: #0f172a; font-size:0.9rem;">${item.desc}</div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            }
+
+            // Pindah Step UI
+            $('#logistikStep1').hide();
+            $('#logistikStep2').fadeIn();
+            $('#stepLabel1').removeClass('step-active').addClass('step-done');
+            $('#stepLabel2').removeClass('step-pending').addClass('step-active');
+        });
+
+        // 9. Event Tombol Kembali
+        $('#btnBackToStep1').on('click', function() {
+            $('#logistikStep2').hide();
+            $('#logistikStep1').fadeIn();
+            $('#stepLabel1').removeClass('step-done').addClass('step-active');
+            $('#stepLabel2').removeClass('step-active').addClass('step-pending');
+        });
+
+        // 10. Fitur Master Barang (Tidak terpengaruh)
+        $('#updateBermasalahSelect').on('change', function() {
+            if ($(this).val() === 'Iya') {
+                $('#updateKeteranganMasalahDiv').slideDown();
+                $('textarea[name="keterangan_masalah"]').attr('required', true);
+            } else {
+                $('#updateKeteranganMasalahDiv').slideUp();
+                $('textarea[name="keterangan_masalah"]').removeAttr('required').val('');
+            }
+        });
+
+        $(document).off('change', '#update_id_barang').on('change', '#update_id_barang', function() {
+            var id_barang = $(this).val();
+            $('#update_id_merk').html('<option value="">Sedang memuat...</option>').trigger('change');
+            $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            if (id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: { action: 'get_merk', id_barang: id_barang },
+                    success: function(response) { $('#update_id_merk').html(response).trigger('change'); }
+                });
+            } else {
+                $('#update_id_merk').html('<option value="">Pilih Barang Dulu...</option>').trigger('change');
+            }
+        });
+
+        $(document).off('change', '#update_id_merk').on('change', '#update_id_merk', function() {
+            var id_barang = $('#update_id_barang').val();
+            var id_merk = $(this).val();
+            $('#update_id_tipe').html('<option value="">Sedang memuat...</option>').trigger('change');
+            if (id_merk && id_barang) {
+                $.ajax({
+                    url: 'ajax_dropdown.php',
+                    type: 'POST',
+                    data: { action: 'get_tipe', id_barang: id_barang, id_merk: id_merk },
+                    success: function(response) { $('#update_id_tipe').html(response).trigger('change'); }
+                });
+            } else {
+                $('#update_id_tipe').html('<option value="">Pilih Merk Dulu...</option>').trigger('change');
+            }
+        });
+    });
     </script>
 <?php
     exit;
@@ -1101,7 +1186,7 @@ if ($formType === 'penerimaan') {
         
         mysqli_stmt_bind_param(
             $stmt,
-            'ssiiiiisisssisssi',
+            'ssiiiiisissssissi',
             $noAsset,
             $serialNumber,
             $_POST['id_barang'],
@@ -1145,6 +1230,10 @@ if ($formType === 'penerimaan') {
     if ($upload['status'] === 'error') jsonError($upload['message']);
 
     $namaPenerimaKirim = trim($_POST['receipt_penerima'] ?? $_POST['receipt_user'] ?? '');
+    
+    // Ambil array ID Barang dari string comma-separated
+    $id_barang_array_str = $_POST['id_barang_array'] ?? (string) $id;
+    $id_barang_array = explode(',', $id_barang_array_str);
 
     mysqli_begin_transaction($koneksi);
     try {
@@ -1154,34 +1243,41 @@ if ($formType === 'penerimaan') {
                 (id_barang, branch_asal, branch_tujuan, tanggal_keluar, jasa_pengiriman, nomor_resi_keluar, foto_resi_keluar, status_pengiriman, nama_penerima)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
+        
         $asal = (int) $barang['id_branch'];
         $st   = STATUS_SEDANG_PERJALANAN;
-        mysqli_stmt_bind_param(
-            $stmt,
-            'iiissssss',
-            $id,
-            $asal,
-            $_POST['tujuan'],
-            $_POST['tanggal_keluar'],
-            $_POST['jasa_pengiriman'],
-            $_POST['nomor_resi'],
-            $upload['filename'],
-            $st,
-            $namaPenerimaKirim
-        );
-        mysqli_stmt_execute($stmt);
+        $tujuan = (int) $_POST['tujuan'];
+        $jasa = $_POST['jasa_pengiriman'];
+        $resi = $_POST['nomor_resi'];
+        $fotoResi = $upload['filename'];
 
-        mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE id = $id");
+        $jumlahDikirim = 0;
 
-        $newPengirimanId = (int) mysqli_insert_id($koneksi);
-        $targetBranch    = (int) ($_POST['tujuan'] ?? 0);
-        if ($targetBranch > 0) {
+        foreach ($id_barang_array as $idBarangKirim) {
+            $idB = (int) trim($idBarangKirim);
+            if ($idB <= 0) continue;
+
+            mysqli_stmt_bind_param(
+                $stmt, 'iiissssss',
+                $idB, $asal, $tujuan, $tanggalKeluar, $jasa, $resi, $fotoResi, $st, $namaPenerimaKirim
+            );
+            
+            if (mysqli_stmt_execute($stmt)) {
+                // Ubah status barang menjadi sedang pengiriman
+                mysqli_query($koneksi, "UPDATE barang SET id_status = 3 WHERE id = $idB");
+                $jumlahDikirim++;
+            }
+        }
+        mysqli_stmt_close($stmt);
+
+        // Kirim Notifikasi ke Cabang Tujuan
+        if ($tujuan > 0 && $jumlahDikirim > 0) {
             $title   = 'Pengiriman dalam perjalanan';
-            $message = 'Barang dengan resi ' . mysqli_real_escape_string($koneksi, $_POST['nomor_resi']) . ' sedang dalam perjalanan ke cabang Anda.';
+            $message = "HO mengirimkan $jumlahDikirim barang dengan resi " . mysqli_real_escape_string($koneksi, $resi) . " ke cabang Anda.";
             $link    = '../Barang/index.php?filter=masuk';
             $stmtNotif = mysqli_prepare($koneksi, "INSERT INTO system_notifications (target_role, target_branch_id, title, message, link, is_read) VALUES ('user', ?, ?, ?, ?, 0)");
             if ($stmtNotif) {
-                mysqli_stmt_bind_param($stmtNotif, 'isss', $targetBranch, $title, $message, $link);
+                mysqli_stmt_bind_param($stmtNotif, 'isss', $tujuan, $title, $message, $link);
                 mysqli_stmt_execute($stmtNotif);
                 mysqli_stmt_close($stmtNotif);
             }
@@ -1189,16 +1285,15 @@ if ($formType === 'penerimaan') {
 
         mysqli_commit($koneksi);
 
-        // Log activity for shipping
-        log_activity($koneksi, 'send_barang', "Kirim barang - Resi: {$_POST['nomor_resi']}, Dari: {$asal}, Tujuan: {$_POST['tujuan']}, Jasa: {$_POST['jasa_pengiriman']}", [
-            'id_barang' => $id,
-            'nomor_resi' => $_POST['nomor_resi'],
+        // Log Activity
+        log_activity($koneksi, 'send_barang', "Kirim $jumlahDikirim barang - Resi: {$resi}, Dari: HO, Tujuan: {$tujuan}", [
+            'nomor_resi' => $resi,
             'branch_asal' => $asal,
-            'branch_tujuan' => $_POST['tujuan'],
-            'jasa_pengiriman' => $_POST['jasa_pengiriman']
+            'branch_tujuan' => $tujuan,
+            'jumlah_barang' => $jumlahDikirim
         ]);
 
-        jsonSuccess("Pengiriman berhasil dibuat.");
+        jsonSuccess("Pengiriman berhasil! $jumlahDikirim Aset telah diproses.");
     } catch (Exception $e) {
         mysqli_rollback($koneksi);
         jsonError($e->getMessage());

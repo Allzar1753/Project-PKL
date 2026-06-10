@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Cek user berdasarkan email
-    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE BINARY email = ? LIMIT 1");
+    $stmt = mysqli_prepare($koneksi, "SELECT * FROM users WHERE email = ? LIMIT 1");
     mysqli_stmt_bind_param($stmt, 's', $login);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
@@ -30,8 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect_to(base_url('auth/login.php'));
     }
 
-    // Verifikasi hash password
-    if (!password_verify($password, $user['password'])) {
+    $isPasswordCorrect = password_verify($password, $user['password']);
+
+    if (!$isPasswordCorrect) {
+        $isPasswordCorrect = password_verify(trim($password), $user['password']);
+    }
+
+    if (!$isPasswordCorrect) {
         set_flash('error', 'Password salah.');
         redirect_to(base_url('auth/login.php'));
     }

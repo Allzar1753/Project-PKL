@@ -37,9 +37,11 @@ if (!empty($user['id_branch'])) {
     }
 }
 
-$mainMenuActive = isMenuActive('/dashboard/') || isMenuActive('/Barang/') || isMenuActive('/Riwayat/') || isMenuActive('/laporan/');
+$mainMenuActive = isMenuActive('/dashboard/') || isMenuActive('/Riwayat/') || isMenuActive('/laporan/');
+$barangMenuActive = isMenuActive('/Barang/'); // Memisahkan menu Barang menjadi grup sendiri
 $isMonitoringPage = isMenuActive('/monitoring/');
 $monitoringMenuActive = $isMonitoringPage;
+
 $isUsersPage = strpos($currentPath, '/users/index.php') !== false || strpos($currentPath, '/users/create.php') !== false || strpos($currentPath, '/users/edit.php') !== false;
 $isAccessPage = strpos($currentPath, '/users/role_permissions.php') !== false || strpos($currentPath, '/users/user_permissions.php') !== false;
 $isActivityLogPage = isMenuActive('/users/activity_log.php');
@@ -293,7 +295,10 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
     </div>
 
     <div class="sidebar-nav-wrap flex-grow-1">
-        <!-- Main Menu Group -->
+        
+        <!-- ============================================== -->
+        <!-- MAIN MENU GROUP -->
+        <!-- ============================================== -->
         <div class="sidebar-group">
             <button type="button" class="sidebar-group-button <?= $mainMenuActive ? 'is-open' : '' ?>" data-menu-target="mainMenu">
                 <span class="sidebar-group-button-left">
@@ -306,7 +311,7 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                 <div class="sidebar-submenu-inner">
                     <ul class="sidebar-menu">
                         <?php if (can('dashboard.view')): ?>
-                        <li><a href="<?= h(base_url('dashboard/index.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/') ? 'active' : '' ?>">
+                        <li><a href="<?= h(base_url('dashboard/index.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/index.php') ? 'active' : '' ?>">
                             <span class="sidebar-icon"><i class="bi bi-house-door"></i></span><span>Dashboard</span></a>
                         </li>
                         <li><a href="<?= h(base_url('dashboard/notifications.php')) ?>" class="sidebar-link <?= isMenuActive('/dashboard/notifications.php') ? 'active' : '' ?>">
@@ -314,31 +319,82 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                             <?php if ($sidebarNotifUnread > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $sidebarNotifUnread > 99 ? '99+' : $sidebarNotifUnread ?></span><?php endif; ?>
                         </a></li>
                         <?php endif; ?>
-                        <?php if (can('barang.view')): ?>
-                        <li><a href="<?= h(base_url('Barang/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/') ? 'active' : '' ?>">
-                            <span class="sidebar-icon"><i class="bi bi-box-seam"></i></span><span>Barang</span></a>
-                        </li>
-                        <?php endif; ?>
-                        <?php if (can('riwayat.view')): ?>
-                        <li><a href="<?= h(base_url('Riwayat/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Riwayat/') ? 'active' : '' ?>">
-                            <span class="sidebar-icon"><i class="bi bi-clock-history"></i></span><span>Riwayat</span></a>
-                        </li>
-                        <?php endif; ?>
-                        <?php if (can('laporan.view')): ?>
-                        <li><a href="<?= h(base_url('laporan/index.php')) ?>" class="sidebar-link <?= isMenuActive('/laporan/') ? 'active' : '' ?>">
-                            <span class="sidebar-icon"><i class="bi bi-file-earmark-bar-graph"></i></span><span>Laporan</span></a>
-                        </li>
-                        <?php endif; ?>
                     </ul>
                 </div>
             </div>
         </div>
 
         <!-- ============================================== -->
+        <!-- MODUL BARANG (INVENTARIS & LOGISTIK) -->
+        <!-- ============================================== -->
+        <?php if (can('barang.view')): ?>
+        <div class="sidebar-group mt-2">
+            <button type="button" class="sidebar-group-button <?= $barangMenuActive ? 'is-open' : '' ?>" data-menu-target="barangMenu">
+                <span class="sidebar-group-button-left">
+                    <span class="sidebar-group-icon"><i class="bi bi-box-seam"></i></span>
+                    <span class="ms-2">Barang</span>
+                </span>
+                <i class="bi bi-chevron-down sidebar-group-arrow"></i>
+            </button>
+            <div id="barangMenu" class="sidebar-submenu <?= $barangMenuActive ? 'show' : '' ?>">
+                <div class="sidebar-submenu-inner">
+                    <ul class="sidebar-menu">
+                        <li><a href="<?= h(base_url('Barang/index.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/index.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-boxes"></i></span><span>Data Aset Aktif</span></a>
+                        </li>
+                        
+                        <?php if (is_admin() && can('barang.kirim')): ?>
+                        <li><a href="<?= h(base_url('Barang/pengiriman_approval.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/pengiriman_approval.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-inboxes"></i></span><span>Approval Pengiriman</span>
+                            <?php if ($pendingHoShippingCount > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $pendingHoShippingCount ?></span><?php endif; ?>
+                        </a></li>
+                        <?php endif; ?>
+
+                        <?php if (can('scrap.approve')): ?>
+                        <li><a href="<?= h(base_url('Barang/approval_scrap.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/approval_scrap.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-clipboard-x"></i></span><span>Approval Scrap</span>
+                        </a></li>
+                        <?php endif; ?>
+                        
+                        <li><a href="<?= h(base_url('Barang/scrap.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/scrap.php') ? 'active' : '' ?>">
+                            <span class="sidebar-icon"><i class="bi bi-trash3-fill text-danger"></i></span><span>Data Aset Scrap</span>
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- ============================================== -->
+        <!-- MENU RIWAYAT & LAPORAN -->
+        <!-- ============================================== -->
+        <div class="sidebar-group mt-2">
+            <ul class="sidebar-menu">
+                <?php if (can('riwayat.view')): ?>
+                <li><a href="<?= h(base_url('Riwayat/index.php')) ?>" class="sidebar-group-button <?= isMenuActive('/Riwayat/') ? 'is-open' : '' ?>" style="text-decoration:none;">
+                    <span class="sidebar-group-button-left">
+                        <span class="sidebar-group-icon"><i class="bi bi-clock-history"></i></span>
+                        <span class="ms-2">Riwayat</span>
+                    </span>
+                </a></li>
+                <?php endif; ?>
+                
+                <?php if (can('laporan.view')): ?>
+                <li><a href="<?= h(base_url('laporan/index.php')) ?>" class="sidebar-group-button <?= isMenuActive('/laporan/') ? 'is-open' : '' ?>" style="text-decoration:none;">
+                    <span class="sidebar-group-button-left">
+                        <span class="sidebar-group-icon"><i class="bi bi-file-earmark-bar-graph"></i></span>
+                        <span class="ms-2">Laporan</span>
+                    </span>
+                </a></li>
+                <?php endif; ?>
+            </ul>
+        </div>
+
+        <!-- ============================================== -->
         <!-- MENU KHUSUS MONITORING ASSET HO -->
         <!-- ============================================== -->
         <?php if (is_admin()): ?>
-        <div class="sidebar-group mt-3">
+        <div class="sidebar-group mt-2">
             <button type="button" class="sidebar-group-button <?= $monitoringMenuActive ? 'is-open' : '' ?>" data-menu-target="monitoringMenu">
                 <span class="sidebar-group-button-left">
                     <span class="sidebar-group-icon"><i class="bi bi-display"></i></span>
@@ -360,11 +416,12 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
             </div>
         </div>
         <?php endif; ?>
-        <!-- ============================================== -->
 
-        <!-- Administrator Group -->
+        <!-- ============================================== -->
+        <!-- ADMINISTRATOR GROUP -->
+        <!-- ============================================== -->
         <?php if (can('users.view') || can('role_permissions.manage')): ?>
-        <div class="sidebar-group mt-3">
+        <div class="sidebar-group mt-2 border-top pt-3">
             <button type="button" class="sidebar-group-button <?= $adminMenuActive ? 'is-open' : '' ?>" data-menu-target="adminMenu">
                 <span class="sidebar-group-button-left">
                     <span class="sidebar-group-icon"><i class="bi bi-shield-check"></i></span>
@@ -381,17 +438,13 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
                             <?php if ($pendingResetCount > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $pendingResetCount ?></span><?php endif; ?>
                         </a></li>
                         <?php endif; ?>
-                        <?php if (is_admin() && can('barang.kirim')): ?>
-                        <li><a href="<?= h(base_url('Barang/pengiriman_approval.php')) ?>" class="sidebar-link <?= isMenuActive('/Barang/pengiriman_approval.php') ? 'active' : '' ?>">
-                            <span class="sidebar-icon"><i class="bi bi-inboxes"></i></span><span>Approval Pengiriman</span>
-                            <?php if ($pendingHoShippingCount > 0): ?><span class="badge bg-danger rounded-pill ms-auto"><?= $pendingHoShippingCount ?></span><?php endif; ?>
-                        </a></li>
-                        <?php endif; ?>
+                        
                         <?php if (can('users.view')): ?>
                         <li><a href="<?= h(base_url('users/activity_log.php')) ?>" class="sidebar-link <?= $isActivityLogPage ? 'active' : '' ?>">
                             <span class="sidebar-icon"><i class="bi bi-activity"></i></span><span>Monitoring & Aktivitas</span></a>
                         </li>
                         <?php endif; ?>
+                        
                         <?php if (can('role_permissions.manage')): ?>
                         <li><a href="<?= h(base_url('users/role_permissions.php')) ?>" class="sidebar-link <?= $isAccessPage ? 'active' : '' ?>">
                             <span class="sidebar-icon"><i class="bi bi-key"></i></span><span>Hak Akses</span></a>
@@ -402,7 +455,7 @@ if (isset($_SESSION['user']) && strtolower($_SESSION['user']['role']) === 'admin
             </div>
         </div>
         <?php endif; ?>
-    </div>
+    </div>  
 
     <div class="sidebar-footer">
         <a href="#" id="btnLogoutConfirm" class="sidebar-logout">

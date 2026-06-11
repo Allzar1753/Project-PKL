@@ -144,11 +144,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $kode_aset = esc($koneksi, generate_kode_aset($koneksi, $id_barang, $tanggal_terima));
 
     // 4. Simpan ke Database
+    // PERBAIKAN: Menambahkan id_branch_pemilik
     $queryBarang = "INSERT INTO barang 
-        (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, id_status, id_branch, foto, `user`, user_id, status) 
+        (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, id_status, id_branch, id_branch_pemilik, foto, `user`, user_id, status) 
         VALUES 
-        ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', '$id_status', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem', 'Tersedia')";
-
+        ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', '$id_status', '$myBranchId', '$myBranchId', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$userIdSistem', 'Tersedia')";
     if (mysqli_query($koneksi, $queryBarang)) {
         $newId = (int) mysqli_insert_id($koneksi);
         log_activity($koneksi, 'create_barang', "User cabang tambah barang - Kode: {$kode_aset}, Serial: {$serial_number}", [

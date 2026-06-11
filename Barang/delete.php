@@ -4,8 +4,10 @@ include '../config/koneksi.php';
 require_once '../config/auth.php';
 require_once '../config/activity_logger.php';
 
+require_permission($koneksi, 'barang.delete'); 
+
 // Hapus require_admin(); ganti dengan login check
-require_login(); 
+// require_login(); 
 
 header('Content-Type: application/json');
 

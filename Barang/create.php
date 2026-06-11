@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $required = [
         'id_barang', 'id_merk', 'serial_number', 'id_tipe', 
-        'id_jenis', 'tanggal_terima', 'bermasalah', 'id_branch', 'user'
+        'id_jenis', 'tanggal_terima', 'bermasalah', 'id_branch', 'id_branch_pemilik', 'user'
     ];
 
     foreach ($required as $field) {
@@ -80,9 +80,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    $bermasalah    = esc($koneksi, $_POST['bermasalah']);
-    $id_branch     = (int) $_POST['id_branch'];
-    $user          = esc($koneksi, $_POST['user']);
+    $bermasalah        = esc($koneksi, $_POST['bermasalah']);
+    $id_branch         = (int) $_POST['id_branch'];
+    $id_branch_pemilik = (int) $_POST['id_branch_pemilik']; 
+    $user              = esc($koneksi, $_POST['user']);
 
     $nameError = validate_person_name($user);
     if ($nameError !== null) {
@@ -162,9 +163,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tanggal_garansi_berakhir = compute_warranty_end_date($tanggal_pembelian, $masa_garansi_bulan);
     $kode_aset = esc($koneksi, generate_kode_aset($koneksi, $id_barang, $tanggal_terima));
 
-    $queryBarang = "INSERT INTO barang (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, keterangan_masalah, id_status, id_branch, foto, `user`, user_id, status) 
-                    VALUES ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem', '$statusField')";
-
+    // PERBAIKAN: Menambahkan id_branch_pemilik
+// UBAH VARIABELNYA AGAR MENGGUNAKAN '$id_branch_pemilik':
+    $queryBarang = "INSERT INTO barang (no_asset, kode_aset, id_barang, id_merk, serial_number, id_tipe, id_jenis, tanggal_terima, tanggal_pembelian, masa_garansi_bulan, tanggal_garansi_berakhir, bermasalah, keterangan_masalah, id_status, id_branch, id_branch_pemilik, foto, `user`, user_id, status) 
+                    VALUES ('$no_asset', '$kode_aset', '$id_barang', '$id_merk', '$serial_number', '$id_tipe', '$id_jenis', '$tanggal_terima', '$tanggal_pembelian', '$masa_garansi_bulan', " . ($tanggal_garansi_berakhir ? "'$tanggal_garansi_berakhir'" : "NULL") . ", '$bermasalah', " . ($keterangan_masalah ? "'$keterangan_masalah'" : "NULL") . ", '$id_status', '$id_branch', '$id_branch_pemilik', " . ($foto ? "'$foto'" : "NULL") . ", '$user', '$user_id_sistem', '$statusField')";
     mysqli_begin_transaction($koneksi);
     try {
         if (!mysqli_query($koneksi, $queryBarang)) throw new Exception(mysqli_error($koneksi));
@@ -376,6 +378,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <option value="<?= (int) $row['id_branch'] ?>"><?= h($row['nama_branch']) ?></option>
                 <?php endwhile; ?>
             </select>
+        </div>
+        
+        <div class="col-md-6">
+            <label class="form-label">Cabang Pemilik Aset <span class="text-danger">*</span></label>
+            <select name="id_branch_pemilik" id="id_branch_pemilik" class="form-control select2">
+                <option value="">Pilih Pemilik Aset...</option>
+                <?php mysqli_data_seek($branch, 0);
+                while ($row = mysqli_fetch_assoc($branch)): ?>
+                    <option value="<?= (int) $row['id_branch'] ?>"><?= h($row['nama_branch']) ?></option>
+                <?php endwhile; ?>
+            </select>
+            <small class="text-muted">Pilih HO jika ini aset pusat, atau pilih Cabang jika ini barang titipan/distribusi.</small>
         </div>
 
         <div class="col-md-6">

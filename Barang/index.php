@@ -105,7 +105,7 @@ if ($isAdmin) {
     $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 }
 
-$stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') " : " AND barang.status IN ('Tersedia','Diterima') ";
+$stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR barang.bermasalah = 'Iya') AND barang.status NOT IN (7, 8) " : " AND barang.status IN ('Tersedia','Diterima') AND barang.id_status NOT IN (7, 8) ";
 
 // =========================================================================
 // LOGIKA SINKRONISASI DATA (ADMIN HO = ID 40)
@@ -117,7 +117,7 @@ if ($isAdmin) {
     $whereLokasi = "barang.id_branch = $idBranchHO";
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
 
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
@@ -125,7 +125,7 @@ if ($isAdmin) {
     $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
     $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima')");
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
 }
@@ -680,12 +680,17 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                 </button>
                             <?php else: ?>
                                 <!-- Tombol Khusus User Cabang -->
-                                <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreateCabang">
-                                    <i class="bi bi-plus-circle me-2"></i>Tambah Aset
-                                </button>
-                                <button class="btn btn-header-dark" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
-                                    <i class="bi bi-truck me-2"></i>Kirim Barang Rusak
-                                </button>
+                                <?php if (can('barang.create')): ?>
+                                    <button class="btn btn-header-light" data-bs-toggle="modal" data-bs-target="#modalCreateCabang">
+                                        <i class="bi bi-plus-circle me-2"></i>Tambah Aset
+                                    </button>
+                                <?php endif; ?>
+                                <?php if (can('barang.pengiriman')): ?>
+    <!-- UBAH data-bs-target MENJADI #modalPengirimanUser -->
+    <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#modalPengirimanUser">
+        <i class="bi bi-truck me-1"></i> Kirim Barang Rusak
+    </button> 
+<?php endif; ?>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -801,8 +806,18 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                             <th>Kondisi</th>
                                             <th>Foto</th>
                                         <?php endif; ?>
-                                        <th class="text-center pe-4">Bukti Terima</th>
-                                    </tr>
+<th class="text-center">
+    <?php 
+        // Cek parameter URL. Jika kosong, berarti sedang di tab default (Asset Tersedia)
+        $tabAktif = $_GET['filter'] ?? 'tersedia'; 
+        
+        if ($tabAktif === 'tersedia') {
+            echo "AKSI";
+        } else {
+            echo "BUKTI TERIMA";
+        }
+    ?>
+</th>                                    </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (mysqli_num_rows($query) > 0): $no = $offset + 1;
@@ -940,12 +955,21 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                                 <button class="btn btn-light border btn-sm btnEditMaster text-primary" data-id="<?= $data['id'] ?>" title="Edit Master"><i class="bi bi-pencil-fill"></i></button>
                                                                 <button class="btn btn-light border btn-sm text-info btnLogistik" data-id="<?= $data['id'] ?>" data-bermasalah="<?= ($data['bermasalah'] === 'Iya' ? '1' : '0') ?>" title="Kirim ke Cabang"><i class="bi bi-truck"></i></button>
                                                                 <button class="btn btn-light border btn-sm btnDelete text-danger" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
+                                                                <?php if (can('barang.scrap')): ?>
+        <button class="btn btn-light border btn-sm text-secondary btnScrap" data-id="<?= $data['id'] ?>" title="Ajukan Scrap (Pemusnahan)"><i class="bi bi-archive-fill"></i></button>
+    <?php endif; ?>
                                                             <?php else: ?>
-                                                                <button class="btn btn-light border btn-sm btnEditMaster text-primary" data-id="<?= $data['id'] ?>" title="Edit Aset"><i class="bi bi-pencil-fill"></i></button>
-                                                                <button class="btn btn-light border btn-sm btnDelete text-danger" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </td>
+                                                                <?php if (can('barang.update')): ?>
+                <button class="btn btn-light border btn-sm btnEditMaster text-primary" data-id="<?= $data['id'] ?>" title="Edit Aset"><i class="bi bi-pencil-fill"></i></button>
+            <?php endif; ?>
+
+            <?php if (can('barang.delete')): ?>
+                <button class="btn btn-light border btn-sm btnDelete text-danger" data-id="<?= $data['id'] ?>" title="Hapus"><i class="bi bi-trash"></i></button>
+            <?php endif; ?>
+
+        <?php endif; ?>
+    </div>
+</td>
                                                 <?php endif; ?>
                                             </tr>
                                         <?php endwhile;
@@ -1035,6 +1059,7 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                 <div class="modal-body" id="contentPengirimanUser">
                     <div class="text-center p-4">
                         <div class="spinner-border text-dark"></div>
+                        <p class="mt-2 text-muted">Memuat form pengiriman...</p>
                     </div>
                 </div>
             </div>
@@ -1290,6 +1315,77 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                         } else {
                             Swal.fire('Gagal', res.message, 'error');
                         }
+                    });
+                }
+            });
+        });
+
+        /**
+         * SCRAP ACTION (PENGAJUAN PEMUSNAHAN OLEH ADMIN)
+         */
+        $(document).on('click', '.btnScrap', function() {
+            const idBarang = $(this).data('id');
+
+            Swal.fire({
+                title: 'Ajukan Scrap Aset?',
+                text: 'Aset ini akan dikunci dan dikirimkan permohonan persetujuan ke User Cabang untuk dimusnahkan. Masukkan alasan Scrap:',
+                icon: 'warning',
+                input: 'textarea',
+                inputPlaceholder: 'Cth: Motherboard terbakar, tidak bisa diperbaiki...',
+                inputAttributes: {
+                    'aria-label': 'Alasan Scrap'
+                },
+                showCancelButton: true,
+                confirmButtonText: '<i class="bi bi-send"></i> Ajukan Scrap',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#E64312',
+                preConfirm: (alasan) => {
+                    if (!alasan) {
+                        Swal.showValidationMessage('Alasan scrap wajib diisi!');
+                    }
+                    return alasan;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Tampilkan loading spinner bawaan SweetAlert
+                    Swal.fire({
+                        title: 'Memproses...',
+                        text: 'Mohon tunggu sebentar',
+                        allowOutsideClick: false,
+                        didOpen: () => { Swal.showLoading() }
+                    });
+
+                    // Siapkan FormData untuk dikirim
+                    const fd = new FormData();
+                    fd.append('id_barang', idBarang);
+                    fd.append('alasan', result.value);
+
+                    // Gunakan fetch / ajax ke backend
+                    fetch('pengajuan_scrap_proses.php', {
+                        method: 'POST',
+                        body: fd
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Tambahkan Jeda Animasi 2 Detik agar seragam dengan form Anda yang lain
+                        setTimeout(function() {
+                            if (data.status === 'success') {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Berhasil!',
+                                    text: data.message,
+                                    showConfirmButton: false,
+                                    timer: 1500
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire('Gagal!', data.message, 'error');
+                            }
+                        }, 2000); // <-- Delay 2 detik
+                    })
+                    .catch(error => {
+                        setTimeout(function() {
+                            Swal.fire('Error!', 'Terjadi kesalahan sistem (Gagal menghubungi server)', 'error');
+                        }, 2000);
                     });
                 }
             });

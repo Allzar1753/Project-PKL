@@ -8,7 +8,7 @@ include '../config/koneksi.php';
 require_once '../config/auth.php';
 require_once '../config/activity_logger.php';
 
-require_permission($koneksi, 'barang.kirim');
+require_permission($koneksi, 'barang.pengiriman');
 if (!is_user_role()) {
     http_response_code(403);
     exit('Halaman ini khusus user cabang.');

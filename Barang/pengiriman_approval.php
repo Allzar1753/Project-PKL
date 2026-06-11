@@ -14,6 +14,7 @@ if (!is_admin()) {
 const STATUS_MENUNGGU_PERSETUJUAN = 'Menunggu persetujuan admin';
 const STATUS_SUDAH_DITERIMA = 'Sudah diterima HO';
 const STATUS_SEDANG_PERJALANAN = 'Sedang perjalanan';
+const STATUS_DITOLAK = 'Pengiriman Di Tolak'; 
 const JENIS_KE_CABANG = 'ke_cabang';
 
 function h($value): string
@@ -53,6 +54,82 @@ if (!$jakartaBranchId) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postAction = trim((string) ($_POST['action'] ?? 'approve_ho'));
 
+    // --- BLOK LOGIKA UNTUK MENOLAK BARANG DARI CABANG ---
+    if ($postAction === 'reject_ho') {
+        $idPengiriman = (int) ($_POST['id_pengiriman'] ?? 0);
+
+        if ($idPengiriman <= 0) jsonOut(['status' => 'error', 'message' => 'ID pengiriman tidak valid.']);
+
+        mysqli_begin_transaction($koneksi);
+        try {
+            $adminId = current_user_id() ? (int) current_user_id() : null;
+            $now = date('Y-m-d H:i:s');
+            $statusLama = STATUS_MENUNGGU_PERSETUJUAN;
+            $statusDitolak = STATUS_DITOLAK;
+            $catatanAdmin = 'Ditolak oleh Admin HO'; 
+
+            // 1. Ambil data pengiriman untuk notifikasi dan update tabel barang
+            $stmtInfo = mysqli_prepare($koneksi, "SELECT id_barang, branch_asal, nomor_resi_keluar, serial_number FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ? LIMIT 1");
+            mysqli_stmt_bind_param($stmtInfo, 'i', $idPengiriman);
+            mysqli_stmt_execute($stmtInfo);
+            $info = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtInfo));
+            mysqli_stmt_close($stmtInfo);
+
+            if (!$info) throw new Exception('Data pengajuan pengiriman tidak ditemukan.');
+
+            $idBarang = (int) $info['id_barang'];
+            $branchAsal = (int) $info['branch_asal'];
+            $resi = (string) $info['nomor_resi_keluar'];
+            $sn = (string) $info['serial_number'];
+
+            // 2. Update status pengiriman cabang HO menjadi ditolak
+            $stmt = mysqli_prepare(
+                $koneksi,
+                "UPDATE pengiriman_cabang_ho
+                 SET status_pengiriman = ?, disetujui_oleh = ?, disetujui_pada = ?, catatan_admin = ?
+                 WHERE id_pengiriman_ho = ? AND COALESCE(status_pengiriman, '') = ?"
+            );
+            mysqli_stmt_bind_param($stmt, 'sissis', $statusDitolak, $adminId, $now, $catatanAdmin, $idPengiriman, $statusLama);
+            mysqli_stmt_execute($stmt);
+            if (mysqli_stmt_affected_rows($stmt) <= 0) throw new Exception('Pengajuan sudah diproses sebelumnya.');
+            mysqli_stmt_close($stmt);
+
+            // 3. Kembalikan status barang menjadi Tersedia (id_status = 4) ke tabel `barang`
+            if ($idBarang > 0) {
+                // PERBAIKAN: Menggunakan tabel `barang`, bukan `tb_barang`
+                $stmtUpdateBarang = mysqli_prepare($koneksi, "UPDATE barang SET id_status = 4 WHERE id_barang = ?");
+                if ($stmtUpdateBarang) {
+                    mysqli_stmt_bind_param($stmtUpdateBarang, 'i', $idBarang);
+                    mysqli_stmt_execute($stmtUpdateBarang);
+                    mysqli_stmt_close($stmtUpdateBarang);
+                }
+            }
+
+            // 4. Kirim Notifikasi ke user cabang asal
+            if ($branchAsal > 0) {
+                createUserBranchNotification(
+                    $koneksi,
+                    $branchAsal,
+                    'Pengiriman Ditolak HO',
+                    "Pengiriman dengan resi {$resi} (SN: {$sn}) ditolak oleh Admin HO. Barang dikembalikan ke status Tersedia.",
+                    '../Barang/index.php'
+                );
+            }
+
+            // 5. Catat ke activity logger
+            log_activity($koneksi, 'reject_pengiriman_ho', "Admin menolak pengiriman HO - Resi: {$resi}, SN: {$sn}", [
+                'id_pengiriman_ho' => $idPengiriman
+            ]);
+
+            mysqli_commit($koneksi);
+            jsonOut(['status' => 'success', 'message' => 'Pengiriman ditolak. Barang kembali Tersedia di Cabang.']);
+        } catch (Throwable $e) {
+            mysqli_rollback($koneksi);
+            jsonOut(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+    // --- END BLOK TOLAK ---
+
     if ($postAction === 'approve_antar_cabang') {
         $idPengiriman = (int) ($_POST['id_pengiriman'] ?? 0);
         if ($idPengiriman <= 0) jsonOut(['status' => 'error', 'message' => 'ID pengiriman tidak valid.']);
@@ -63,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $now = date('Y-m-d H:i:s');
             $statusBaru = STATUS_SEDANG_PERJALANAN;
             $statusLama = STATUS_MENUNGGU_PERSETUJUAN;
+            $jenisKeCabang = JENIS_KE_CABANG;
 
             $stmt = mysqli_prepare(
                 $koneksi,
@@ -73,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$stmt) throw new Exception('Gagal menyiapkan approval antar cabang.');
 
             $catatanAdmin = 'Disetujui Admin HO untuk pengiriman antar cabang';
-            mysqli_stmt_bind_param($stmt, 'sississ', $statusBaru, $adminId, $now, $catatanAdmin, $idPengiriman, JENIS_KE_CABANG, $statusLama);
+            mysqli_stmt_bind_param($stmt, 'sississ', $statusBaru, $adminId, $now, $catatanAdmin, $idPengiriman, $jenisKeCabang, $statusLama);
             mysqli_stmt_execute($stmt);
             if (mysqli_stmt_affected_rows($stmt) <= 0) throw new Exception('Data tidak ditemukan atau sudah diproses.');
             mysqli_stmt_close($stmt);
@@ -167,7 +245,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
 
-                // Notifikasi admin bersifat sementara: setelah approval, tandai notifikasi terkait sebagai sudah dibaca.
                 $adminRole = 'admin';
                 $notifLikeResi = '%' . $resi . '%';
                 $notifLink = '../Barang/pengiriman_approval.php';
@@ -188,7 +265,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // --- LOGIKA OTOMATISASI PINDAH INVENTARIS ---
         $stmtGetSN = mysqli_prepare($koneksi, "SELECT serial_number, catatan_user FROM pengiriman_cabang_ho WHERE id_pengiriman_ho = ?");
         mysqli_stmt_bind_param($stmtGetSN, 'i', $idPengiriman);
         mysqli_stmt_execute($stmtGetSN);
@@ -208,6 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pemilikBarang = trim((string) ($dataPemilik['pemilik_barang'] ?? ''));
 
+            // PERBAIKAN: Menggunakan tabel `barang` sesuai arahan
             $queryUpdateBarang = "UPDATE barang SET 
                 id_branch = ?, 
                 status = 'Diterima', 
@@ -304,7 +381,6 @@ $q = mysqli_query($koneksi, "
             padding: 24px 32px;
         }
 
-        /* Hero Banner tersinkronisasi */
         .page-hero {
             position: relative;
             background: var(--dark-1);
@@ -334,7 +410,6 @@ $q = mysqli_query($koneksi, "
             max-width: 800px;
         }
 
-        /* Table Card & UI */
         .ui-card {
             background: #ffffff;
             border: 1px solid var(--border-soft);
@@ -364,7 +439,6 @@ $q = mysqli_query($koneksi, "
             border-bottom: 1px solid var(--border-soft);
         }
 
-        /* Teks & Meta Data */
         .meta-line {
             display: block;
             font-size: 0.85rem;
@@ -377,7 +451,6 @@ $q = mysqli_query($koneksi, "
             font-weight: 600;
         }
 
-        /* Soft Badge Hexindo Style */
         .badge-custom {
             padding: 0.5em 1em;
             font-weight: 600;
@@ -390,7 +463,6 @@ $q = mysqli_query($koneksi, "
             gap: 6px;
         }
 
-        /* Button Action Approval */
         .btn-modern {
             background-color: var(--orange-1);
             color: white;
@@ -407,7 +479,6 @@ $q = mysqli_query($koneksi, "
             color: white;
         }
 
-        /* Empty State */
         .empty-state {
             padding: 4rem 2rem;
             text-align: center;
@@ -446,7 +517,6 @@ $q = mysqli_query($koneksi, "
 
                 <div class="page-shell">
 
-                    <!-- Header Hero Hexindo Style -->
                     <div class="page-hero">
                         <div class="hero-content">
                             <h1 class="page-title"><i class="bi bi-inboxes-fill me-2" style="color: var(--orange-1);"></i> Approval Pengiriman Cabang</h1>
@@ -454,7 +524,6 @@ $q = mysqli_query($koneksi, "
                         </div>
                     </div>
 
-                    <!-- Container Table -->
                     <div class="ui-card">
                         <div class="table-responsive">
                             <table class="table table-custom">
@@ -505,20 +574,29 @@ $q = mysqli_query($koneksi, "
                                                     </span>
                                                 </td>
                                                 <td class="text-end">
-                                                    <?php if ($canApprove && !$isAntarCabang): ?>
-                                                        <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Konfirmasi Terima Barang HO">
-                                                            <i class="bi bi-check2-all me-1"></i> Terima di HO
-                                                        </button>
-                                                    <?php elseif ($canApprove && $isAntarCabang): ?>
-                                                        <button class="btn btn-modern btnApproveCabang" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Setujui Pengiriman Antar Cabang">
-                                                            <i class="bi bi-send-check me-1"></i> Setujui Antar Cabang
-                                                        </button>
-                                                    <?php else: ?>
-                                                        <!-- Status Selesai (Meskipun query men-filter ini, dibiarkan sbg fallback) -->
-                                                        <button class="btn btn-light border rounded-2 fw-bold text-muted btn-sm" disabled>
-                                                            <i class="bi bi-check-circle-fill text-success me-1"></i> Selesai
-                                                        </button>
-                                                    <?php endif; ?>
+                                                    <!-- Flexbox untuk menampung dua tombol -->
+                                                    <div class="d-flex justify-content-end gap-2">
+                                                        <?php if ($canApprove && !$isAntarCabang): ?>
+                                                            <button class="btn btn-modern btnApprove" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Konfirmasi Terima Barang HO">
+                                                                <i class="bi bi-check2-all me-1"></i> Terima di HO
+                                                            </button>
+                                                            <button class="btn btn-outline-danger btn-sm border-2 fw-bold btnTolak" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Tolak Pengiriman & Kembalikan ke Cabang">
+                                                                <i class="bi bi-x-lg"></i> Tolak
+                                                            </button>
+                                                        <?php elseif ($canApprove && $isAntarCabang): ?>
+                                                            <button class="btn btn-modern btnApproveCabang" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Setujui Pengiriman Antar Cabang">
+                                                                <i class="bi bi-send-check me-1"></i> Setujui Antar Cabang
+                                                            </button>
+                                                            <button class="btn btn-outline-danger btn-sm border-2 fw-bold btnTolak" data-id="<?= (int) $row['id_pengiriman'] ?>" title="Tolak Pengiriman Antar Cabang">
+                                                                <i class="bi bi-x-lg"></i> Tolak
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <!-- Status Selesai -->
+                                                            <button class="btn btn-light border rounded-2 fw-bold text-muted btn-sm" disabled>
+                                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Selesai
+                                                            </button>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endwhile; ?>
@@ -558,8 +636,7 @@ $q = mysqli_query($koneksi, "
         </div>
     </div>
 
-
-    <!-- SCRIPT TIDAK DIUBAH SAMA SEKALI (HANYA WARNA SWEETALERT DISESUAIKAN) -->
+    <!-- SCRIPT -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
@@ -571,14 +648,11 @@ $q = mysqli_query($koneksi, "
                 const id = approveBtn.getAttribute('data-id');
                 const contentDiv = document.getElementById('contentTerimaCabang');
                 
-                // Tampilkan animasi loading di dalam modal
                 contentDiv.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-dark"></div><div class="mt-2 text-muted">Memuat form...</div></div>';
                 
-                // Buka Modal Pop-up
                 const modal = new bootstrap.Modal(document.getElementById('modalTerimaCabang'));
                 modal.show();
 
-                // Ambil form dari file terima_barang_form.php dan masukkan ke dalam modal
                 fetch('terima_barang_form.php?id=' + id)
                     .then(response => response.text())
                     .then(html => {
@@ -589,6 +663,42 @@ $q = mysqli_query($koneksi, "
                     });
             }
         });
+
+        // --- KETIKA TOMBOL "TOLAK" DIKLIK (TANPA ALASAN INPUT) ---
+        document.addEventListener('click', function(e) {
+            const tolakBtn = e.target.closest('.btnTolak');
+            if (!tolakBtn) return;
+
+            const id = tolakBtn.getAttribute('data-id');
+            Swal.fire({
+                title: 'Tolak Pengiriman?',
+                text: 'Barang ini akan ditolak dan dikembalikan ke status "Tersedia" di cabang asal.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Tolak',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc3545',
+            }).then((result) => {
+                if (!result.isConfirmed) return;
+
+                const fd = new FormData();
+                fd.append('action', 'reject_ho');
+                fd.append('id_pengiriman', id);
+
+                fetch(window.location.href, { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({ icon: 'success', title: 'Ditolak', text: data.message, confirmButtonColor: '#E64312' })
+                                .then(() => location.reload());
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Gagal', text: data.message || 'Terjadi kesalahan.' });
+                        }
+                    })
+                    .catch(() => Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghubungi server.' }));
+            });
+        });
+        // --- END BLOK TOLAK ---
 
         document.addEventListener('click', function(e) {
             const cabangBtn = e.target.closest('.btnApproveCabang');
@@ -627,24 +737,21 @@ $q = mysqli_query($koneksi, "
         // 2. KETIKA FORM DI DALAM MODAL DI-SUBMIT
         document.addEventListener('submit', function(e) {
             if (e.target && e.target.id === 'formTerimaCabang') {
-                e.preventDefault(); // Cegah reload halaman
+                e.preventDefault(); 
                 
                 const form = e.target;
                 const btn = form.querySelector('button[type="submit"]');
                 const originalText = btn.innerHTML;
                 
-                // Ubah tombol jadi loading
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
 
-                // Kirim data form (termasuk foto) ke terima_barang_proses.php
                 fetch('terima_barang_proses.php', {
                     method: 'POST',
                     body: new FormData(form)
                 })
                 .then(res => res.json())
                 .then(data => {
-                    // Kasih jeda 1 detik agar animasi loading terlihat natural
                     setTimeout(() => {
                         if (data.status === 'success') {
                             Swal.fire({ 

@@ -43,9 +43,12 @@ function shippingBadge(string $status): string
     return '<span class="badge rounded-pill ' . $class . '"><i class="bi ' . $icon . ' me-1"></i>' . h($status) . '</span>';
 }
 
-function barangBadge(string $bermasalah): string
+function barangBadge(?string $bermasalah): string
 {
-    if ($bermasalah === 'Iya') {
+    // Tambahan proteksi: jika kosong, anggap saja 'Tidak'
+    $statusMasalah = $bermasalah ?? 'Tidak'; 
+    
+    if ($statusMasalah === 'Iya') {
         return '<span class="badge rounded-pill badge-soft-danger"><i class="bi bi-exclamation-triangle me-1"></i>Bermasalah</span>';
     }
     return '<span class="badge rounded-pill badge-soft-success"><i class="bi bi-check-circle me-1"></i>Normal</span>';
@@ -74,7 +77,7 @@ function canOpenPengirimanUser(): bool
 // =========================================================================
 $searchInput = isset($_GET['cari']) ? trim((string) $_GET['cari']) : '';
 $filter = isset($_GET['filter']) ? trim((string) $_GET['filter']) : '';
-if (!in_array($filter, ['', 'masuk', 'keluar'], true)) {
+if (!in_array($filter, ['', 'masuk', 'keluar', 'milik_ho'], true)) {
     $filter = '';
 }
 
@@ -114,18 +117,18 @@ $stokAktifSql = $isAdmin ? " AND (barang.status IN ('Tersedia','Diterima') OR ba
 $idBranchHO = 40;
 
 if ($isAdmin) {
-    $whereLokasi = "barang.id_branch = $idBranchHO";
-    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    $whereSummaryLokasi = "barang.id_branch = $idBranchHO";
+    $excludeTransitSummary = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
 
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereSummaryLokasi $excludeTransitSummary AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE status_pengiriman IN ('Sudah diterima HO', 'Selesai')");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman");
 } else {
-    $whereLokasi = "barang.id_branch = $myBranchId";
-    $excludeTransitSql = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
-    $excludeTransitSql .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
+    $whereSummaryLokasi = "barang.id_branch = $myBranchId";
+    $excludeTransitSummary = " AND barang.id NOT IN (SELECT id_barang FROM barang_pengiriman WHERE status_pengiriman = 'Sedang perjalanan') ";
+    $excludeTransitSummary .= " AND barang.serial_number NOT IN (SELECT serial_number FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId AND status_pengiriman NOT IN ('Ditolak', 'Selesai')) ";
 
-    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereLokasi $excludeTransitSql AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
+    $totalInventaris = fetchSingleValue($koneksi, "SELECT COUNT(id) AS total FROM barang WHERE $whereSummaryLokasi $excludeTransitSummary AND status IN ('Tersedia','Diterima') AND id_status NOT IN (7, 8)");
     $totalMasuk      = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman) AS total FROM barang_pengiriman WHERE branch_tujuan = $myBranchId AND status_pengiriman = 'Sudah diterima'");
     $totalKeluar     = fetchSingleValue($koneksi, "SELECT COUNT(id_pengiriman_ho) AS total FROM pengiriman_cabang_ho WHERE branch_asal = $myBranchId");
 }
@@ -191,7 +194,19 @@ if ($filter === 'keluar') {
             ORDER BY id_transaksi DESC";
     }
 } else {
-    // ... (Bagian else yang bawah ini biarkan saja, jangan diubah)
+    // ---------------------------------------------------------
+    // TAMBAHAN BARU: MENCIPTAKAN ULANG $whereLokasi SESUAI TAB
+    // ---------------------------------------------------------
+    if ($filter === 'milik_ho' && $isAdmin) {
+        // Tab Khusus: Aset Milik HO (Berdasarkan id_branch_pemilik = 40)
+        $whereLokasi = "barang.id_branch_pemilik = $idBranchHO";
+    } else {
+        // Tab Default (Asset Tersedia): Aset yang Fisiknya ada di Lokasi saat ini
+        $whereLokasi = $isAdmin ? "barang.id_branch = $idBranchHO" : "barang.id_branch = $myBranchId";
+    }
+    // ---------------------------------------------------------
+
+    // MENGEMBALIKAN KODE ASLI YANG SEMPAT TERSINGKAT OLEH '...'
     if ($isAdmin) {
         $subqueryLastUser = "(SELECT p.pemilik_barang FROM pengiriman_cabang_ho p WHERE p.serial_number = barang.serial_number AND p.status_pengiriman IN ('Sudah diterima HO', 'Selesai') AND p.pemilik_barang IS NOT NULL AND p.pemilik_barang != '' AND p.pemilik_barang != '0' ORDER BY p.id_pengiriman_ho DESC LIMIT 1)";
     } else {
@@ -203,18 +218,23 @@ if ($filter === 'keluar') {
         $searchSql_barang = " AND (tb_barang.nama_barang LIKE '%$s%' OR barang.kode_aset LIKE '%$s%' OR barang.no_asset LIKE '%$s%' OR barang.serial_number LIKE '%$s%' OR barang.user LIKE '%$s%' OR $subqueryLastUser LIKE '%$s%') ";
     }
 
+    // UPDATE: Melakukan 2x JOIN ke tb_branch untuk memisahkan nama lokasi & nama kepemilikan
+    // Pastikan kolom barang.bermasalah ada di sini
     $querySql = "SELECT barang.id, barang.kode_aset, barang.no_asset, barang.serial_number, barang.bermasalah, barang.foto,
                         barang.tanggal_garansi_berakhir, barang.masa_garansi_bulan, 
                         barang.user AS master_user, 
                         $subqueryLastUser AS last_logistic_user,
                         barang.keterangan_masalah, barang.status,
-                        tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, br.nama_branch AS info_branch
+                        tb_barang.nama_barang, m.nama_merk, t.nama_tipe, j.nama_jenis, 
+                        br_lokasi.nama_branch AS lokasi_sekarang,
+                        br_pemilik.nama_branch AS pemilik_asli
                  FROM barang
                  JOIN tb_barang ON barang.id_barang = tb_barang.id_barang
                  LEFT JOIN tb_merk m ON barang.id_merk = m.id_merk
                  LEFT JOIN tb_tipe t ON barang.id_tipe = t.id_tipe
                  LEFT JOIN tb_jenis j ON barang.id_jenis = j.id_jenis
-                 LEFT JOIN tb_branch br ON barang.id_branch = br.id_branch
+                 LEFT JOIN tb_branch br_lokasi ON barang.id_branch = br_lokasi.id_branch
+                 LEFT JOIN tb_branch br_pemilik ON barang.id_branch_pemilik = br_pemilik.id_branch
                  WHERE $whereLokasi $excludeTransitSql $stokAktifSql $searchSql_barang 
                  ORDER BY barang.id DESC";
 }
@@ -233,12 +253,17 @@ if (!$query) die(mysqli_error($koneksi));
 // UI States
 $searchValue = h($searchInput);
 $filterValue = h($filter);
-$btnSemua = ($filter === '' ? 'btn-mode is-active' : 'btn-mode');
-$btnMasuk = ($filter === 'masuk' ? 'btn-mode is-active' : 'btn-mode');
-$btnKeluar = ($filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode');
-$tableTitle = $filter === 'masuk' ? 'Daftar Barang Masuk' : ($filter === 'keluar' ? 'Daftar Barang Keluar' : 'Total Inventaris');
-$tableIcon = $filter === 'masuk' ? 'bi-box-arrow-in-down' : ($filter === 'keluar' ? 'bi-box-arrow-up' : 'bi-box-seam');
-$emptyColspan = ($filter === '' ? 7 : 6);
+$btnSemua   = ($filter === '' ? 'btn-mode is-active' : 'btn-mode');
+$btnMilikHO = ($filter === 'milik_ho' ? 'btn-mode is-active' : 'btn-mode'); // TAMBAHAN
+$btnMasuk   = ($filter === 'masuk' ? 'btn-mode is-active' : 'btn-mode');
+$btnKeluar  = ($filter === 'keluar' ? 'btn-mode is-active' : 'btn-mode');
+
+if ($filter === 'masuk') { $tableTitle = 'Daftar Barang Masuk'; $tableIcon = 'bi-box-arrow-in-down'; } 
+elseif ($filter === 'keluar') { $tableTitle = 'Daftar Barang Keluar'; $tableIcon = 'bi-box-arrow-up'; } 
+elseif ($filter === 'milik_ho') { $tableTitle = 'Aset Internal Milik HO'; $tableIcon = 'bi-building-check'; } // TAMBAHAN
+else { $tableTitle = $isAdmin ? 'Aset Fisik di Gudang' : 'Total Inventaris'; $tableIcon = 'bi-box-seam'; }
+
+$emptyColspan = ($filter === '' || $filter === 'milik_ho' ? 7 : 6);
 ?>
 
 <!DOCTYPE html>
@@ -756,6 +781,13 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                     <a href="index.php?cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnSemua ?>">
                                         <i class="bi bi-grid-fill me-2"></i>Asset Tersedia
                                     </a>
+                                    
+                                    <?php if ($isAdmin): ?>
+                                        <a href="index.php?filter=milik_ho&cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnMilikHO ?>">
+                                            <i class="bi bi-building-check me-2"></i>Aset Milik HO
+                                        </a>
+                                    <?php endif; ?>
+
                                     <a href="index.php?filter=masuk&cari=<?= urlencode($searchInput) ?>&limit=<?= $limit ?>" class="<?= $btnMasuk ?>">
                                         <i class="bi bi-box-arrow-in-down me-2"></i>Logistik Masuk
                                     </a>
@@ -930,7 +962,17 @@ $emptyColspan = ($filter === '' ? 7 : 6);
                                                             $namaTampil = 'No User';
                                                         }
                                                         ?>
-                                                        <div class="meta-line"><i class="bi bi-person me-2 text-muted"></i><?= h($namaTampil) ?></div>
+                                                        <div class="meta-line mb-2 fw-semibold"><i class="bi bi-person me-2 text-muted"></i><?= h($namaTampil) ?></div>
+                                                        
+                                                        <!-- TAMBAHAN TAMPILAN BADGE LOKASI & PEMILIK -->
+                                                        <div class="d-flex flex-column gap-1" style="font-size: 0.78rem;">
+                                                            <span class="badge bg-light text-dark border text-start fw-normal" title="Lokasi Gudang Saat Ini">
+                                                                <i class="bi bi-geo-alt-fill text-danger me-1"></i> <b>Fisik:</b> <?= h($data['lokasi_sekarang'] ?? '-') ?>
+                                                            </span>
+                                                            <span class="badge bg-light text-dark border text-start fw-normal" title="Kepemilikan Aset (Anggaran)">
+                                                                <i class="bi bi-wallet2 text-success me-1"></i> <b>Milik:</b> <?= h($data['pemilik_asli'] ?? '-') ?>
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td>
                                                         <?= warranty_badge_html($data['tanggal_garansi_berakhir'] ?? null) ?>
